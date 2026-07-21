@@ -1,0 +1,48 @@
+:root {
+  --ink: #102 intermediate;
+  --ink-soft: #3a4a52;
+  --paper: #f3f6f4;
+  --panel: rgba(255, 255, 255, 0.72);
+  --line: rgba(16, 42, 46, 0.12);
+  --accent: #0f8a6b;
+  --accent-deep: #0a5c49;
+  --warn: #c45c26;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+  --display: "Syne", "Avenir Next", sans-serif;
+  color: var(--ink);
+  background: var(--paper);
+  font-family: var(--mono);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  background:
+    radial-gradient(1200px 500px at 10% -10%, rgba(15, 138, 107, 0.16), transparent 55%),
+    radial-gradient(900px 420px at 100% 0%, rgba(196, 92, 38, 0.12), transparent 50%),
+    linear-gradient(180deg, #eef3f0 0%, var(--paper) 40%, #e7eeea 100%);
+}
+
+button,
+select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+img {
+  display: block;
+}
