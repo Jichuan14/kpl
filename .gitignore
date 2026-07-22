@@ -10,6 +10,9 @@ venv/
 backend/data/*.db
 backend/data/*.sqlite*
 *.db
+*.sqlite
+*.sqlite3
+*.jsonl
 
 # IDE / OS
 .idea/
