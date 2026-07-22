@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import bp, leagues, sync
+from app.api import bp, data, leagues, pipeline, sync
 from app.config import get_settings
 from app.database import init_db
 
@@ -24,6 +24,8 @@ app.add_middleware(
 app.include_router(leagues.router)
 app.include_router(bp.router)
 app.include_router(sync.router)
+app.include_router(data.router)
+app.include_router(pipeline.router)
 
 
 @app.on_event("startup")

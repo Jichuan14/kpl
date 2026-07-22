@@ -83,6 +83,63 @@ class BattleBp(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 
+class Team(Base):
+    __tablename__ = "teams"
+
+    team_id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    team_name: Mapped[str] = mapped_column(String(64), default="")
+    team_icon: Mapped[str] = mapped_column(String(500), default="")
+
+
+class Player(Base):
+    __tablename__ = "players"
+    __table_args__ = (
+        UniqueConstraint("player_name", "team_id", name="uk_player_team"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    player_name: Mapped[str] = mapped_column(String(64), default="")
+    team_id: Mapped[str] = mapped_column(String(32), default="")
+    team_name: Mapped[str] = mapped_column(String(64), default="")
+    player_icon: Mapped[str] = mapped_column(String(500), default="")
+
+
+class BattlePlayer(Base):
+    __tablename__ = "battle_players"
+    __table_args__ = (
+        UniqueConstraint(
+            "battle_id",
+            "player_name",
+            "hero_id",
+            "camp",
+            name="uk_battle_player_hero_camp",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    battle_id: Mapped[str] = mapped_column(String(64), index=True)
+    match_id: Mapped[str] = mapped_column(String(32), index=True)
+    league_id: Mapped[str] = mapped_column(String(32), index=True)
+    team_id: Mapped[str] = mapped_column(String(32), default="", index=True)
+    team_name: Mapped[str] = mapped_column(String(64), default="")
+    player_name: Mapped[str] = mapped_column(String(64), default="")
+    player_icon: Mapped[str] = mapped_column(String(500), default="")
+    hero_id: Mapped[int] = mapped_column(Integer, default=0)
+    hero_name: Mapped[str] = mapped_column(String(100), default="")
+    camp: Mapped[int] = mapped_column(Integer, default=0)
+    match_camp: Mapped[int] = mapped_column(Integer, default=0)
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    position_desc: Mapped[str] = mapped_column(String(32), default="")
+
+
+class Hero(Base):
+    __tablename__ = "heroes"
+
+    hero_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    hero_name: Mapped[str] = mapped_column(String(100), default="")
+    hero_icon: Mapped[str] = mapped_column(String(500), default="")
+
+
 class HeroBpStats(Base):
     """Precomputed per-league hero BP aggregates for the frontend."""
 

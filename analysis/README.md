@@ -22,6 +22,19 @@ python3 analysis/init_heroes.py
 | `compute_bp_statistics.py` | Compute availability-adjusted response, synergy, counter-pick, and counter-ban statistics |
 | `visualize_bp_statistics.py` | Build a self-contained interactive HTML dashboard from statistical JSONL |
 
+The Vue management page runs the complete pipeline automatically after a
+league download, or lets each stage run separately. Its outputs are isolated
+by league:
+
+```text
+analysis/exports/{league_id}/matches.jsonl
+analysis/exports/{league_id}/bp_decisions.jsonl
+analysis/outputs/{league_id}/*.jsonl
+analysis/outputs/{league_id}/bp_statistics_report.html
+```
+
+The commands below remain useful for manual runs and custom paths.
+
 ### BP QA
 
 Defaults to **2026 挑战者杯**. Pass flags for any other season:
@@ -33,9 +46,12 @@ python3 analysis/qa_bp.py --league-id 20260002
 python3 analysis/qa_bp.py --year 2025 --name 挑战者杯 --json-out analysis/outputs/qa_2025_challenger.json
 ```
 
-### Sync teams / players
+### Legacy team / player backfill
 
-Backfills from battles already in the DB (calls battle detail API). Stores raw `camp` plus `match_camp` aligned to match `camp1`/`camp2`.
+The backend's league download now stores teams, players, and battle-player
+mappings from the same battle-detail request as BP actions. This script remains
+available only for older databases that need a backfill. It stores raw `camp`
+plus `match_camp` aligned to match `camp1`/`camp2`.
 
 ```bash
 # prefer backend venv (has httpx)

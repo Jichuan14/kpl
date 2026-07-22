@@ -12,7 +12,13 @@ async function request(path, options = {}) {
   }
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(text || `HTTP ${res.status}`);
+    let message = text;
+    try {
+      message = JSON.parse(text)?.detail || text;
+    } catch {
+      // Keep the plain response body.
+    }
+    throw new Error(message || `HTTP ${res.status}`);
   }
   const body = await res.json();
   if (body && body.success === false) {
@@ -23,6 +29,22 @@ async function request(path, options = {}) {
 
 export function fetchLeagues() {
   return request("/api/leagues");
+}
+
+export function syncLeagues() {
+  return request("/api/sync/leagues", { method: "POST" });
+}
+
+export function fetchDataStatus(leagueId) {
+  const params = new URLSearchParams({ league_id: leagueId });
+  return request(`/api/data/status?${params}`);
+}
+
+export function runAnalysisStep({ leagueId, step }) {
+  return request("/api/pipeline/run", {
+    method: "POST",
+    body: JSON.stringify({ league_id: leagueId, step }),
+  });
 }
 
 export function fetchHeroBp({ leagueId, sort = "presence", limit = 40 } = {}) {
@@ -38,6 +60,7 @@ export function syncLeagueBp({ leagueId, matchLimit = null } = {}) {
       league_id: leagueId || null,
       match_limit: matchLimit,
       recompute_stats: true,
+      run_analysis: true,
     }),
   });
 }

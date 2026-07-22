@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -45,3 +47,9 @@ class SyncLeagueRequest(BaseModel):
         description="Optional cap on finished matches to deep-sync (BP detail). Useful for testing.",
     )
     recompute_stats: bool = True
+    run_analysis: bool = True
+
+
+class AnalysisRunRequest(BaseModel):
+    league_id: str = Field(min_length=1, max_length=32)
+    step: Literal["export", "decisions", "statistics", "report", "all"] = "all"

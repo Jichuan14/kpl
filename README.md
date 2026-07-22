@@ -50,12 +50,27 @@ npm run dev
 
 Open http://localhost:5173 — Vite proxies `/api` to the backend on `:8000`.
 
-### Smoke sync (latest league, first 3 finished matches)
+### Smoke sync (selected league, first 3 finished matches)
 
 ```bash
 curl -X POST http://localhost:8000/api/sync/league-bp \
   -H 'Content-Type: application/json' \
-  -d '{"match_limit": 3}'
+  -d '{"league_id":"20260002","match_limit":3}'
+```
+
+Each battle detail is downloaded once and used to store battle metadata, BP
+actions, team/player mappings, and every encountered hero. The management page
+at `http://localhost:5173` lets you select the year and season before starting
+the download. A completed download automatically exports match and decision
+JSONL, computes relationship statistics, and builds that season's HTML report.
+The same four analysis stages can also be run separately from the management
+page.
+
+Season artifacts are isolated under:
+
+```text
+analysis/exports/{league_id}/
+analysis/outputs/{league_id}/
 ```
 
 Then:
