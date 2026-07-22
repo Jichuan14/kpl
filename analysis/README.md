@@ -19,6 +19,8 @@ python3 analysis/init_heroes.py
 | `qa_bp.py` | Per-league BP data QA (completeness, peak candidates, pick reuse) |
 | `export_match_data.py` | Export ordered match BP, players, sides, winners, and quality flags to JSONL |
 | `build_bp_decisions.py` | Convert match JSONL into one pre-action state per ban/pick |
+| `compute_bp_statistics.py` | Compute availability-adjusted response, synergy, counter-pick, and counter-ban statistics |
+| `visualize_bp_statistics.py` | Build a self-contained interactive HTML dashboard from statistical JSONL |
 
 ### BP QA
 
@@ -67,4 +69,34 @@ python3 analysis/build_bp_decisions.py
 python3 analysis/build_bp_decisions.py \
   --input analysis/exports/20260002_matches.jsonl \
   --output analysis/exports/20260002_bp_decisions.jsonl
+```
+
+### Compute statistical BP relationships
+
+Only decisions where a candidate hero was legal count toward that candidate's
+denominator. Results include raw and smoothed probabilities, baseline rates,
+lift, 95% Wilson intervals, outcomes, sample counts, and legal overrides.
+
+```bash
+python3 analysis/compute_bp_statistics.py
+python3 analysis/compute_bp_statistics.py --alpha 10 --min-selections 2
+```
+
+Generated under `analysis/outputs/`:
+
+- `ban_response_stats.jsonl` — opponent's next ban plus all later picks,
+  separated between the banning team and its opponent
+- `pick_synergy_stats.jsonl`
+- `counter_pick_stats.jsonl`
+- `counter_ban_stats.jsonl`
+
+### Visualize statistical results
+
+Generates an interactive, dependency-free HTML report with filters for
+relationship type, overall versus side/slot context, response side, minimum
+support, ranking metric, and top-N results.
+
+```bash
+python3 analysis/visualize_bp_statistics.py --min-selections 2
+open analysis/outputs/bp_statistics_report.html
 ```
