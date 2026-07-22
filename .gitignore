@@ -13,8 +13,6 @@ backend/data/*.sqlite*
 *.sqlite
 *.sqlite3
 *.jsonl
-analysis/outputs/*.html
-analysis/outputs/**/*.html
 
 # IDE / OS
 .idea/

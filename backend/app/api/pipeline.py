@@ -1,5 +1,4 @@
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -9,24 +8,6 @@ from app.schemas import AnalysisRunRequest, ApiResponse
 from app.services.analysis_pipeline import AnalysisPipeline
 
 router = APIRouter(prefix="/api/pipeline", tags=["pipeline"])
-
-
-@router.get("/report/{league_id}")
-def open_report(league_id: str) -> FileResponse:
-    try:
-        report_path = AnalysisPipeline(league_id).report_path
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    if not report_path.is_file():
-        raise HTTPException(
-            status_code=404,
-            detail="Generate this season's report first",
-        )
-    return FileResponse(
-        report_path,
-        media_type="text/html",
-        filename=None,
-    )
 
 
 @router.post("/run")

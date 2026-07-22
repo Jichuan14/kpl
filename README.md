@@ -51,6 +51,8 @@ npm run dev
 Open:
 
 - `http://localhost:5173/` — public multi-season Draft Atlas visualization
+- `http://localhost:5173/teams` — team-specific hero synergy analysis
+- `http://localhost:5173/methodology` — calculation definitions and examples
 - `http://localhost:5173/management` — local download and analysis management
 
 Vite proxies `/api` to the backend on `:8000`.
@@ -67,9 +69,8 @@ Each battle detail is downloaded once and used to store battle metadata, BP
 actions, team/player mappings, and every encountered hero. The management page
 at `http://localhost:5173` lets you select the year and season before starting
 the download. A completed download automatically exports match and decision
-JSONL, computes relationship statistics, and builds that season's HTML report.
-The same four analysis stages can also be run separately from the management
-page.
+JSONL, computes relationship statistics, and ranks opening meta heroes. The
+same analysis stages can also be run separately from the management page.
 
 Season artifacts are isolated under:
 

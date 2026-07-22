@@ -21,8 +21,8 @@ Examples:
 
     python3 analysis/build_bp_decisions.py
     python3 analysis/build_bp_decisions.py \
-        --input analysis/exports/20260002_matches.jsonl \
-        --output analysis/exports/20260002_bp_decisions.jsonl
+        --input analysis/exports/20260002/matches.jsonl \
+        --output analysis/exports/20260002/bp_decisions.jsonl
 """
 
 from __future__ import annotations
@@ -34,9 +34,15 @@ from typing import Any, Iterator
 
 from common import DB_PATH, REPO_ROOT, connect
 
-DEFAULT_INPUT = REPO_ROOT / "analysis" / "exports" / "20260002_matches.jsonl"
+DEFAULT_INPUT = (
+    REPO_ROOT / "analysis" / "exports" / "20260002" / "matches.jsonl"
+)
 DEFAULT_OUTPUT = (
-    REPO_ROOT / "analysis" / "exports" / "20260002_bp_decisions.jsonl"
+    REPO_ROOT
+    / "analysis"
+    / "exports"
+    / "20260002"
+    / "bp_decisions.jsonl"
 )
 
 

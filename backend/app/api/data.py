@@ -223,26 +223,28 @@ def data_status(
             and path.is_file()
             and path.stat().st_mtime >= decision_mtime
         )
-    report = artifact(
-        league_output_dir / "bp_statistics_report.html",
-        "html_report",
-        "Interactive statistics report",
-    )
-
     statistics_ready = all(item["ready"] for item in statistics)
-    latest_stat_mtime = max(
-        (
-            (league_output_dir / filename).stat().st_mtime
-            for _, filename in STAT_ARTIFACTS
-            if (league_output_dir / filename).is_file()
-        ),
-        default=0,
+    meta = artifact(
+        league_output_dir / "meta_hero_stats.jsonl",
+        "meta_heroes",
+        "Opening meta heroes",
     )
-    report_path = league_output_dir / "bp_statistics_report.html"
-    report["ready"] = bool(
-        statistics_ready
-        and report_path.is_file()
-        and report_path.stat().st_mtime >= latest_stat_mtime
+    meta_path = league_output_dir / "meta_hero_stats.jsonl"
+    meta["ready"] = bool(
+        decision_mtime is not None
+        and meta_path.is_file()
+        and meta_path.stat().st_mtime >= decision_mtime
+    )
+    team_synergy = artifact(
+        league_output_dir / "team_synergy_stats.jsonl",
+        "team_synergy",
+        "Team hero synergies",
+    )
+    team_synergy_path = league_output_dir / "team_synergy_stats.jsonl"
+    team_synergy["ready"] = bool(
+        decision_mtime is not None
+        and team_synergy_path.is_file()
+        and team_synergy_path.stat().st_mtime >= decision_mtime
     )
     pipeline = [
         {
@@ -281,10 +283,16 @@ def data_status(
             ),
         },
         {
-            "key": "report",
-            "label": "HTML dashboard",
-            "ready": report["ready"],
-            "detail": "Interactive report generated" if report["ready"] else "Not generated",
+            "key": "meta",
+            "label": "Opening meta heroes",
+            "ready": meta["ready"],
+            "detail": f'{meta["records"]:,} ranked heroes',
+        },
+        {
+            "key": "team_synergy",
+            "label": "Team hero synergies",
+            "ready": team_synergy["ready"],
+            "detail": f'{team_synergy["records"]:,} team-specific pairs',
         },
     ]
 
@@ -309,7 +317,8 @@ def data_status(
             "artifacts": {
                 "exports": exports,
                 "statistics": statistics,
-                "report": report,
+                "meta": meta,
+                "team_synergy": team_synergy,
             },
             "processing_note": (
                 "JSONL processing preserves questionable source rows and marks "

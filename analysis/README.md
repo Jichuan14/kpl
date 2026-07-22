@@ -20,7 +20,8 @@ python3 analysis/init_heroes.py
 | `export_match_data.py` | Export ordered match BP, players, sides, winners, and quality flags to JSONL |
 | `build_bp_decisions.py` | Convert match JSONL into one pre-action state per ban/pick |
 | `compute_bp_statistics.py` | Compute availability-adjusted response, synergy, counter-pick, and counter-ban statistics |
-| `visualize_bp_statistics.py` | Build a self-contained interactive HTML dashboard from statistical JSONL |
+| `compute_meta_heroes.py` | Rank opening-priority heroes from first-phase bans and Blue first picks |
+| `compute_team_synergies.py` | Rank availability-adjusted hero pairs preferred by each team |
 
 The Vue management page runs the complete pipeline automatically after a
 league download, or lets each stage run separately. Its outputs are isolated
@@ -30,7 +31,6 @@ by league:
 analysis/exports/{league_id}/matches.jsonl
 analysis/exports/{league_id}/bp_decisions.jsonl
 analysis/outputs/{league_id}/*.jsonl
-analysis/outputs/{league_id}/bp_statistics_report.html
 ```
 
 The commands below remain useful for manual runs and custom paths.
@@ -83,8 +83,8 @@ outcomes. It preserves source quality flags.
 ```bash
 python3 analysis/build_bp_decisions.py
 python3 analysis/build_bp_decisions.py \
-  --input analysis/exports/20260002_matches.jsonl \
-  --output analysis/exports/20260002_bp_decisions.jsonl
+  --input analysis/exports/20260002/matches.jsonl \
+  --output analysis/exports/20260002/bp_decisions.jsonl
 ```
 
 ### Compute statistical BP relationships
@@ -106,13 +106,36 @@ Generated under `analysis/outputs/`:
 - `counter_pick_stats.jsonl`
 - `counter_ban_stats.jsonl`
 
-### Visualize statistical results
+### Compute opening-priority meta heroes
 
-Generates an interactive, dependency-free HTML report with filters for
-relationship type, overall versus side/slot context, response side, minimum
-support, ranking metric, and top-N results.
+Ranks heroes by whether they were banned in BP orders 1–4 or selected with
+Blue's first pick. It also reports those components separately and adjusts the
+Blue first-pick denominator for hero legality.
 
 ```bash
-python3 analysis/visualize_bp_statistics.py --min-selections 2
-open analysis/outputs/bp_statistics_report.html
+python3 analysis/compute_meta_heroes.py --league-id 20260002
+python3 analysis/compute_meta_heroes.py --league-id 20260001 --min-battles 20
+```
+
+Output:
+
+```text
+analysis/outputs/{league_id}/meta_hero_stats.jsonl
+```
+
+### Compute team-specific hero synergies
+
+For each team, measures how often it completes an unordered hero pair when one
+hero is already visible and the other is legal. Results include pair support,
+the team's normal candidate baseline, smoothed lift, confidence interval, and
+battle win rate.
+
+```bash
+python3 analysis/compute_team_synergies.py --league-id 20260001
+```
+
+Output:
+
+```text
+analysis/outputs/{league_id}/team_synergy_stats.jsonl
 ```

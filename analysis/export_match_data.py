@@ -424,7 +424,8 @@ def main(argv: list[str] | None = None) -> int:
             suffix = f"_{args.match_id}" if args.match_id else ""
             output_path = (
                 DEFAULT_EXPORT_DIR
-                / f"{league['league_id']}{suffix}_matches.jsonl"
+                / league["league_id"]
+                / f"matches{suffix}.jsonl"
             )
         count = write_jsonl(conn, matches, output_path)
 

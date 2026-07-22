@@ -52,4 +52,11 @@ class SyncLeagueRequest(BaseModel):
 
 class AnalysisRunRequest(BaseModel):
     league_id: str = Field(min_length=1, max_length=32)
-    step: Literal["export", "decisions", "statistics", "report", "all"] = "all"
+    step: Literal[
+        "export",
+        "decisions",
+        "statistics",
+        "meta",
+        "team_synergy",
+        "all",
+    ] = "all"

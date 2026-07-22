@@ -6,7 +6,14 @@ import time
 from pathlib import Path
 from typing import Any, Literal
 
-PipelineStep = Literal["export", "decisions", "statistics", "report", "all"]
+PipelineStep = Literal[
+    "export",
+    "decisions",
+    "statistics",
+    "meta",
+    "team_synergy",
+    "all",
+]
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 ANALYSIS_DIR = REPO_ROOT / "analysis"
@@ -15,7 +22,7 @@ OUTPUT_ROOT = ANALYSIS_DIR / "outputs"
 
 
 class AnalysisPipeline:
-    """Run season-isolated JSONL and report generation."""
+    """Run season-isolated JSONL analysis generation."""
 
     def __init__(self, league_id: str):
         if not league_id or not all(
@@ -28,11 +35,10 @@ class AnalysisPipeline:
         self.output_dir = OUTPUT_ROOT / league_id
         self.matches_path = self.export_dir / "matches.jsonl"
         self.decisions_path = self.export_dir / "bp_decisions.jsonl"
-        self.report_path = self.output_dir / "bp_statistics_report.html"
 
     def run(self, step: PipelineStep) -> dict[str, Any]:
         steps = (
-            ["export", "decisions", "statistics", "report"]
+            ["export", "decisions", "statistics", "meta", "team_synergy"]
             if step == "all"
             else [step]
         )
@@ -48,24 +54,30 @@ class AnalysisPipeline:
     def _run_step(self, step: str) -> dict[str, Any]:
         self.export_dir.mkdir(parents=True, exist_ok=True)
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        command = self._command(step)
+        commands = [self._command(step)]
         started = time.monotonic()
-        process = subprocess.run(
-            command,
-            cwd=REPO_ROOT,
-            capture_output=True,
-            text=True,
-            timeout=300,
-            check=False,
-        )
+        outputs: list[str] = []
+        for command in commands:
+            process = subprocess.run(
+                command,
+                cwd=REPO_ROOT,
+                capture_output=True,
+                text=True,
+                timeout=300,
+                check=False,
+            )
+            if process.returncode != 0:
+                detail = (
+                    process.stderr or process.stdout or "unknown error"
+                ).strip()
+                raise RuntimeError(f"{step} failed: {detail}")
+            if process.stdout.strip():
+                outputs.append(process.stdout.strip())
         duration = round(time.monotonic() - started, 3)
-        if process.returncode != 0:
-            detail = (process.stderr or process.stdout or "unknown error").strip()
-            raise RuntimeError(f"{step} failed: {detail}")
         return {
             "step": step,
             "duration_seconds": duration,
-            "output": process.stdout.strip(),
+            "output": "\n".join(outputs),
         }
 
     def _command(self, step: str) -> list[str]:
@@ -99,14 +111,27 @@ class AnalysisPipeline:
                 "--min-selections",
                 "2",
             ]
-        if step == "report":
+        if step == "meta":
             return [
                 python,
-                str(ANALYSIS_DIR / "visualize_bp_statistics.py"),
-                "--input-dir",
-                str(self.output_dir),
+                str(ANALYSIS_DIR / "compute_meta_heroes.py"),
+                "--league-id",
+                self.league_id,
+                "--input",
+                str(self.decisions_path),
                 "--output",
-                str(self.report_path),
+                str(self.output_dir / "meta_hero_stats.jsonl"),
+            ]
+        if step == "team_synergy":
+            return [
+                python,
+                str(ANALYSIS_DIR / "compute_team_synergies.py"),
+                "--league-id",
+                self.league_id,
+                "--input",
+                str(self.decisions_path),
+                "--output",
+                str(self.output_dir / "team_synergy_stats.jsonl"),
                 "--min-selections",
                 "2",
             ]

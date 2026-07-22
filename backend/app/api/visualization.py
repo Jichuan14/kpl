@@ -33,6 +33,10 @@ def statistics_ready(league_id: str) -> bool:
     return all((directory / filename).is_file() for filename in STAT_FILES.values())
 
 
+def team_synergy_ready(league_id: str) -> bool:
+    return (OUTPUT_ROOT / league_id / "team_synergy_stats.jsonl").is_file()
+
+
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     with path.open(encoding="utf-8") as source:
@@ -167,6 +171,7 @@ def available_seasons(db: Session = Depends(get_db)) -> ApiResponse:
             "year": league.year,
             "season": league.season,
             "status": league.status,
+            "team_synergy_ready": team_synergy_ready(league.league_id),
         }
         for league in leagues
         if statistics_ready(league.league_id)
@@ -208,6 +213,13 @@ def visualization_patterns(
             if int(row.get("selection_count") or 0) >= min_selections
         )
 
+    meta_path = output_dir / "meta_hero_stats.jsonl"
+    meta_heroes = read_jsonl(meta_path) if meta_path.is_file() else []
+    for hero in meta_heroes:
+        hero_id = int(hero.get("hero_id") or 0)
+        if not hero.get("hero_icon"):
+            hero["hero_icon"] = hero_icons.get(hero_id, "")
+
     return ApiResponse(
         data={
             "league": {
@@ -217,9 +229,75 @@ def visualization_patterns(
                 "season": league.season,
             },
             "rows": rows,
+            "meta_heroes": meta_heroes,
             "source_counts": source_counts,
             "generated_at": (
                 datetime.fromtimestamp(latest_mtime).astimezone().isoformat()
+            ),
+        }
+    )
+
+
+@router.get("/team-synergies")
+def team_synergies(
+    league_id: str = Query(..., min_length=1, max_length=32),
+    min_selections: int = Query(2, ge=1, le=1000),
+    db: Session = Depends(get_db),
+) -> ApiResponse:
+    league = db.scalar(select(League).where(League.league_id == league_id))
+    if league is None:
+        raise HTTPException(status_code=404, detail="League not found")
+    path = OUTPUT_ROOT / league_id / "team_synergy_stats.jsonl"
+    if not path.is_file():
+        raise HTTPException(
+            status_code=404,
+            detail="Team synergies have not been calculated for this season",
+        )
+
+    rows = [
+        row
+        for row in read_jsonl(path)
+        if int(row.get("selection_count") or 0) >= min_selections
+    ]
+    teams_by_id: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        team_id = str(row.get("team_id") or "")
+        if not team_id:
+            continue
+        team = teams_by_id.setdefault(
+            team_id,
+            {
+                "team_id": team_id,
+                "team_name": row.get("team_name") or team_id,
+                "battle_count": int(row.get("team_battle_count") or 0),
+                "pair_count": 0,
+                "total_pair_selections": 0,
+            },
+        )
+        team["pair_count"] += 1
+        team["total_pair_selections"] += int(row.get("selection_count") or 0)
+
+    teams = sorted(
+        teams_by_id.values(),
+        key=lambda team: (
+            -team["battle_count"],
+            str(team["team_name"]),
+        ),
+    )
+    return ApiResponse(
+        data={
+            "league": {
+                "league_id": league.league_id,
+                "league_name": league.league_name,
+                "year": league.year,
+                "season": league.season,
+            },
+            "teams": teams,
+            "rows": rows,
+            "generated_at": (
+                datetime.fromtimestamp(path.stat().st_mtime)
+                .astimezone()
+                .isoformat()
             ),
         }
     )

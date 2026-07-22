@@ -38,9 +38,13 @@ from typing import Any, Callable, Iterable
 from common import DB_PATH, REPO_ROOT, connect
 
 DEFAULT_INPUT = (
-    REPO_ROOT / "analysis" / "exports" / "20260002_bp_decisions.jsonl"
+    REPO_ROOT
+    / "analysis"
+    / "exports"
+    / "20260002"
+    / "bp_decisions.jsonl"
 )
-DEFAULT_OUTPUT_DIR = REPO_ROOT / "analysis" / "outputs"
+DEFAULT_OUTPUT_DIR = REPO_ROOT / "analysis" / "outputs" / "20260002"
 
 CountMap = dict[tuple[Any, ...], int]
 

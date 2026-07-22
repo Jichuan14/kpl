@@ -46,6 +46,14 @@ export function fetchVisualizationPatterns({
   return request(`/api/visualization/patterns?${params}`);
 }
 
+export function fetchTeamSynergies({ leagueId, minSelections = 2 }) {
+  const params = new URLSearchParams({
+    league_id: leagueId,
+    min_selections: String(minSelections),
+  });
+  return request(`/api/visualization/team-synergies?${params}`);
+}
+
 export function syncLeagues() {
   return request("/api/sync/leagues", { method: "POST" });
 }

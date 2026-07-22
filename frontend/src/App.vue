@@ -1,5 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import MethodologyPage from "./MethodologyPage.vue";
+import TeamSynergyPage from "./TeamSynergyPage.vue";
 import VisualizationPage from "./VisualizationPage.vue";
 import {
   fetchDataStatus,
@@ -27,6 +29,8 @@ let processingTimer = null;
 const routePath = ref(window.location.pathname);
 
 const isManagement = computed(() => routePath.value.startsWith("/management"));
+const isMethodology = computed(() => routePath.value.startsWith("/methodology"));
+const isTeams = computed(() => routePath.value.startsWith("/teams"));
 
 const selectedLeague = computed(() =>
   leagues.value.find((league) => league.league_id === leagueId.value)
@@ -52,8 +56,18 @@ const totalStages = computed(() => dataStatus.value?.pipeline?.length || 0);
 
 const artifacts = computed(() => {
   if (!dataStatus.value?.artifacts) return [];
-  const { exports = [], statistics = [], report } = dataStatus.value.artifacts;
-  return [...exports, ...statistics, ...(report ? [report] : [])];
+  const {
+    exports = [],
+    statistics = [],
+    meta,
+    team_synergy: teamSynergy,
+  } = dataStatus.value.artifacts;
+  return [
+    ...exports,
+    ...statistics,
+    ...(meta ? [meta] : []),
+    ...(teamSynergy ? [teamSynergy] : []),
+  ];
 });
 
 async function loadLeagues() {
@@ -61,7 +75,7 @@ async function loadLeagues() {
   leagues.value = rows || [];
   if (!leagueId.value && leagues.value.length) {
     const preferred = leagues.value.find(
-      (league) => league.league_id === "20260002"
+      (league) => league.league_id === "20260001"
     );
     const initial = preferred || leagues.value[0];
     selectedYear.value = String(initial.year || "");
@@ -133,7 +147,7 @@ async function runDownload({ matchLimit = null, mode = "all" } = {}) {
       `${result.heroes_upserted || 0} heroes`;
     notice.value = result.analysis_error
       ? `${downloadSummary} · analysis failed: ${result.analysis_error}`
-      : `${downloadSummary} · season JSONL and report generated`;
+      : `${downloadSummary} · season analysis generated`;
     await loadStatus();
   } catch (err) {
     notice.value = "";
@@ -149,15 +163,6 @@ async function runDownload({ matchLimit = null, mode = "all" } = {}) {
 function pipelineReady(key) {
   return Boolean(
     dataStatus.value?.pipeline?.find((stage) => stage.key === key)?.ready
-  );
-}
-
-function openReport() {
-  if (!leagueId.value || !pipelineReady("report")) return;
-  window.open(
-    `/api/pipeline/report/${encodeURIComponent(leagueId.value)}`,
-    "_blank",
-    "noopener,noreferrer"
   );
 }
 
@@ -268,10 +273,24 @@ watch(selectedYear, () => {
     <div>
       <a
         href="/"
-        :class="{ active: !isManagement }"
+        :class="{ active: !isManagement && !isMethodology && !isTeams }"
         @click.prevent="navigate('/')"
       >
-        Draft Atlas
+        Overall Stats
+      </a>
+      <a
+        href="/teams"
+        :class="{ active: isTeams }"
+        @click.prevent="navigate('/teams')"
+      >
+        Teams
+      </a>
+      <a
+        href="/methodology"
+        :class="{ active: isMethodology }"
+        @click.prevent="navigate('/methodology')"
+      >
+        How it works
       </a>
       <a
         href="/management"
@@ -425,7 +444,7 @@ watch(selectedYear, () => {
           <div class="panel-title">
             <div>
               <p class="kicker">Processing coverage</p>
-              <h2>Download → JSONL → report</h2>
+              <h2>Download → JSONL → analysis</h2>
             </div>
             <strong class="stage-count">{{ readyStages }}/{{ totalStages }}</strong>
           </div>
@@ -480,18 +499,18 @@ watch(selectedYear, () => {
             <button
               class="button ghost"
               type="button"
-              :disabled="Boolean(processingStep) || syncing || !pipelineReady('statistics')"
-              @click="runPipeline('report')"
+              :disabled="Boolean(processingStep) || syncing || !pipelineReady('decisions_jsonl')"
+              @click="runPipeline('meta')"
             >
-              {{ processingStep === "report" ? `Rendering… ${processingElapsed}s` : "4 · Build report" }}
+              {{ processingStep === "meta" ? `Ranking… ${processingElapsed}s` : "4 · Calculate meta heroes" }}
             </button>
             <button
-              class="button report-button"
+              class="button ghost"
               type="button"
-              :disabled="!pipelineReady('report')"
-              @click="openReport"
+              :disabled="Boolean(processingStep) || syncing || !pipelineReady('decisions_jsonl')"
+              @click="runPipeline('team_synergy')"
             >
-              Open HTML report ↗
+              {{ processingStep === "team_synergy" ? `Grouping… ${processingElapsed}s` : "5 · Calculate team synergies" }}
             </button>
           </div>
 
@@ -540,7 +559,7 @@ watch(selectedYear, () => {
           </dl>
           <p class="terminal-note">
             JSONL processing remains an explicit local pipeline. The dashboard
-            reports generated files without treating flagged source rows as
+            lists generated files without treating flagged source rows as
             deleted or corrected.
           </p>
         </article>
@@ -550,7 +569,7 @@ watch(selectedYear, () => {
         <div class="panel-title">
           <div>
             <p class="kicker">Processed locally</p>
-            <h2>JSONL and report artifacts</h2>
+            <h2>JSONL analysis artifacts</h2>
           </div>
           <span>{{ artifacts.filter((item) => item.ready).length }} files ready</span>
         </div>
@@ -592,6 +611,8 @@ watch(selectedYear, () => {
       Refresh the KPL league catalog to begin downloading data.
     </section>
   </main>
+  <TeamSynergyPage v-else-if="isTeams" />
+  <MethodologyPage v-else-if="isMethodology" />
   <VisualizationPage v-else />
 </template>
 
@@ -923,13 +944,6 @@ select {
   min-height: 36px;
   padding: 0.45rem 0.65rem;
   font-size: 0.72rem;
-}
-
-.pipeline-actions .report-button {
-  margin-left: auto;
-  border-color: var(--accent-deep);
-  color: var(--accent-deep);
-  font-weight: 500;
 }
 
 .pipeline {
