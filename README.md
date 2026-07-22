@@ -48,7 +48,12 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:5173 — Vite proxies `/api` to the backend on `:8000`.
+Open:
+
+- `http://localhost:5173/` — public multi-season Draft Atlas visualization
+- `http://localhost:5173/management` — local download and analysis management
+
+Vite proxies `/api` to the backend on `:8000`.
 
 ### Smoke sync (selected league, first 3 finished matches)
 

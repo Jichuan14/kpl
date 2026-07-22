@@ -1,5 +1,6 @@
 <script setup>
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import VisualizationPage from "./VisualizationPage.vue";
 import {
   fetchDataStatus,
   fetchLeagues,
@@ -23,6 +24,9 @@ const error = ref("");
 const notice = ref("");
 let syncTimer = null;
 let processingTimer = null;
+const routePath = ref(window.location.pathname);
+
+const isManagement = computed(() => routePath.value.startsWith("/management"));
 
 const selectedLeague = computed(() =>
   leagues.value.find((league) => league.league_id === leagueId.value)
@@ -215,13 +219,35 @@ function dateTime(value) {
       }).format(date);
 }
 
-onMounted(async () => {
+async function loadManagement() {
   try {
     await loadLeagues();
     await loadStatus();
   } catch (err) {
     error.value = err.message || "Could not connect to the local API.";
   }
+}
+
+function handlePopState() {
+  routePath.value = window.location.pathname;
+  if (isManagement.value && !leagues.value.length) loadManagement();
+}
+
+function navigate(path) {
+  if (window.location.pathname === path) return;
+  window.history.pushState({}, "", path);
+  routePath.value = path;
+  if (isManagement.value && !leagues.value.length) loadManagement();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+onMounted(() => {
+  window.addEventListener("popstate", handlePopState);
+  if (isManagement.value) loadManagement();
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener("popstate", handlePopState);
 });
 
 watch(leagueId, loadStatus);
@@ -235,7 +261,29 @@ watch(selectedYear, () => {
 </script>
 
 <template>
-  <main class="page">
+  <nav class="site-navigation">
+    <a class="site-brand" href="/" @click.prevent="navigate('/')">
+      KPL<span>LAB</span>
+    </a>
+    <div>
+      <a
+        href="/"
+        :class="{ active: !isManagement }"
+        @click.prevent="navigate('/')"
+      >
+        Draft Atlas
+      </a>
+      <a
+        href="/management"
+        :class="{ active: isManagement }"
+        @click.prevent="navigate('/management')"
+      >
+        Management
+      </a>
+    </div>
+  </nav>
+
+  <main v-if="isManagement" class="page">
     <header class="masthead">
       <div>
         <p class="eyebrow">KPL · Local data operations</p>
@@ -544,9 +592,53 @@ watch(selectedYear, () => {
       Refresh the KPL league catalog to begin downloading data.
     </section>
   </main>
+  <VisualizationPage v-else />
 </template>
 
 <style scoped>
+.site-navigation {
+  display: flex;
+  width: min(1440px, calc(100% - 2rem));
+  min-height: 62px;
+  margin: 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--line);
+}
+
+.site-navigation a {
+  color: var(--ink-soft);
+  text-decoration: none;
+}
+
+.site-brand {
+  font: 800 1rem var(--display);
+  letter-spacing: -0.02em;
+}
+
+.site-brand span {
+  margin-left: 0.18rem;
+  color: var(--accent);
+}
+
+.site-navigation > div {
+  display: flex;
+  align-self: stretch;
+  gap: 1.4rem;
+}
+
+.site-navigation > div a {
+  display: flex;
+  align-items: center;
+  border-bottom: 2px solid transparent;
+  font-size: 0.73rem;
+}
+
+.site-navigation > div a.active {
+  border-color: var(--accent);
+  color: var(--ink);
+}
+
 .page {
   width: min(1240px, calc(100% - 2rem));
   margin: 0 auto;

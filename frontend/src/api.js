@@ -31,6 +31,21 @@ export function fetchLeagues() {
   return request("/api/leagues");
 }
 
+export function fetchVisualizationSeasons() {
+  return request("/api/visualization/seasons");
+}
+
+export function fetchVisualizationPatterns({
+  leagueId,
+  minSelections = 2,
+}) {
+  const params = new URLSearchParams({
+    league_id: leagueId,
+    min_selections: String(minSelections),
+  });
+  return request(`/api/visualization/patterns?${params}`);
+}
+
 export function syncLeagues() {
   return request("/api/sync/leagues", { method: "POST" });
 }
