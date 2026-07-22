@@ -4,9 +4,10 @@ import {
   fetchVisualizationPatterns,
   fetchVisualizationSeasons,
 } from "./api";
+import { selectAvailableLeague, selectedLeagueId } from "./selectedLeague";
 
 const seasons = ref([]);
-const leagueId = ref("");
+const leagueId = selectedLeagueId;
 const payload = ref(null);
 const loading = ref(false);
 const error = ref("");
@@ -51,53 +52,6 @@ const topMetaHeroes = computed(() =>
     .filter((hero) => hero.early_priority_count > 0)
     .slice(0, 12)
 );
-
-const overallRows = computed(() =>
-  rows.value.filter((row) => row.context_level === "overall" && !row.is_peak_battle)
-);
-
-const totalPatternRecords = computed(() =>
-  Object.values(payload.value?.source_counts || {}).reduce(
-    (sum, count) => sum + Number(count || 0),
-    0
-  )
-);
-
-const uniqueHeroCount = computed(() => {
-  const heroIds = new Set();
-  overallRows.value.forEach((row) => {
-    if (row.source_hero_id) heroIds.add(row.source_hero_id);
-    if (row.target_hero_id) heroIds.add(row.target_hero_id);
-  });
-  (payload.value?.meta_heroes || []).forEach((hero) => {
-    if (hero.hero_id) heroIds.add(hero.hero_id);
-  });
-  return heroIds.size;
-});
-
-const observedSelections = computed(() =>
-  overallRows.value.reduce((sum, row) => sum + Number(row.selections || 0), 0)
-);
-
-const topPriorityHero = computed(() => topMetaHeroes.value[0] || null);
-
-function strongestOverallPattern(relationType) {
-  return overallRows.value
-    .filter(
-      (row) =>
-        row.relation === relationType &&
-        row.selections >= 3 &&
-        row.smoothed_lift != null
-    )
-    .sort(
-      (a, b) =>
-        Number(b.smoothed_lift) - Number(a.smoothed_lift) ||
-        b.selections - a.selections
-    )[0];
-}
-
-const strongestCounter = computed(() => strongestOverallPattern("counter_pick"));
-const strongestSynergy = computed(() => strongestOverallPattern("pick_synergy"));
 
 const filteredRows = computed(() => {
   const needle = search.value.trim().toLocaleLowerCase();
@@ -201,12 +155,7 @@ function metaPickWidth(hero) {
 
 async function loadSeasons() {
   seasons.value = (await fetchVisualizationSeasons()) || [];
-  if (!leagueId.value && seasons.value.length) {
-    const preferred = seasons.value.find(
-      (season) => season.league_id === "20260001"
-    );
-    leagueId.value = (preferred || seasons.value[0]).league_id;
-  }
+  selectAvailableLeague(seasons.value);
 }
 
 async function loadPatterns() {
@@ -239,22 +188,17 @@ watch(leagueId, loadPatterns);
 watch(relation, () => {
   if (relation.value !== "ban_response") responseScope.value = "all";
 });
-
-function openTeamsPage() {
-  window.history.pushState({}, "", "/teams");
-  window.dispatchEvent(new PopStateEvent("popstate"));
-}
 </script>
 
 <template>
   <main class="visual-page">
-    <header class="visual-hero">
-      <div class="hero-copy">
+    <section class="explorer-heading">
+      <div>
         <p class="visual-eyebrow">Honor of Kings · Season intelligence</p>
-        <h1>Overall Stats</h1>
+        <h1>Draft Pattern Explorer</h1>
         <p>
-          A season-wide view of the heroes, priorities, counters, and draft
-          patterns shaping professional play.
+          Filter the season data to investigate specific counters, combinations,
+          and ban responses.
         </p>
       </div>
       <label class="season-control">
@@ -271,132 +215,67 @@ function openTeamsPage() {
         </select>
         <small v-if="currentSeason">Dataset {{ currentSeason.league_id }}</small>
       </label>
-    </header>
+    </section>
 
     <p v-if="error" class="visual-message error">{{ error }}</p>
-    <p v-else-if="loading" class="visual-message">Loading season overview…</p>
+    <p v-else-if="loading" class="visual-message">Loading season data…</p>
 
     <template v-if="payload && !loading">
-      <section class="overview-summary" aria-label="Season summary">
-        <article>
-          <span>Heroes analyzed</span>
-          <strong>{{ number(uniqueHeroCount) }}</strong>
-          <small>in season draft data</small>
-        </article>
-        <article>
-          <span>Pattern records</span>
-          <strong>{{ number(totalPatternRecords) }}</strong>
-          <small>across picks, bans, and responses</small>
-        </article>
-        <article>
-          <span>Observed selections</span>
-          <strong>{{ number(observedSelections) }}</strong>
-          <small>in overall relationship stats</small>
-        </article>
-        <article class="overview-highlight">
-          <span>Highest draft priority</span>
-          <strong>{{ topPriorityHero?.hero_name || "—" }}</strong>
-          <small>
-            {{ topPriorityHero ? `${percent(topPriorityHero.early_priority_rate)} early priority` : "No priority data" }}
-          </small>
-        </article>
-      </section>
-
-      <section class="overview-feature-grid">
-        <article class="season-signal">
-          <p class="visual-eyebrow">Strongest counter signal</p>
-          <h2>{{ strongestCounter?.relationship || "Not enough data" }}</h2>
-          <p v-if="strongestCounter">
-            {{ strongestCounter.smoothed_lift.toFixed(2) }}× the usual selection
-            rate across {{ number(strongestCounter.selections) }} picks.
-          </p>
-        </article>
-        <article class="season-signal synergy-signal">
-          <p class="visual-eyebrow">Strongest synergy signal</p>
-          <h2>{{ strongestSynergy?.relationship || "Not enough data" }}</h2>
-          <p v-if="strongestSynergy">
-            {{ strongestSynergy.smoothed_lift.toFixed(2) }}× the usual selection
-            rate across {{ number(strongestSynergy.selections) }} pairings.
-          </p>
-        </article>
-        <article class="teams-cta">
+      <section v-if="topMetaHeroes.length" class="meta-section">
+        <div class="meta-heading">
           <div>
-            <p class="visual-eyebrow">Team analysis</p>
-            <h2>Compare team identities</h2>
-            <p>Browse preferred hero pairs and draft tendencies team by team.</p>
+            <p class="visual-eyebrow">Opening draft priority</p>
+            <h2>Season meta heroes</h2>
+            <p>
+              Heroes most often removed in the first four bans or secured with
+              Blue's first pick.
+            </p>
           </div>
-          <button class="teams-cta-button" type="button" @click="openTeamsPage">
-            Open teams →
-          </button>
-        </article>
-      </section>
-
-    <section v-if="topMetaHeroes.length" class="meta-section">
-      <div class="meta-heading">
-        <div>
-          <p class="visual-eyebrow">Opening draft priority</p>
-          <h2>Season meta heroes</h2>
-          <p>
-            Heroes most often removed in the first four bans or secured with
-            Blue's first pick.
-          </p>
-        </div>
-        <div class="meta-legend">
-          <span><i class="ban-key"></i>Opening ban</span>
-          <span><i class="pick-key"></i>Blue first pick</span>
-        </div>
-      </div>
-
-      <div class="meta-grid">
-        <article
-          v-for="hero in topMetaHeroes"
-          :key="hero.hero_id"
-          class="meta-hero"
-        >
-          <span class="meta-rank">{{ hero.priority_rank }}</span>
-          <div class="meta-avatar">
-            <img
-              v-if="hero.hero_icon"
-              :src="hero.hero_icon"
-              :alt="hero.hero_name"
-            />
-            <span v-else>{{ initial(hero.hero_name) }}</span>
+          <div class="meta-legend">
+            <span><i class="ban-key"></i>Opening ban</span>
+            <span><i class="pick-key"></i>Blue first pick</span>
           </div>
-          <div class="meta-copy">
-            <strong>{{ hero.hero_name }}</strong>
-            <small>
-              {{ hero.opening_ban_count }} bans ·
-              {{ hero.blue_first_pick_count }} Blue first picks
-            </small>
-            <div class="meta-track">
-              <span
-                class="meta-ban"
-                :style="{ width: metaBanWidth(hero) }"
-              ></span>
-              <span
-                class="meta-pick"
-                :style="{ width: metaPickWidth(hero) }"
-              ></span>
+        </div>
+
+        <div class="meta-grid">
+          <article
+            v-for="hero in topMetaHeroes"
+            :key="hero.hero_id"
+            class="meta-hero"
+          >
+            <span class="meta-rank">{{ hero.priority_rank }}</span>
+            <div class="meta-avatar">
+              <img
+                v-if="hero.hero_icon"
+                :src="hero.hero_icon"
+                :alt="hero.hero_name"
+              />
+              <span v-else>{{ initial(hero.hero_name) }}</span>
             </div>
-          </div>
-          <strong class="meta-rate">
-            {{ percent(hero.early_priority_rate) }}
-            <small>priority</small>
-          </strong>
-        </article>
-      </div>
-    </section>
-
-    <section class="explorer-heading">
-      <div>
-        <p class="visual-eyebrow">Deep dive</p>
-        <h2>Draft Pattern Explorer</h2>
-        <p>
-          Filter the season data to investigate specific counters, combinations,
-          and ban responses.
-        </p>
-      </div>
-    </section>
+            <div class="meta-copy">
+              <strong>{{ hero.hero_name }}</strong>
+              <small>
+                {{ hero.opening_ban_count }} bans ·
+                {{ hero.blue_first_pick_count }} Blue first picks
+              </small>
+              <div class="meta-track">
+                <span
+                  class="meta-ban"
+                  :style="{ width: metaBanWidth(hero) }"
+                ></span>
+                <span
+                  class="meta-pick"
+                  :style="{ width: metaPickWidth(hero) }"
+                ></span>
+              </div>
+            </div>
+            <strong class="meta-rate">
+              {{ percent(hero.early_priority_rate) }}
+              <small>priority</small>
+            </strong>
+          </article>
+        </div>
+      </section>
 
     <section class="relation-tabs" aria-label="Relationship type">
       <button
@@ -632,19 +511,6 @@ function openTeamsPage() {
   padding: 2.25rem 0 5rem;
 }
 
-.visual-hero {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 3rem;
-  padding: 2.6rem;
-  border: 1px solid rgba(16, 42, 46, 0.11);
-  background:
-    radial-gradient(circle at 82% 20%, rgba(31, 184, 144, 0.2), transparent 28%),
-    linear-gradient(135deg, #f8fbf9 0%, #e7f1ec 100%);
-  box-shadow: 0 24px 70px rgba(16, 42, 46, 0.08);
-}
-
 .visual-eyebrow {
   margin: 0 0 0.5rem;
   color: var(--accent-deep);
@@ -653,17 +519,17 @@ function openTeamsPage() {
   text-transform: uppercase;
 }
 
-.hero-copy h1 {
+.explorer-heading h1 {
   margin: 0;
-  font: 800 clamp(3.2rem, 9vw, 6.8rem)/0.85 var(--display);
-  letter-spacing: -0.065em;
+  font: 700 clamp(2rem, 4vw, 3rem)/1 var(--display);
+  letter-spacing: -0.045em;
 }
 
-.hero-copy > p:last-child {
+.explorer-heading p:last-child {
   max-width: 660px;
-  margin: 1.25rem 0 0;
+  margin: 0.65rem 0 0;
   color: var(--ink-soft);
-  font-size: 0.95rem;
+  font-size: 0.76rem;
 }
 
 .season-control {
@@ -696,159 +562,8 @@ function openTeamsPage() {
   font-size: 0.68rem;
 }
 
-.overview-summary {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 1px;
-  margin-top: 1rem;
-  border: 1px solid var(--line);
-  background: var(--line);
-}
-
-.overview-summary article {
-  min-width: 0;
-  padding: 1.25rem;
-  background: rgba(255, 255, 255, 0.9);
-}
-
-.overview-summary .overview-highlight {
-  background: var(--ink);
-  color: #fff;
-}
-
-.overview-summary span,
-.overview-summary small {
-  display: block;
-  color: var(--ink-soft);
-}
-
-.overview-summary .overview-highlight span,
-.overview-summary .overview-highlight small {
-  color: rgba(255, 255, 255, 0.65);
-}
-
-.overview-summary span {
-  font-size: 0.65rem;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-}
-
-.overview-summary strong {
-  display: block;
-  margin: 0.55rem 0 0.25rem;
-  overflow: hidden;
-  font: 700 clamp(1.8rem, 4vw, 2.7rem)/1 var(--display);
-  letter-spacing: -0.04em;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.overview-summary small {
-  overflow: hidden;
-  font-size: 0.68rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.overview-feature-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.75rem;
-  margin-top: 0.75rem;
-}
-
-.season-signal,
-.overview-feature-grid .teams-cta {
-  min-height: 190px;
-  margin: 0;
-  padding: 1.25rem;
-  border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.82);
-}
-
-.season-signal {
-  position: relative;
-  overflow: hidden;
-}
-
-.season-signal::after {
-  position: absolute;
-  right: -35px;
-  bottom: -55px;
-  width: 150px;
-  height: 150px;
-  border: 24px solid rgba(15, 138, 107, 0.08);
-  border-radius: 50%;
-  content: "";
-}
-
-.season-signal.synergy-signal::after {
-  border-color: rgba(107, 97, 182, 0.09);
-}
-
-.season-signal h2 {
-  position: relative;
-  z-index: 1;
-  max-width: 22rem;
-  margin: 1.6rem 0 0;
-  font: 700 clamp(1.35rem, 2.5vw, 2rem)/1.05 var(--display);
-  letter-spacing: -0.045em;
-}
-
-.season-signal > p:last-child {
-  position: relative;
-  z-index: 1;
-  max-width: 28rem;
-  margin: 0.7rem 0 0;
-  color: var(--ink-soft);
-  font-size: 0.72rem;
-}
-
-.teams-cta {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1.5rem;
-  margin-top: 0.85rem;
-  padding: 1.15rem 1.25rem;
-  border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.8);
-}
-
-.teams-cta h2 {
-  margin: 0;
-  font: 700 1.45rem/1 var(--display);
-  letter-spacing: -0.03em;
-}
-
-.teams-cta p:last-child {
-  margin: 0.4rem 0 0;
-  color: var(--ink-soft);
-  font-size: 0.74rem;
-}
-
-.teams-cta-button {
-  min-height: 42px;
-  padding: 0.55rem 0.9rem;
-  border: 1px solid var(--accent-deep);
-  background: var(--accent);
-  color: #fff;
-  font: inherit;
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.overview-feature-grid .teams-cta {
-  align-items: flex-start;
-  flex-direction: column;
-}
-
-.overview-feature-grid .teams-cta-button {
-  margin-top: auto;
-}
-
 .meta-section {
-  margin-top: 1rem;
+  margin-top: 1.5rem;
   padding: 1.25rem;
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.82);
@@ -856,23 +571,9 @@ function openTeamsPage() {
 
 .explorer-heading {
   display: flex;
+  align-items: flex-end;
   justify-content: space-between;
-  margin-top: 3rem;
-  padding-top: 1.5rem;
-  border-top: 1px solid var(--line);
-}
-
-.explorer-heading h2 {
-  margin: 0;
-  font: 700 clamp(1.8rem, 4vw, 2.6rem)/1 var(--display);
-  letter-spacing: -0.045em;
-}
-
-.explorer-heading p:last-child {
-  max-width: 620px;
-  margin: 0.65rem 0 0;
-  color: var(--ink-soft);
-  font-size: 0.76rem;
+  gap: 2rem;
 }
 
 .meta-heading {
@@ -1344,15 +1045,6 @@ th {
 }
 
 @media (max-width: 1050px) {
-  .overview-summary,
-  .overview-feature-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .overview-feature-grid .teams-cta {
-    grid-column: span 2;
-  }
-
   .meta-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1376,34 +1068,15 @@ th {
     padding-top: 0.75rem;
   }
 
-  .visual-hero,
-  .teams-cta {
+  .explorer-heading {
     align-items: stretch;
     flex-direction: column;
     gap: 1.5rem;
     padding: 1.4rem;
   }
 
-  .teams-cta-button {
-    width: 100%;
-  }
-
   .season-control {
     min-width: 0;
-  }
-
-  .overview-summary,
-  .overview-feature-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .overview-feature-grid .teams-cta {
-    grid-column: auto;
-  }
-
-  .season-signal,
-  .overview-feature-grid .teams-cta {
-    min-height: 0;
   }
 
   .relation-tabs {

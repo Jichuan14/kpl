@@ -4,9 +4,10 @@ import {
   fetchTeamSynergies,
   fetchVisualizationSeasons,
 } from "./api";
+import { selectAvailableLeague, selectedLeagueId } from "./selectedLeague";
 
 const seasons = ref([]);
-const leagueId = ref("");
+const leagueId = selectedLeagueId;
 const teamId = ref("");
 const payload = ref(null);
 const loading = ref(false);
@@ -120,12 +121,7 @@ function selectTeam(nextTeamId) {
 async function loadSeasons() {
   const allSeasons = (await fetchVisualizationSeasons()) || [];
   seasons.value = allSeasons.filter((season) => season.team_synergy_ready);
-  if (!leagueId.value && seasons.value.length) {
-    const preferred = seasons.value.find(
-      (season) => season.league_id === "20260001"
-    );
-    leagueId.value = (preferred || seasons.value[0]).league_id;
-  }
+  selectAvailableLeague(seasons.value);
 }
 
 async function loadTeamSynergies() {

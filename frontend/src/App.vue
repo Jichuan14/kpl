@@ -10,9 +10,10 @@ import {
   syncLeagueBp,
   syncLeagues,
 } from "./api";
+import { selectAvailableLeague, selectedLeagueId } from "./selectedLeague";
 
 const leagues = ref([]);
-const leagueId = ref("");
+const leagueId = selectedLeagueId;
 const selectedYear = ref("");
 const dataStatus = ref(null);
 const loading = ref(false);
@@ -73,14 +74,11 @@ const artifacts = computed(() => {
 async function loadLeagues() {
   const rows = await fetchLeagues();
   leagues.value = rows || [];
-  if (!leagueId.value && leagues.value.length) {
-    const preferred = leagues.value.find(
-      (league) => league.league_id === "20260001"
-    );
-    const initial = preferred || leagues.value[0];
-    selectedYear.value = String(initial.year || "");
-    leagueId.value = initial.league_id;
-  }
+  selectAvailableLeague(leagues.value);
+  const initial = leagues.value.find(
+    (league) => league.league_id === leagueId.value
+  );
+  selectedYear.value = String(initial?.year || "");
 }
 
 async function loadStatus() {
@@ -255,7 +253,13 @@ onBeforeUnmount(() => {
   window.removeEventListener("popstate", handlePopState);
 });
 
-watch(leagueId, loadStatus);
+watch(leagueId, () => {
+  const selected = leagues.value.find(
+    (league) => league.league_id === leagueId.value
+  );
+  if (selected) selectedYear.value = String(selected.year || "");
+  loadStatus();
+});
 watch(selectedYear, () => {
   if (
     !seasonLeagues.value.some((league) => league.league_id === leagueId.value)
@@ -270,35 +274,41 @@ watch(selectedYear, () => {
     <a class="site-brand" href="/" @click.prevent="navigate('/')">
       KPL<span>LAB</span>
     </a>
-    <div>
-      <a
-        href="/"
-        :class="{ active: !isManagement && !isMethodology && !isTeams }"
-        @click.prevent="navigate('/')"
-      >
-        Overall Stats
-      </a>
-      <a
-        href="/teams"
-        :class="{ active: isTeams }"
-        @click.prevent="navigate('/teams')"
-      >
-        Teams
-      </a>
-      <a
-        href="/methodology"
-        :class="{ active: isMethodology }"
-        @click.prevent="navigate('/methodology')"
-      >
-        How it works
-      </a>
-      <a
-        href="/management"
-        :class="{ active: isManagement }"
-        @click.prevent="navigate('/management')"
-      >
-        Management
-      </a>
+    <div class="navigation-links">
+      <div class="primary-tabs" aria-label="Analysis views">
+        <a
+          href="/"
+          :class="{ active: !isManagement && !isMethodology && !isTeams }"
+          @click.prevent="navigate('/')"
+        >
+          <span>Explore</span>
+          <strong>Draft patterns</strong>
+        </a>
+        <a
+          href="/teams"
+          :class="{ active: isTeams }"
+          @click.prevent="navigate('/teams')"
+        >
+          <span>Compare</span>
+          <strong>Teams</strong>
+        </a>
+      </div>
+      <div class="utility-links">
+        <a
+          href="/methodology"
+          :class="{ active: isMethodology }"
+          @click.prevent="navigate('/methodology')"
+        >
+          How it works
+        </a>
+        <a
+          href="/management"
+          :class="{ active: isManagement }"
+          @click.prevent="navigate('/management')"
+        >
+          Management
+        </a>
+      </div>
     </div>
   </nav>
 
@@ -620,7 +630,7 @@ watch(selectedYear, () => {
 .site-navigation {
   display: flex;
   width: min(1440px, calc(100% - 2rem));
-  min-height: 62px;
+  min-height: 82px;
   margin: 0 auto;
   align-items: center;
   justify-content: space-between;
@@ -633,7 +643,7 @@ watch(selectedYear, () => {
 }
 
 .site-brand {
-  font: 800 1rem var(--display);
+  font: 800 1.12rem var(--display);
   letter-spacing: -0.02em;
 }
 
@@ -642,20 +652,76 @@ watch(selectedYear, () => {
   color: var(--accent);
 }
 
-.site-navigation > div {
-  display: flex;
-  align-self: stretch;
-  gap: 1.4rem;
-}
-
-.site-navigation > div a {
+.navigation-links {
   display: flex;
   align-items: center;
-  border-bottom: 2px solid transparent;
-  font-size: 0.73rem;
+  gap: 1rem;
 }
 
-.site-navigation > div a.active {
+.primary-tabs {
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  border: 1px solid var(--line);
+  border-radius: 0.45rem;
+  background: rgba(255, 255, 255, 0.42);
+}
+
+.primary-tabs a {
+  display: grid;
+  min-width: 138px;
+  gap: 0.12rem;
+  padding: 0.58rem 0.82rem 0.62rem;
+  border: 1px solid transparent;
+  border-radius: 0.25rem;
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.primary-tabs a span {
+  color: var(--ink-soft);
+  font-size: 0.59rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.primary-tabs a strong {
+  color: var(--ink-soft);
+  font: 700 0.92rem/1.1 var(--display);
+  letter-spacing: -0.02em;
+}
+
+.primary-tabs a:hover {
+  background: rgba(15, 138, 107, 0.08);
+}
+
+.primary-tabs a.active {
+  border-color: var(--accent-deep);
+  background: var(--ink);
+}
+
+.primary-tabs a.active span {
+  color: rgba(255, 255, 255, 0.64);
+}
+
+.primary-tabs a.active strong {
+  color: #fff;
+}
+
+.utility-links {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.utility-links a {
+  padding: 0.4rem 0;
+  border-bottom: 1px solid transparent;
+  font-size: 0.68rem;
+  letter-spacing: 0.03em;
+}
+
+.utility-links a:hover,
+.utility-links a.active {
   border-color: var(--accent);
   color: var(--ink);
 }
@@ -1099,6 +1165,35 @@ select {
 }
 
 @media (max-width: 760px) {
+  .site-navigation {
+    width: min(100% - 1rem, 1440px);
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 0.9rem 0;
+  }
+
+  .navigation-links {
+    width: 100%;
+    align-items: stretch;
+    flex-direction: column;
+    gap: 0.65rem;
+  }
+
+  .primary-tabs,
+  .utility-links {
+    width: 100%;
+  }
+
+  .primary-tabs a {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .utility-links {
+    justify-content: space-between;
+  }
+
   .page {
     width: min(100% - 1rem, 1240px);
     padding-top: 1.25rem;
