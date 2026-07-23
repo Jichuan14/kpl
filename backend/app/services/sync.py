@@ -90,8 +90,16 @@ class SyncService:
         league_id: str | None = None,
         match_limit: int | None = None,
         recompute_stats: bool = True,
+        incremental: bool = True,
     ) -> dict[str, Any]:
-        """Sync one league, fetching each battle detail exactly once."""
+        """Sync one league.
+
+        Incremental syncs always refresh the lightweight match catalog, but
+        only download battle and BP details for a finished match that has no
+        complete local battle data yet. This makes the normal scheduled path scale
+        with new matches rather than with the whole season.  Passing
+        ``incremental=False`` keeps the original full repair/backfill path.
+        """
         lid = self.resolve_league_id(league_id)
         match_count = self._sync_matches(lid)
         self._sleep()
@@ -107,13 +115,22 @@ class SyncService:
         if match_limit is not None:
             finished = finished[: max(0, match_limit)]
 
+        if incremental:
+            finished_to_sync = [
+                match
+                for match in finished
+                if not self._match_has_complete_battle_data(match.match_id)
+            ]
+        else:
+            finished_to_sync = finished
+
         battles_synced = 0
         bp_rows = 0
         battle_player_rows = 0
         team_ids: set[str] = set()
         player_keys: set[tuple[str, str]] = set()
         detail_errors = 0
-        for match in finished:
+        for match in finished_to_sync:
             result = self._sync_match_battles_and_bp(match)
             battles_synced += result["battles"]
             bp_rows += result["bp_rows"]
@@ -125,13 +142,17 @@ class SyncService:
 
         heroes_upserted = self._refresh_heroes_for_league(lid)
         stats = None
-        if recompute_stats:
+        if recompute_stats and finished_to_sync:
             stats = recompute_hero_bp_stats(self.db, lid)
 
         return {
             "league_id": lid,
+            "incremental": incremental,
             "matches_upserted": match_count,
-            "finished_matches_processed": len(finished),
+            "finished_matches_found": len(finished),
+            "finished_matches_processed": len(finished_to_sync),
+            "finished_matches_skipped": len(finished) - len(finished_to_sync),
+            "data_changed": bool(finished_to_sync),
             "battles_upserted": battles_synced,
             "bp_rows_written": bp_rows,
             "battle_player_rows_written": battle_player_rows,
@@ -141,6 +162,25 @@ class SyncService:
             "battle_detail_errors": detail_errors,
             "hero_stats": stats,
         }
+
+    def _match_has_complete_battle_data(self, match_id: str) -> bool:
+        """Whether every locally known game has persisted BP detail.
+
+        A failed battle-detail request creates a battle row before the detail
+        is available. Treat that as incomplete so the *same new match* is
+        retried on the next run instead of silently publishing partial data.
+        """
+        battle_ids = list(
+            self.db.scalars(select(Battle.battle_id).where(Battle.match_id == match_id))
+        )
+        if not battle_ids:
+            return False
+        for battle_id in battle_ids:
+            if self.db.scalar(
+                select(BattleBp.id).where(BattleBp.battle_id == battle_id).limit(1)
+            ) is None:
+                return False
+        return True
 
     def _sync_matches(self, league_id: str) -> int:
         payload = self.api.get_matches(league_id)

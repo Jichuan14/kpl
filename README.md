@@ -66,7 +66,10 @@ curl -X POST http://localhost:8000/api/sync/league-bp \
 ```
 
 Each battle detail is downloaded once and used to store battle metadata, BP
-actions, team/player mappings, and every encountered hero. The management page
+actions, team/player mappings, and every encountered hero. Normal syncs are
+incremental: they refresh the match list but deep-download only finished matches
+without complete local battle data, then rebuild the season analysis and public assets
+when new data was added. The management page
 at `http://localhost:5173` lets you select the year and season before starting
 the download. A completed download automatically exports match and decision
 JSONL, computes relationship statistics, and ranks opening meta heroes. The
@@ -103,11 +106,14 @@ curl 'http://localhost:8000/api/bp/heroes?sort=presence&limit=20'
 {
   "league_id": null,
   "match_limit": 3,
-  "recompute_stats": true
+  "recompute_stats": true,
+  "incremental": true
 }
 ```
 
-Omit `league_id` to use the latest league. Omit `match_limit` to process all finished matches (slower).
+Omit `league_id` to use the latest league. Omit `match_limit` to consider all
+finished matches. `incremental` defaults to `true`; set it to `false` only for
+a deliberate full repair/backfill of a season.
 
 ## Data model (BP-focused)
 
