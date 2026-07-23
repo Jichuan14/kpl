@@ -17,6 +17,7 @@ const leagues = ref([]);
 const leagueId = selectedLeagueId;
 const selectedYear = ref("");
 const dataStatus = ref(null);
+const apiConnected = ref(false);
 const loading = ref(false);
 const syncing = ref(false);
 const syncingCatalog = ref(false);
@@ -77,6 +78,7 @@ const artifacts = computed(() => {
 
 async function loadLeagues() {
   const rows = await fetchLeagues();
+  apiConnected.value = true;
   leagues.value = rows || [];
   selectAvailableLeague(leagues.value);
   const initial = leagues.value.find(
@@ -231,6 +233,7 @@ async function loadManagement() {
     await loadLeagues();
     await loadStatus();
   } catch (err) {
+    apiConnected.value = false;
     error.value = err.message || "Could not connect to the local API.";
   }
 }
@@ -335,8 +338,8 @@ watch(selectedYear, () => {
         </p>
       </div>
       <div class="api-state">
-        <span class="pulse" :class="{ active: dataStatus }"></span>
-        {{ dataStatus ? "Local API connected" : "Waiting for local API" }}
+        <span class="pulse" :class="{ active: apiConnected }"></span>
+        {{ apiConnected ? "Local API connected" : "Waiting for local API" }}
       </div>
     </header>
 
@@ -419,7 +422,7 @@ watch(selectedYear, () => {
     <template v-if="dataStatus">
       <section class="section-heading">
         <div>
-          <p class="kicker">Downloaded into SQLite</p>
+          <p class="kicker">Downloaded into database</p>
           <h2>{{ selectedLeague?.league_name || leagueId }}</h2>
         </div>
         <div class="league-code">{{ leagueId }}</div>

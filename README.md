@@ -7,7 +7,7 @@ Backend for ingesting KPL official match/BP data into SQL and serving hero ban/p
 | Piece | Choice | Why |
 |---|---|---|
 | API | **FastAPI** (Python) | Easy REST + great for later pandas analysis |
-| DB | **SQLite** locally → **Postgres** when hosting | Relational fit for matches/BP; simple hosting |
+| DB | **MySQL** for the active application; SQLite fallback retained for local safety | Relational fit for matches/BP and Spring Boot compatibility |
 | ORM | SQLAlchemy 2 | Clean models + raw SQL when needed |
 | HTTP client | httpx | Calls official KPL open APIs |
 
@@ -16,7 +16,7 @@ Backend for ingesting KPL official match/BP data into SQL and serving hero ban/p
 | | Your past | Reference `kpl-agent` | This project |
 |---|---|---|---|
 | Runtime | Node.js | Java 17 / Spring Boot | Python / FastAPI |
-| Database | MongoDB | MySQL | SQLite → Postgres |
+| Database | MongoDB | MySQL | MySQL (SQLite fallback) |
 | Cache | — | Redis | none yet |
 | Frontend | — | Vue 3 | later |
 
@@ -35,6 +35,19 @@ cp .env.example .env
 
 uvicorn app.main:app --reload --port 8000
 ```
+
+### Local MySQL
+
+The application and Management analysis pipeline use the same `DATABASE_URL`.
+The active local configuration uses MySQL with a non-root application user:
+
+```env
+DATABASE_URL=mysql+pymysql://kpl_app:your-url-encoded-password@127.0.0.1:3306/kpl_lab?charset=utf8mb4
+```
+
+On its first start, the backend creates the application tables. Re-download
+seasons from Management to populate MySQL, then run the complete pipeline to
+regenerate exports, statistics, and the draft models.
 
 Open docs: http://localhost:8000/docs
 
@@ -125,9 +138,9 @@ Win rate for a hero = picks where `pick.camp == battle.win_camp` / pick count.
 
 Good cheap path for a personal site:
 
-1. **Postgres** on Railway / Neon / Supabase / Render  
-2. Set `DATABASE_URL=postgresql+psycopg://...` (add `psycopg[binary]` to requirements)  
-3. Deploy this FastAPI app on **Railway**, **Render**, or **Fly.io**  
-4. Frontend (Vue/React/static) on **Vercel** / **Netlify**, calling your API  
+1. **MySQL** on Alibaba Cloud RDS, or MySQL on the same ECS instance for a small project
+2. Set `DATABASE_URL=mysql+pymysql://...`
+3. Deploy this FastAPI app behind Nginx, or migrate the API layer to Spring Boot later
+4. Serve the Vue build from Nginx, calling the `/api` reverse-proxy route
 
 You do **not** need Redis or Java for v1. Add a cache only if the site gets real traffic.

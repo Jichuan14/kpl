@@ -15,7 +15,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-from common import DB_PATH, connect, resolve_league
+from common import DB_PATH, connect, has_table, resolve_league
 
 # Typical KPL global-BP game: 10 bans + 10 picks.
 EXPECTED_BP_ACTIONS = 20
@@ -239,19 +239,9 @@ def check_battle_bp(conn, league_id: str) -> tuple[list[BattleIssue], list[Battl
     return incomplete, peak, missing_win
 
 
-def _has_table(conn, name: str) -> bool:
-    return (
-        conn.execute(
-            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
-            (name,),
-        ).fetchone()
-        is not None
-    )
-
-
 def check_battles_missing_players(conn, league_id: str) -> list[BattleIssue]:
     """Battles that have no battle_players rows (can't map camp → team)."""
-    if not _has_table(conn, "battle_players"):
+    if not has_table(conn, "battle_players"):
         return [
             BattleIssue(
                 match_id="",
@@ -536,7 +526,12 @@ def report_to_dict(report: QaReport) -> dict[str, Any]:
 
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="QA BP data for one KPL league/season")
-    parser.add_argument("--db", type=Path, default=DB_PATH, help="Path to kpl_bp.db")
+    parser.add_argument(
+        "--db",
+        type=Path,
+        default=DB_PATH,
+        help="SQLite fallback database path (DATABASE_URL is used for MySQL)",
+    )
     parser.add_argument("--league-id", default=None, help="Exact league_id, e.g. 20260002")
     parser.add_argument("--year", type=int, default=None, help="League year filter")
     parser.add_argument(

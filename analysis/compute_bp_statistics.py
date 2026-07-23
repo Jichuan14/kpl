@@ -35,7 +35,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
-from common import DB_PATH, REPO_ROOT, connect
+from common import DB_PATH, REPO_ROOT, connect, has_table
 
 DEFAULT_INPUT = (
     REPO_ROOT
@@ -51,12 +51,7 @@ CountMap = dict[tuple[Any, ...], int]
 
 def load_hero_names(db_path: Path) -> dict[int, str]:
     with connect(db_path) as conn:
-        has_heroes = (
-            conn.execute(
-                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='heroes'"
-            ).fetchone()
-            is not None
-        )
+        has_heroes = has_table(conn, "heroes")
         if has_heroes:
             rows = conn.execute(
                 "SELECT hero_id, hero_name FROM heroes WHERE hero_id > 0"

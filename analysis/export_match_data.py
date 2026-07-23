@@ -1,7 +1,8 @@
 """Export match-level BP and player data as JSONL.
 
-SQLite remains the source of truth. Each output line contains one complete
-match. Questionable source data is preserved and described by quality flags.
+The configured database is the source of truth. Each output line contains one
+complete match. Questionable source data is preserved and described by quality
+flags.
 
 Camp terminology
 ----------------
@@ -104,19 +105,13 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from common import DB_PATH, REPO_ROOT, connect, resolve_league
+from common import DB_PATH, REPO_ROOT, connect, has_table, resolve_league
 
 DEFAULT_EXPORT_DIR = REPO_ROOT / "analysis" / "exports"
 
 
 def _has_table(conn, name: str) -> bool:
-    return (
-        conn.execute(
-            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
-            (name,),
-        ).fetchone()
-        is not None
-    )
+    return has_table(conn, name)
 
 
 def _team_from_row(row: Any) -> dict[str, Any]:

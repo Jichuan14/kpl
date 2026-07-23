@@ -30,13 +30,12 @@ import argparse
 import json
 import math
 import random
-import sqlite3
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
-from common import REPO_ROOT, connect
+from common import REPO_ROOT, connect, has_table
 
 DEFAULT_OUTPUT = REPO_ROOT / "analysis" / "outputs" / "20260003" / "draft_model.json"
 DEFAULT_OUTPUT_ROOT = REPO_ROOT / "analysis" / "outputs"
@@ -122,12 +121,14 @@ def load_hero_metadata() -> dict[int, dict[str, str]]:
         }
         for row in rows
     }
-    try:
+    with connect() as database:
+        positions_available = has_table(database, "hero_positions")
+    if positions_available:
         with connect() as database:
             position_rows = database.execute(
                 "SELECT hero_id, position FROM hero_positions WHERE position > 0"
             ).fetchall()
-    except sqlite3.OperationalError:
+    else:
         position_rows = []
     for row in position_rows:
         hero_id = int(row["hero_id"])
