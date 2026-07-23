@@ -3,6 +3,7 @@ import { onMounted, ref, watch } from "vue";
 import { fetchDraftModel } from "./api";
 import { selectedLeagueId } from "./selectedLeague";
 import { language } from "./i18n";
+import { finishStartupLoading } from "./startupLoader";
 
 const model = ref(null);
 
@@ -15,7 +16,10 @@ async function loadModel() {
   }
 }
 
-onMounted(loadModel);
+onMounted(async () => {
+  await loadModel();
+  finishStartupLoading();
+});
 watch(selectedLeagueId, loadModel);
 </script>
 
