@@ -6,6 +6,7 @@ import {
   simulateDraft,
 } from "./api";
 import { selectAvailableLeague, selectedLeagueId } from "./selectedLeague";
+import { language, t } from "./i18n";
 
 const leagueId = selectedLeagueId;
 const seasons = ref([]);
@@ -41,10 +42,10 @@ const currentStep = computed(() =>
 );
 
 const currentLabel = computed(() => {
-  if (!currentStep.value) return "Draft complete";
-  const side = currentStep.value.side === "blue" ? "Blue" : "Red";
-  const action = currentStep.value.action === "ban" ? "ban" : "pick";
-  return `${side} ${action} · action ${currentStep.value.bp_order}`;
+  if (!currentStep.value) return t("Draft complete");
+  const side = t(currentStep.value.side === "blue" ? "Blue" : "Red");
+  const action = t(currentStep.value.action === "ban" ? "ban" : "pick");
+  return `${side} ${action} · ${t("action")} ${currentStep.value.bp_order}`;
 });
 
 const usedHeroIds = computed(
@@ -57,8 +58,8 @@ const usedHeroIds = computed(
 const heroes = computed(() => model.value?.heroes || []);
 
 const pickerTitle = computed(() => {
-  if (pickerTarget.value === "global-blue") return "Add Blue's earlier-game hero";
-  if (pickerTarget.value === "global-red") return "Add Red's earlier-game hero";
+  if (pickerTarget.value === "global-blue") return t("Add Blue's earlier-game hero");
+  if (pickerTarget.value === "global-red") return t("Add Red's earlier-game hero");
   return currentLabel.value;
 });
 
@@ -103,14 +104,18 @@ const selectedSeason = computed(() =>
 );
 
 const boardGroups = computed(() => [
-  { key: "blue_bans", title: "Blue bans", tone: "blue" },
-  { key: "blue_picks", title: "Blue picks", tone: "blue" },
-  { key: "red_bans", title: "Red bans", tone: "red" },
-  { key: "red_picks", title: "Red picks", tone: "red" },
+  { key: "blue_bans", title: t("Blue bans"), tone: "blue" },
+  { key: "blue_picks", title: t("Blue picks"), tone: "blue" },
+  { key: "red_bans", title: t("Red bans"), tone: "red" },
+  { key: "red_picks", title: t("Red picks"), tone: "red" },
 ]);
 
 function percent(value) {
   return `${(Number(value || 0) * 100).toFixed(1)}%`;
+}
+
+function number(value) {
+  return Number(value || 0).toLocaleString(language.value);
 }
 
 function heroName(heroId) {
@@ -295,7 +300,7 @@ watch(leagueId, loadModel);
             {{ season.year }} · {{ season.league_name }} · S{{ season.season }}
           </option>
         </select>
-        <small v-if="model">{{ model.training_decisions.toLocaleString() }} historic draft actions</small>
+        <small v-if="model">{{ number(model.training_decisions) }} historic draft actions</small>
       </label>
     </header>
 
@@ -306,7 +311,7 @@ watch(leagueId, loadModel);
       <section class="simulator-status">
         <div>
           <span>Next action</span>
-          <strong>{{ currentLabel }}</strong>
+          <strong data-i18n-ignore>{{ currentLabel }}</strong>
           <small>{{ selectedSeason?.league_name || leagueId }}</small>
         </div>
         <div class="simulator-actions">
@@ -386,7 +391,7 @@ watch(leagueId, loadModel);
             class="draft-group"
             :class="group.tone"
           >
-            <p>{{ group.title }}</p>
+            <p data-i18n-ignore>{{ group.title }}</p>
             <div class="draft-slots">
               <button
                 v-for="heroId in board[group.key]"
@@ -433,7 +438,7 @@ watch(leagueId, loadModel);
         <div class="picker-heading">
           <div>
             <p class="simulator-eyebrow">{{ pickerTarget === 'draft' ? 'Add the next action' : 'Global BP setup' }}</p>
-            <h2>{{ pickerTitle }}</h2>
+            <h2 data-i18n-ignore>{{ pickerTitle }}</h2>
           </div>
           <input v-model="search" type="search" placeholder="Find a hero…" :disabled="pickerTarget === 'draft' && !currentStep" />
         </div>

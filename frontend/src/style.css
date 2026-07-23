@@ -7,8 +7,8 @@
   --accent: #0f8a6b;
   --accent-deep: #0a5c49;
   --warn: #c45c26;
-  --mono: "IBM Plex Mono", ui-monospace, monospace;
-  --display: "Syne", "Avenir Next", sans-serif;
+  --mono: "IBM Plex Mono", "PingFang SC", "Microsoft YaHei", ui-monospace, monospace;
+  --display: "Syne", "PingFang SC", "Microsoft YaHei", "Avenir Next", sans-serif;
   color: var(--ink);
   background: var(--paper);
   font-family: var(--mono);

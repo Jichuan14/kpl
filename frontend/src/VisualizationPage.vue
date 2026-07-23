@@ -5,6 +5,7 @@ import {
   fetchVisualizationSeasons,
 } from "./api";
 import { selectAvailableLeague, selectedLeagueId } from "./selectedLeague";
+import { language } from "./i18n";
 
 const seasons = ref([]);
 const leagueId = selectedLeagueId;
@@ -119,7 +120,7 @@ function metricText(row) {
     return percent(value);
   }
   if (metric.value === "smoothed_lift") return `${value.toFixed(2)}×`;
-  return Math.round(value).toLocaleString();
+  return Math.round(value).toLocaleString(language.value);
 }
 
 function percent(value) {
@@ -127,7 +128,7 @@ function percent(value) {
 }
 
 function number(value) {
-  return Number(value || 0).toLocaleString();
+  return Number(value || 0).toLocaleString(language.value);
 }
 
 function initial(name) {

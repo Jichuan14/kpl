@@ -2,6 +2,7 @@
 import { onMounted, ref, watch } from "vue";
 import { fetchDraftModel } from "./api";
 import { selectedLeagueId } from "./selectedLeague";
+import { language } from "./i18n";
 
 const model = ref(null);
 
@@ -30,7 +31,7 @@ watch(selectedLeagueId, loadModel);
       </p>
       <p v-if="model" class="data-note">
         The currently selected season model contains
-        <strong>{{ Number(model.training_decisions || 0).toLocaleString() }}</strong>
+        <strong>{{ Number(model.training_decisions || 0).toLocaleString(language) }}</strong>
         historical ban and pick decisions.
       </p>
     </header>
