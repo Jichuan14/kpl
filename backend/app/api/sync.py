@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.schemas import ApiResponse, SyncLeagueRequest
 from app.services.analysis_pipeline import AnalysisPipeline
+from app.services.static_publisher import publish_league
 from app.services.sync import SyncService
 
 router = APIRouter(prefix="/api/sync", tags=["sync"])
@@ -31,9 +32,8 @@ def sync_league_bp(body: SyncLeagueRequest, db: Session = Depends(get_db)) -> Ap
         )
         if body.run_analysis:
             try:
-                result["analysis"] = AnalysisPipeline(
-                    result["league_id"]
-                ).run("all")
+                result["analysis"] = AnalysisPipeline(result["league_id"]).run("all")
+                result["published"] = publish_league(db, result["league_id"])
             except (ValueError, RuntimeError) as exc:
                 result["analysis_error"] = str(exc)
         return ApiResponse(message="league BP synced", data=result)
