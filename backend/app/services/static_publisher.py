@@ -32,6 +32,8 @@ def _write_json(path: Path, value: object) -> None:
         temporary.write("\n")
         temporary_path = Path(temporary.name)
     temporary_path.replace(path)
+    # Nginx runs as an unprivileged user and serves this bind-mounted file.
+    path.chmod(0o644)
 
 
 def _hero_url(hero_id: int) -> str:
@@ -70,6 +72,7 @@ def _download_hero_assets(db: Session) -> dict[str, int]:
                     temporary.write(response.content)
                     temporary_path = Path(temporary.name)
                 temporary_path.replace(path)
+                path.chmod(0o644)
                 downloaded += 1
             except (httpx.HTTPError, ValueError):
                 failed += 1
