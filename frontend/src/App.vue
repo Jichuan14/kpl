@@ -684,6 +684,13 @@ watch(selectedYear, () => {
   <DraftSimulatorPage v-else-if="isSimulator" />
   <MethodologyPage v-else-if="isMethodology" />
   <VisualizationPage v-else />
+
+  <footer class="site-footnote" data-i18n-ignore>
+    <div>
+      <strong>KPL 赛事数据分析平台，数据来源于腾讯官方接口。</strong>
+      <span>免责声明：本项目仅供学习与研究使用，所有赛事数据版权归腾讯及 KPL 联赛所有。不得将数据用于任何商业用途。使用本项目即表示您同意本声明。</span>
+    </div>
+  </footer>
 </template>
 
 <style scoped>
@@ -892,6 +899,27 @@ watch(selectedYear, () => {
   background: rgba(255, 255, 255, 0.68);
   color: var(--ink);
   font: inherit;
+}
+
+.site-footnote {
+  width: min(1240px, calc(100% - 2rem));
+  margin: 0 auto;
+  padding: 1.25rem 0 2rem;
+  border-top: 1px solid var(--line);
+  color: var(--ink-soft);
+  font-size: 0.7rem;
+  line-height: 1.65;
+}
+
+.site-footnote div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+}
+
+.site-footnote strong {
+  color: var(--ink);
+  font-weight: 600;
 }
 
 .page {
@@ -1365,6 +1393,11 @@ select {
   .page {
     width: min(100% - 1rem, 1240px);
     padding-top: 1.25rem;
+  }
+
+  .site-footnote {
+    width: calc(100% - 1rem);
+    padding-bottom: 1.25rem;
   }
 
   .masthead,
