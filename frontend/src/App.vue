@@ -12,6 +12,7 @@ import {
   syncLeagues,
 } from "./api";
 import { selectAvailableLeague, selectedLeagueId } from "./selectedLeague";
+import { language } from "./i18n";
 
 const leagues = ref([]);
 const leagueId = selectedLeagueId;
@@ -204,7 +205,7 @@ async function runPipeline(step) {
 }
 
 function number(value) {
-  return Number(value || 0).toLocaleString();
+  return Number(value || 0).toLocaleString(language.value);
 }
 
 function bytes(value) {
@@ -220,7 +221,7 @@ function dateTime(value) {
   const date = new Date(value);
   return Number.isNaN(date.getTime())
     ? value
-    : new Intl.DateTimeFormat(undefined, {
+    : new Intl.DateTimeFormat(language.value, {
         dateStyle: "medium",
         timeStyle: "short",
       }).format(date);
@@ -319,6 +320,13 @@ watch(selectedYear, () => {
         >
           Management
         </a>
+        <label class="language-switcher">
+          <span>Language</span>
+          <select v-model="language" aria-label="Language">
+            <option value="zh-CN" data-i18n-ignore>{{ language === "en" ? "Chinese" : "中文" }}</option>
+            <option value="en">English</option>
+          </select>
+        </label>
       </div>
     </div>
   </nav>
@@ -744,6 +752,24 @@ watch(selectedYear, () => {
 .utility-links a.active {
   border-color: var(--accent);
   color: var(--ink);
+}
+
+.language-switcher {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--ink-soft);
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+}
+
+.language-switcher select {
+  min-height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 0.25rem;
+  background: rgba(255, 255, 255, 0.68);
+  color: var(--ink);
+  font: inherit;
 }
 
 .page {
