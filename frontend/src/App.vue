@@ -316,7 +316,6 @@ watch(selectedYear, () => {
         <a
           href="/management"
           :class="{ active: isManagement }"
-          @click.prevent="navigate('/management')"
         >
           Management
         </a>
