@@ -5,6 +5,7 @@ __pycache__/
 .venv/
 venv/
 .env
+.env.production
 
 # Data / local DB
 backend/data/*.db
