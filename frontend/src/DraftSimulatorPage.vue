@@ -7,6 +7,7 @@ import {
 } from "./api";
 import { selectAvailableLeague, selectedLeagueId } from "./selectedLeague";
 import { language, t } from "./i18n";
+import { finishStartupLoading } from "./startupLoader";
 
 const leagueId = selectedLeagueId;
 const seasons = ref([]);
@@ -276,6 +277,8 @@ onMounted(async () => {
     await loadModel();
   } catch (err) {
     error.value = err.message || "Could not load the draft simulator.";
+  } finally {
+    finishStartupLoading();
   }
 });
 
