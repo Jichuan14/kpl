@@ -12,6 +12,7 @@ PipelineStep = Literal[
     "statistics",
     "meta",
     "team_synergy",
+    "draft_model",
     "all",
 ]
 
@@ -38,7 +39,14 @@ class AnalysisPipeline:
 
     def run(self, step: PipelineStep) -> dict[str, Any]:
         steps = (
-            ["export", "decisions", "statistics", "meta", "team_synergy"]
+            [
+                "export",
+                "decisions",
+                "statistics",
+                "meta",
+                "team_synergy",
+                "draft_model",
+            ]
             if step == "all"
             else [step]
         )
@@ -134,5 +142,13 @@ class AnalysisPipeline:
                 str(self.output_dir / "team_synergy_stats.jsonl"),
                 "--min-selections",
                 "2",
+            ]
+        if step == "draft_model":
+            # Per-season artifacts are cumulative: each season is trained on
+            # its own decision export plus every earlier available season.
+            return [
+                python,
+                str(ANALYSIS_DIR / "build_draft_model.py"),
+                "--per-season",
             ]
         raise ValueError(f"Unknown pipeline step: {step}")

@@ -58,5 +58,20 @@ class AnalysisRunRequest(BaseModel):
         "statistics",
         "meta",
         "team_synergy",
+        "draft_model",
         "all",
     ] = "all"
+
+
+class DraftSimulationRequest(BaseModel):
+    league_id: str = Field(min_length=1, max_length=32)
+    bp_order: int = Field(ge=1, le=20)
+    blue_picks: list[int] = Field(default_factory=list)
+    red_picks: list[int] = Field(default_factory=list)
+    blue_bans: list[int] = Field(default_factory=list)
+    red_bans: list[int] = Field(default_factory=list)
+    blue_used_previous_battles: list[int] = Field(default_factory=list)
+    red_used_previous_battles: list[int] = Field(default_factory=list)
+    legal_hero_ids: list[int] | None = None
+    rollouts: int = Field(default=100, ge=100, le=5000)
+    seed: int | None = None

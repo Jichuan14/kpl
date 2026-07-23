@@ -13,6 +13,7 @@ backend/data/*.sqlite*
 *.sqlite
 *.sqlite3
 *.jsonl
+analysis/outputs/*/draft_model.json
 
 # IDE / OS
 .idea/

@@ -54,6 +54,17 @@ export function fetchTeamSynergies({ leagueId, minSelections = 2 }) {
   return request(`/api/visualization/team-synergies?${params}`);
 }
 
+export function fetchDraftModel(leagueId) {
+  return request(`/api/simulations/model?league_id=${encodeURIComponent(leagueId)}`);
+}
+
+export function simulateDraft(state) {
+  return request("/api/simulations/draft", {
+    method: "POST",
+    body: JSON.stringify(state),
+  });
+}
+
 export function syncLeagues() {
   return request("/api/sync/leagues", { method: "POST" });
 }

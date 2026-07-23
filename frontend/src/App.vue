@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import MethodologyPage from "./MethodologyPage.vue";
+import DraftSimulatorPage from "./DraftSimulatorPage.vue";
 import TeamSynergyPage from "./TeamSynergyPage.vue";
 import VisualizationPage from "./VisualizationPage.vue";
 import {
@@ -32,6 +33,7 @@ const routePath = ref(window.location.pathname);
 const isManagement = computed(() => routePath.value.startsWith("/management"));
 const isMethodology = computed(() => routePath.value.startsWith("/methodology"));
 const isTeams = computed(() => routePath.value.startsWith("/teams"));
+const isSimulator = computed(() => routePath.value.startsWith("/simulator"));
 
 const selectedLeague = computed(() =>
   leagues.value.find((league) => league.league_id === leagueId.value)
@@ -62,12 +64,14 @@ const artifacts = computed(() => {
     statistics = [],
     meta,
     team_synergy: teamSynergy,
+    draft_model: draftModel,
   } = dataStatus.value.artifacts;
   return [
     ...exports,
     ...statistics,
     ...(meta ? [meta] : []),
     ...(teamSynergy ? [teamSynergy] : []),
+    ...(draftModel ? [draftModel] : []),
   ];
 });
 
@@ -278,7 +282,7 @@ watch(selectedYear, () => {
       <div class="primary-tabs" aria-label="Analysis views">
         <a
           href="/"
-          :class="{ active: !isManagement && !isMethodology && !isTeams }"
+          :class="{ active: !isManagement && !isMethodology && !isTeams && !isSimulator }"
           @click.prevent="navigate('/')"
         >
           <span>Explore</span>
@@ -291,6 +295,14 @@ watch(selectedYear, () => {
         >
           <span>Compare</span>
           <strong>Teams</strong>
+        </a>
+        <a
+          href="/simulator"
+          :class="{ active: isSimulator }"
+          @click.prevent="navigate('/simulator')"
+        >
+          <span>Simulate</span>
+          <strong>BP draft</strong>
         </a>
       </div>
       <div class="utility-links">
@@ -522,6 +534,14 @@ watch(selectedYear, () => {
             >
               {{ processingStep === "team_synergy" ? `Grouping… ${processingElapsed}s` : "5 · Calculate team synergies" }}
             </button>
+            <button
+              class="button ghost"
+              type="button"
+              :disabled="Boolean(processingStep) || syncing || !pipelineReady('decisions_jsonl')"
+              @click="runPipeline('draft_model')"
+            >
+              {{ processingStep === "draft_model" ? `Training… ${processingElapsed}s` : "6 · Build draft model" }}
+            </button>
           </div>
 
           <ol class="pipeline">
@@ -622,6 +642,7 @@ watch(selectedYear, () => {
     </section>
   </main>
   <TeamSynergyPage v-else-if="isTeams" />
+  <DraftSimulatorPage v-else-if="isSimulator" />
   <MethodologyPage v-else-if="isMethodology" />
   <VisualizationPage v-else />
 </template>

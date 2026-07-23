@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -246,6 +247,25 @@ def data_status(
         and team_synergy_path.is_file()
         and team_synergy_path.stat().st_mtime >= decision_mtime
     )
+    draft_model = artifact(
+        league_output_dir / "draft_model.json",
+        "draft_model",
+        "Draft probability model",
+    )
+    draft_model_path = league_output_dir / "draft_model.json"
+    draft_model["ready"] = bool(
+        decision_mtime is not None
+        and draft_model_path.is_file()
+        and draft_model_path.stat().st_mtime >= decision_mtime
+    )
+    if draft_model["exists"]:
+        try:
+            with draft_model_path.open(encoding="utf-8") as source:
+                draft_model["records"] = int(
+                    json.load(source).get("training_decisions") or 0
+                )
+        except (OSError, ValueError, json.JSONDecodeError):
+            draft_model["records"] = 0
     pipeline = [
         {
             "key": "download",
@@ -294,6 +314,12 @@ def data_status(
             "ready": team_synergy["ready"],
             "detail": f'{team_synergy["records"]:,} team-specific pairs',
         },
+        {
+            "key": "draft_model",
+            "label": "Draft probability model",
+            "ready": draft_model["ready"],
+            "detail": f'{draft_model["records"]:,} training decisions',
+        },
     ]
 
     return ApiResponse(
@@ -319,6 +345,7 @@ def data_status(
                 "statistics": statistics,
                 "meta": meta,
                 "team_synergy": team_synergy,
+                "draft_model": draft_model,
             },
             "processing_note": (
                 "JSONL processing preserves questionable source rows and marks "

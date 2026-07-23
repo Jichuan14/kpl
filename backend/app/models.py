@@ -140,6 +140,21 @@ class Hero(Base):
     hero_icon: Mapped[str] = mapped_column(String(500), default="")
 
 
+class HeroPosition(Base):
+    """An observed lane/role a hero can occupy in professional match data."""
+
+    __tablename__ = "hero_positions"
+    __table_args__ = (
+        UniqueConstraint("hero_id", "position", name="uk_hero_position"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    hero_id: Mapped[int] = mapped_column(Integer, index=True)
+    position: Mapped[int] = mapped_column(Integer)
+    position_desc: Mapped[str] = mapped_column(String(32), default="")
+    observed_pick_count: Mapped[int] = mapped_column(Integer, default=0)
+
+
 class HeroBpStats(Base):
     """Precomputed per-league hero BP aggregates for the frontend."""
 

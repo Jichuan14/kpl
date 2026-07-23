@@ -9,12 +9,15 @@ Offline BP analysis scripts and notebooks. Reads from `backend/data/kpl_bp.db`.
 python3 analysis/init_heroes.py
 ```
 
+This also maintains `hero_positions`: one row per hero and observed role. A
+hero may have several rows when it has been played in multiple positions.
+
 ## Scripts
 
 | File | Purpose |
 |---|---|
 | `common.py` | Shared DB path, connect, league resolution |
-| `init_heroes.py` | Create/seed the `heroes` reference table (`hero_id`, `hero_name`, `hero_icon`) |
+| `init_heroes.py` | Create/refresh hero metadata and observed role eligibility |
 | `sync_battle_players.py` | Sync `teams`, `players`, `battle_players` from battle detail API |
 | `qa_bp.py` | Per-league BP data QA (completeness, peak candidates, pick reuse) |
 | `export_match_data.py` | Export ordered match BP, players, sides, winners, and quality flags to JSONL |
@@ -22,6 +25,7 @@ python3 analysis/init_heroes.py
 | `compute_bp_statistics.py` | Compute availability-adjusted response, synergy, counter-pick, and counter-ban statistics |
 | `compute_meta_heroes.py` | Rank opening-priority heroes from first-phase bans and Blue first picks |
 | `compute_team_synergies.py` | Rank availability-adjusted hero pairs preferred by each team |
+| `build_draft_model.py` | Train an interpretable next-action probability model and run BP rollouts |
 
 The Vue management page runs the complete pipeline automatically after a
 league download, or lets each stage run separately. Its outputs are isolated
@@ -122,6 +126,33 @@ Output:
 ```text
 analysis/outputs/{league_id}/meta_hero_stats.jsonl
 ```
+
+### Build a draft probability model
+
+Builds a smoothed, contextual model for the next legal pick or ban. It uses
+the action, side, draft slot, and already-visible own/opponent picks and bans.
+The default training set includes all available BP decision exports and writes
+the artifact to the 2026 S3 output folder.
+
+```bash
+# Train the default model.
+python3 analysis/build_draft_model.py
+
+# Write one artifact per season. Each artifact uses only that season and
+# earlier available seasons as training data.
+python3 analysis/build_draft_model.py --per-season
+
+# Score the next action and simulate the rest of an example draft.
+python3 analysis/build_draft_model.py \
+  --state analysis/example_draft_state.json \
+  --rollouts 1000 \
+  --seed 7
+```
+
+The state requires `bp_order`, the next action number. It may also provide
+`blue_picks`, `red_picks`, `blue_bans`, `red_bans`, and an exact
+`legal_hero_ids` list. Omitting the legal list uses every trained hero that is
+not already on the board.
 
 ### Compute team-specific hero synergies
 
