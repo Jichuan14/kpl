@@ -1,0 +1,36 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    env_file:
+      - .env.production
+    restart: unless-stopped
+    volumes:
+      # ECS-local persistent state. Do not mount these from network storage.
+      - ./backend/data:/app/backend/data
+      - ./analysis/exports:/app/analysis/exports
+      - ./analysis/outputs:/app/analysis/outputs
+    expose:
+      - "8000"
+    networks:
+      - kpl_internal
+
+  web:
+    build:
+      context: frontend
+      dockerfile: Dockerfile
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./deploy/.htpasswd:/etc/nginx/auth/.htpasswd:ro
+    networks:
+      - kpl_internal
+
+networks:
+  kpl_internal:
+    driver: bridge
