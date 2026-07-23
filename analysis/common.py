@@ -31,7 +31,11 @@ class SqlAlchemyConnection:
     """Small DB-API-style adapter for analysis scripts that use qmark SQL."""
 
     def __init__(self, url: str):
-        self.engine = create_engine(url)
+        self.engine = create_engine(
+            url,
+            pool_pre_ping=True,
+            pool_recycle=1800,
+        )
         self.connection = self.engine.connect()
         self.dialect = self.engine.dialect.name
 

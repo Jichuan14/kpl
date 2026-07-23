@@ -134,13 +134,20 @@ hero_bp_stats    (precomputed rates for frontend)
 
 Win rate for a hero = picks where `pick.camp == battle.win_camp` / pick count.
 
-## Hosting later
+## Alibaba Cloud deployment
 
-Good cheap path for a personal site:
+Production container files are included for an Alibaba Cloud ECS + ApsaraDB
+RDS for MySQL deployment:
 
-1. **MySQL** on Alibaba Cloud RDS, or MySQL on the same ECS instance for a small project
-2. Set `DATABASE_URL=mysql+pymysql://...`
-3. Deploy this FastAPI app behind Nginx, or migrate the API layer to Spring Boot later
-4. Serve the Vue build from Nginx, calling the `/api` reverse-proxy route
+```bash
+cp .env.production.example .env.production
+# Edit DATABASE_URL, then create deploy/.htpasswd as documented.
+docker compose -f docker-compose.production.yml up -d --build
+```
 
-You do **not** need Redis or Java for v1. Add a cache only if the site gets real traffic.
+Nginx serves the Vue build, proxies `/api` to FastAPI, and protects Management
+and data-changing endpoints with HTTP Basic authentication. Generated analysis
+files are persisted on the ECS disk outside the container lifecycle.
+
+See [`deploy/README.md`](deploy/README.md) for resource setup, MySQL migration,
+HTTPS, backups, and update instructions.
