@@ -7,11 +7,9 @@ flex heroes can have more than one row in ``hero_positions``.
 
 from __future__ import annotations
 
-import sqlite3
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-DB_PATH = REPO_ROOT / "backend" / "data" / "kpl_bp.db"
+from common import DB_PATH, connect, has_table
 
 # These heroes appear in the BP catalog but have no player-role observation in
 # the locally downloaded matches. Keep the role model complete while marking
@@ -25,7 +23,7 @@ POSITION_OVERRIDES = (
     (529, 5, "打野"),  # 盘古
 )
 
-CREATE_SQL = """
+CREATE_HEROES_SQL = """
 CREATE TABLE IF NOT EXISTS heroes (
     hero_id INTEGER PRIMARY KEY,
     hero_name VARCHAR(100) NOT NULL DEFAULT '',
@@ -46,18 +44,15 @@ CREATE TABLE IF NOT EXISTS hero_positions (
 """
 
 def init_heroes(db_path: Path = DB_PATH) -> int:
-    if not db_path.exists():
-        raise FileNotFoundError(f"Database not found: {db_path}")
-
-    with sqlite3.connect(db_path) as conn:
-        conn.execute(CREATE_SQL)
-        conn.execute(CREATE_HERO_POSITIONS_SQL)
-        has_battle_players = conn.execute(
-            """
-            SELECT 1 FROM sqlite_master
-            WHERE type = 'table' AND name = 'battle_players'
-            """
-        ).fetchone()
+    with connect(db_path) as conn:
+        mysql = getattr(conn, "dialect", None) == "mysql"
+        # The backend normally owns this schema. These definitions keep the
+        # standalone maintenance command usable with the SQLite fallback.
+        if not has_table(conn, "heroes"):
+            conn.execute(CREATE_HEROES_SQL)
+        if not has_table(conn, "hero_positions"):
+            conn.execute(CREATE_HERO_POSITIONS_SQL)
+        has_battle_players = has_table(conn, "battle_players")
         sources = """
             SELECT hero_id, hero_name, hero_icon
             FROM battle_bps
@@ -73,26 +68,25 @@ def init_heroes(db_path: Path = DB_PATH) -> int:
         rows = conn.execute(
             f"""
             SELECT hero_id, MAX(hero_name), MAX(hero_icon)
-            FROM ({sources})
+            FROM ({sources}) AS hero_sources
             GROUP BY hero_id
             """
         ).fetchall()
-        conn.executemany(
+        if mysql:
+            hero_upsert = """
+                INSERT INTO heroes (hero_id, hero_name, hero_icon) VALUES (?, ?, ?)
+                ON DUPLICATE KEY UPDATE
+                    hero_name = IF(VALUES(hero_name) != '', VALUES(hero_name), hero_name),
+                    hero_icon = IF(VALUES(hero_icon) != '', VALUES(hero_icon), hero_icon)
             """
-            INSERT INTO heroes (hero_id, hero_name, hero_icon)
-            VALUES (?, ?, ?)
-            ON CONFLICT(hero_id) DO UPDATE SET
-                hero_name = CASE
-                    WHEN excluded.hero_name != '' THEN excluded.hero_name
-                    ELSE heroes.hero_name
-                END,
-                hero_icon = CASE
-                    WHEN excluded.hero_icon != '' THEN excluded.hero_icon
-                    ELSE heroes.hero_icon
-                END
-            """,
-            rows,
-        )
+        else:
+            hero_upsert = """
+                INSERT INTO heroes (hero_id, hero_name, hero_icon) VALUES (?, ?, ?)
+                ON CONFLICT(hero_id) DO UPDATE SET
+                    hero_name = CASE WHEN excluded.hero_name != '' THEN excluded.hero_name ELSE heroes.hero_name END,
+                    hero_icon = CASE WHEN excluded.hero_icon != '' THEN excluded.hero_icon ELSE heroes.hero_icon END
+            """
+        conn.executemany(hero_upsert, rows)
         if has_battle_players:
             position_rows = conn.execute(
                 """
@@ -106,40 +100,43 @@ def init_heroes(db_path: Path = DB_PATH) -> int:
                 GROUP BY hero_id, position
                 """
             ).fetchall()
-            conn.executemany(
+            if mysql:
+                position_upsert = """
+                    INSERT INTO hero_positions (hero_id, position, position_desc, observed_pick_count)
+                    VALUES (?, ?, ?, ?)
+                    ON DUPLICATE KEY UPDATE
+                        position_desc = IF(VALUES(position_desc) != '', VALUES(position_desc), position_desc),
+                        observed_pick_count = VALUES(observed_pick_count)
                 """
-                INSERT INTO hero_positions (
-                    hero_id, position, position_desc, observed_pick_count
-                )
-                VALUES (?, ?, ?, ?)
-                ON CONFLICT(hero_id, position) DO UPDATE SET
-                    position_desc = CASE
-                        WHEN excluded.position_desc != '' THEN excluded.position_desc
-                        ELSE hero_positions.position_desc
-                    END,
-                    observed_pick_count = excluded.observed_pick_count
-                """,
-                position_rows,
-            )
-        conn.executemany(
+            else:
+                position_upsert = """
+                    INSERT INTO hero_positions (hero_id, position, position_desc, observed_pick_count)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT(hero_id, position) DO UPDATE SET
+                        position_desc = CASE WHEN excluded.position_desc != '' THEN excluded.position_desc ELSE hero_positions.position_desc END,
+                        observed_pick_count = excluded.observed_pick_count
+                """
+            conn.executemany(position_upsert, position_rows)
+        if mysql:
+            overrides_upsert = """
+                INSERT INTO hero_positions (hero_id, position, position_desc, observed_pick_count)
+                VALUES (?, ?, ?, 0)
+                ON DUPLICATE KEY UPDATE
+                    position_desc = IF(position_desc = '', VALUES(position_desc), position_desc)
             """
-            INSERT INTO hero_positions (
-                hero_id, position, position_desc, observed_pick_count
-            )
-            VALUES (?, ?, ?, 0)
-            ON CONFLICT(hero_id, position) DO UPDATE SET
-                position_desc = CASE
-                    WHEN hero_positions.position_desc = '' THEN excluded.position_desc
-                    ELSE hero_positions.position_desc
-                END
-            """,
-            POSITION_OVERRIDES,
-        )
+        else:
+            overrides_upsert = """
+                INSERT INTO hero_positions (hero_id, position, position_desc, observed_pick_count)
+                VALUES (?, ?, ?, 0)
+                ON CONFLICT(hero_id, position) DO UPDATE SET
+                    position_desc = CASE WHEN hero_positions.position_desc = '' THEN excluded.position_desc ELSE hero_positions.position_desc END
+            """
+        conn.executemany(overrides_upsert, POSITION_OVERRIDES)
         conn.commit()
-        count = conn.execute("SELECT COUNT(*) FROM heroes").fetchone()[0]
+        count = conn.execute("SELECT COUNT(*) AS count FROM heroes").fetchone()["count"]
     return int(count)
 
 
 if __name__ == "__main__":
     n = init_heroes()
-    print(f"hero catalog ready: {n} heroes in {DB_PATH}")
+    print(f"hero catalog ready: {n} heroes (using DATABASE_URL or {DB_PATH})")

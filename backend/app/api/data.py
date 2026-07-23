@@ -89,7 +89,8 @@ def data_status(
     if not all(character.isalnum() or character in "-_" for character in league_id):
         raise HTTPException(status_code=400, detail="Invalid league_id")
 
-    tables = set(inspect(db.get_bind()).get_table_names())
+    bind = db.get_bind()
+    tables = set(inspect(bind).get_table_names())
     league = db.execute(
         text(
             "SELECT league_name, year, season, status FROM leagues "
@@ -133,6 +134,11 @@ def data_status(
         else heroes_used
     )
 
+    player_identity = (
+        "CONCAT(player_name, ':', team_id)"
+        if bind.dialect.name == "mysql"
+        else "player_name || ':' || team_id"
+    )
     counts = {
         "matches": count_rows(db, "matches", league_id),
         "finished_matches": count_rows(
@@ -164,7 +170,7 @@ def data_status(
             int(
                 db.execute(
                     text(
-                        "SELECT COUNT(DISTINCT player_name || ':' || team_id) "
+                        f"SELECT COUNT(DISTINCT {player_identity}) "
                         "FROM battle_players "
                         "WHERE league_id = :league_id AND player_name != ''"
                     ),

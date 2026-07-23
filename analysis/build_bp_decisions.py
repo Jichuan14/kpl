@@ -32,7 +32,7 @@ import json
 from pathlib import Path
 from typing import Any, Iterator
 
-from common import DB_PATH, REPO_ROOT, connect
+from common import DB_PATH, REPO_ROOT, connect, has_table
 
 DEFAULT_INPUT = (
     REPO_ROOT / "analysis" / "exports" / "20260002" / "matches.jsonl"
@@ -49,12 +49,7 @@ DEFAULT_OUTPUT = (
 def load_hero_roster(db_path: Path) -> tuple[list[int], dict[int, str]]:
     """Load stable hero IDs from ``heroes`` or fall back to BP rows."""
     with connect(db_path) as conn:
-        has_heroes = (
-            conn.execute(
-                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='heroes'"
-            ).fetchone()
-            is not None
-        )
+        has_heroes = has_table(conn, "heroes")
         if has_heroes:
             rows = conn.execute(
                 """

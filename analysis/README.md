@@ -1,6 +1,8 @@
 # Analysis
 
-Offline BP analysis scripts and notebooks. Reads from `backend/data/kpl_bp.db`.
+Offline BP analysis scripts and notebooks. They use `backend/.env`'s
+`DATABASE_URL` (MySQL in the active local configuration); SQLite remains a
+fallback when no non-SQLite URL is configured.
 
 ## Setup
 
@@ -67,8 +69,9 @@ python3 analysis/sync_battle_players.py --year 2026 --name 挑战者杯 --only-m
 
 ### Export analysis data
 
-SQLite stays the source of truth. The exporter writes one complete match per
-JSONL line and preserves questionable rows with `quality_flags`.
+The configured database is the source of truth. The exporter writes one
+complete match per JSONL line and preserves questionable rows with
+`quality_flags`.
 
 ```bash
 # One match

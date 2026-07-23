@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from common import DB_PATH, connect, resolve_league
+from common import DB_PATH, connect, has_table, resolve_league
 
 COMP_BASE_URL = "https://prod.comp.smoba.qq.com"
 DEFAULT_DELAY = 0.2
@@ -84,9 +84,17 @@ class SyncStats:
 
 
 def ensure_tables(conn) -> None:
-    conn.executescript(
-        CREATE_TEAMS_SQL + CREATE_PLAYERS_SQL + CREATE_BATTLE_PLAYERS_SQL
-    )
+    if getattr(conn, "dialect", None) == "mysql":
+        required = ("teams", "players", "battle_players")
+        missing = [name for name in required if not has_table(conn, name)]
+        if missing:
+            raise RuntimeError(
+                "Missing MySQL tables: "
+                + ", ".join(missing)
+                + ". Start the backend once to initialize the application schema."
+            )
+        return
+    conn.executescript(CREATE_TEAMS_SQL + CREATE_PLAYERS_SQL + CREATE_BATTLE_PLAYERS_SQL)
     conn.commit()
 
 
@@ -112,22 +120,21 @@ def seed_teams_from_matches(conn, league_id: str) -> int:
 def upsert_team(conn, team_id: str, team_name: str, team_icon: str = "") -> int:
     if not team_id:
         return 0
-    conn.execute(
+    if getattr(conn, "dialect", None) == "mysql":
+        sql = """
+            INSERT INTO teams (team_id, team_name, team_icon) VALUES (?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+                team_name = IF(VALUES(team_name) != '', VALUES(team_name), team_name),
+                team_icon = IF(VALUES(team_icon) != '', VALUES(team_icon), team_icon)
         """
-        INSERT INTO teams (team_id, team_name, team_icon)
-        VALUES (?, ?, ?)
-        ON CONFLICT(team_id) DO UPDATE SET
-            team_name = CASE
-                WHEN excluded.team_name != '' THEN excluded.team_name
-                ELSE teams.team_name
-            END,
-            team_icon = CASE
-                WHEN excluded.team_icon != '' THEN excluded.team_icon
-                ELSE teams.team_icon
-            END
-        """,
-        (team_id, team_name or "", team_icon or ""),
-    )
+    else:
+        sql = """
+            INSERT INTO teams (team_id, team_name, team_icon) VALUES (?, ?, ?)
+            ON CONFLICT(team_id) DO UPDATE SET
+                team_name = CASE WHEN excluded.team_name != '' THEN excluded.team_name ELSE teams.team_name END,
+                team_icon = CASE WHEN excluded.team_icon != '' THEN excluded.team_icon ELSE teams.team_icon END
+        """
+    conn.execute(sql, (team_id, team_name or "", team_icon or ""))
     return 1
 
 
@@ -140,22 +147,23 @@ def upsert_player(
 ) -> int:
     if not player_name:
         return 0
-    conn.execute(
+    if getattr(conn, "dialect", None) == "mysql":
+        sql = """
+            INSERT INTO players (player_name, team_id, team_name, player_icon)
+            VALUES (?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+                team_name = IF(VALUES(team_name) != '', VALUES(team_name), team_name),
+                player_icon = IF(VALUES(player_icon) != '', VALUES(player_icon), player_icon)
         """
-        INSERT INTO players (player_name, team_id, team_name, player_icon)
-        VALUES (?, ?, ?, ?)
-        ON CONFLICT(player_name, team_id) DO UPDATE SET
-            team_name = CASE
-                WHEN excluded.team_name != '' THEN excluded.team_name
-                ELSE players.team_name
-            END,
-            player_icon = CASE
-                WHEN excluded.player_icon != '' THEN excluded.player_icon
-                ELSE players.player_icon
-            END
-        """,
-        (player_name, team_id or "", team_name or "", player_icon or ""),
-    )
+    else:
+        sql = """
+            INSERT INTO players (player_name, team_id, team_name, player_icon)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(player_name, team_id) DO UPDATE SET
+                team_name = CASE WHEN excluded.team_name != '' THEN excluded.team_name ELSE players.team_name END,
+                player_icon = CASE WHEN excluded.player_icon != '' THEN excluded.player_icon ELSE players.player_icon END
+        """
+    conn.execute(sql, (player_name, team_id or "", team_name or "", player_icon or ""))
     return 1
 
 
