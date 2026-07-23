@@ -102,6 +102,7 @@ export function syncLeagueBp({ leagueId, matchLimit = null } = {}) {
       match_limit: matchLimit,
       recompute_stats: true,
       run_analysis: true,
+      incremental: true,
     }),
   });
 }

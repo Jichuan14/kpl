@@ -48,6 +48,14 @@ class SyncLeagueRequest(BaseModel):
     )
     recompute_stats: bool = True
     run_analysis: bool = True
+    incremental: bool = Field(
+        default=True,
+        description=(
+            "When true, refresh the match list but download battle/BP details "
+            "only for finished matches that do not yet have complete battle data. "
+            "Set false for an explicit full repair/backfill."
+        ),
+    )
 
 
 class AnalysisRunRequest(BaseModel):

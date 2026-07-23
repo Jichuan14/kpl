@@ -130,6 +130,67 @@ class UnifiedBattleSyncTest(unittest.TestCase):
             self.db.scalar(select(func.count()).select_from(BattlePlayer)), 2
         )
 
+    def test_incremental_sync_downloads_only_finished_matches_without_battles(self) -> None:
+        calls: list[str] = []
+        # This existing match is fully stored, so it must not be downloaded.
+        self.db.add(
+            BattleBp(
+                battle_id="battle-1",
+                league_id="league-1",
+                action_type=0,
+                hero_id=1,
+            )
+        )
+        self.db.commit()
+        self.service._sleep = lambda: None
+        self.service.api.get_matches = lambda league_id: {
+            "code": 200,
+            "results": [
+                {
+                    "match_id": "match-1",
+                    "status": 2,
+                    "camp1": {"team_id": "team-a", "team_name": "Team A"},
+                    "camp2": {"team_id": "team-b", "team_name": "Team B"},
+                },
+                {
+                    "match_id": "match-new",
+                    "status": 2,
+                    "camp1": {"team_id": "team-a", "team_name": "Team A"},
+                    "camp2": {"team_id": "team-b", "team_name": "Team B"},
+                },
+            ],
+        }
+
+        def battles(match_id: str) -> dict:
+            calls.append(f"battles:{match_id}")
+            return {"code": 200, "results": [{"battle_id": "battle-new"}]}
+
+        def detail(battle_id: str) -> dict:
+            calls.append(f"detail:{battle_id}")
+            data = self.detail()
+            data["battle_id"] = battle_id
+            return {"code": 200, "data": data}
+
+        self.service.api.get_match_battles = battles
+        self.service.api.get_battle_detail = detail
+
+        first = self.service.sync_league_bp(
+            league_id="league-1", recompute_stats=False
+        )
+        self.assertTrue(first["data_changed"])
+        self.assertEqual(first["finished_matches_found"], 2)
+        self.assertEqual(first["finished_matches_processed"], 1)
+        self.assertEqual(first["finished_matches_skipped"], 1)
+        self.assertEqual(calls, ["battles:match-new", "detail:battle-new"])
+
+        calls.clear()
+        second = self.service.sync_league_bp(
+            league_id="league-1", recompute_stats=False
+        )
+        self.assertFalse(second["data_changed"])
+        self.assertEqual(second["finished_matches_processed"], 0)
+        self.assertEqual(calls, [])
+
 
 if __name__ == "__main__":
     unittest.main()
