@@ -27,6 +27,7 @@ const processingStep = ref("");
 const processingElapsed = ref(0);
 const error = ref("");
 const notice = ref("");
+const apiConnected = ref(false);
 let syncTimer = null;
 let processingTimer = null;
 const routePath = ref(window.location.pathname);
@@ -79,6 +80,7 @@ const artifacts = computed(() => {
 async function loadLeagues() {
   const rows = await fetchLeagues();
   leagues.value = rows || [];
+  apiConnected.value = true;
   selectAvailableLeague(leagues.value);
   const initial = leagues.value.find(
     (league) => league.league_id === leagueId.value
@@ -95,6 +97,7 @@ async function loadStatus() {
   error.value = "";
   try {
     dataStatus.value = await fetchDataStatus(leagueId.value);
+    apiConnected.value = true;
   } catch (err) {
     dataStatus.value = null;
     error.value = err.message || "Could not load local data status.";
@@ -342,8 +345,8 @@ watch(selectedYear, () => {
         </p>
       </div>
       <div class="api-state">
-        <span class="pulse" :class="{ active: dataStatus }"></span>
-        {{ dataStatus ? "Local API connected" : "Waiting for local API" }}
+        <span class="pulse" :class="{ active: apiConnected }"></span>
+        {{ apiConnected ? "Local API connected" : "Waiting for local API" }}
       </div>
     </header>
 
