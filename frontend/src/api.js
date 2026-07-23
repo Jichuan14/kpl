@@ -27,35 +27,42 @@ async function request(path, options = {}) {
   return body.data;
 }
 
+async function staticData(path) {
+  let res;
+  try {
+    res = await fetch(path);
+  } catch (err) {
+    throw new Error(`Cannot load published analysis (${err.message}).`);
+  }
+  if (!res.ok) {
+    throw new Error("Published analysis is not available yet. Run the analysis pipeline.");
+  }
+  return res.json();
+}
+
 export function fetchLeagues() {
   return request("/api/leagues");
 }
 
 export function fetchVisualizationSeasons() {
-  return request("/api/visualization/seasons");
+  return staticData("/assets/data/seasons.json");
 }
 
 export function fetchVisualizationPatterns({
   leagueId,
   minSelections = 2,
 }) {
-  const params = new URLSearchParams({
-    league_id: leagueId,
-    min_selections: String(minSelections),
-  });
-  return request(`/api/visualization/patterns?${params}`);
+  void minSelections;
+  return staticData(`/assets/data/${encodeURIComponent(leagueId)}/patterns.json`);
 }
 
 export function fetchTeamSynergies({ leagueId, minSelections = 2 }) {
-  const params = new URLSearchParams({
-    league_id: leagueId,
-    min_selections: String(minSelections),
-  });
-  return request(`/api/visualization/team-synergies?${params}`);
+  void minSelections;
+  return staticData(`/assets/data/${encodeURIComponent(leagueId)}/team-synergies.json`);
 }
 
 export function fetchDraftModel(leagueId) {
-  return request(`/api/simulations/model?league_id=${encodeURIComponent(leagueId)}`);
+  return staticData(`/assets/data/${encodeURIComponent(leagueId)}/draft-model.json`);
 }
 
 export function simulateDraft(state) {
