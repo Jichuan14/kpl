@@ -6,6 +6,7 @@ import {
 } from "./api";
 import { selectAvailableLeague, selectedLeagueId } from "./selectedLeague";
 import { language } from "./i18n";
+import { finishStartupLoading } from "./startupLoader";
 
 const seasons = ref([]);
 const leagueId = selectedLeagueId;
@@ -182,6 +183,8 @@ onMounted(async () => {
     await loadPatterns();
   } catch (err) {
     error.value = err.message || "Could not load visualization data.";
+  } finally {
+    finishStartupLoading();
   }
 });
 
