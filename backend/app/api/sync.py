@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.schemas import ApiResponse, SyncLeagueRequest
+from app.services.analysis_pipeline import AnalysisPipeline
 from app.services.sync import SyncService
 
 router = APIRouter(prefix="/api/sync", tags=["sync"])
@@ -20,7 +21,7 @@ def sync_leagues(db: Session = Depends(get_db)) -> ApiResponse:
 
 @router.post("/league-bp")
 def sync_league_bp(body: SyncLeagueRequest, db: Session = Depends(get_db)) -> ApiResponse:
-    """Pull matches + battle BP for one league, then recompute hero aggregates."""
+    """Pull complete match, battle, BP, team, player, and hero data."""
     sync = SyncService(db)
     try:
         result = sync.sync_league_bp(
@@ -28,6 +29,13 @@ def sync_league_bp(body: SyncLeagueRequest, db: Session = Depends(get_db)) -> Ap
             match_limit=body.match_limit,
             recompute_stats=body.recompute_stats,
         )
+        if body.run_analysis:
+            try:
+                result["analysis"] = AnalysisPipeline(
+                    result["league_id"]
+                ).run("all")
+            except (ValueError, RuntimeError) as exc:
+                result["analysis_error"] = str(exc)
         return ApiResponse(message="league BP synced", data=result)
     finally:
         sync.close()

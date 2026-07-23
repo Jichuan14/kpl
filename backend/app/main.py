@@ -1,7 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 
-from app.api import bp, leagues, sync
+from app.api import bp, data, leagues, pipeline, simulation, sync, visualization
 from app.config import get_settings
 from app.database import init_db
 
@@ -20,10 +21,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 app.include_router(leagues.router)
 app.include_router(bp.router)
 app.include_router(sync.router)
+app.include_router(data.router)
+app.include_router(pipeline.router)
+app.include_router(visualization.router)
+app.include_router(simulation.router)
 
 
 @app.on_event("startup")

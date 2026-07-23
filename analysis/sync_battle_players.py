@@ -1,6 +1,8 @@
-"""Sync teams + players + per-battle player rows from the KPL battle detail API.
+"""Legacy backfill for teams, players, and per-battle player rows.
 
-Creates tables if missing, then backfills for battles already stored in the DB.
+The backend's unified league sync now writes these rows from the same battle
+detail response as BP actions. Use this script only to repair databases created
+before that pipeline existed; running it after a unified sync repeats API calls.
 
 Usage (from repo root):
 

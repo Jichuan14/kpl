@@ -12,7 +12,13 @@ async function request(path, options = {}) {
   }
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(text || `HTTP ${res.status}`);
+    let message = text;
+    try {
+      message = JSON.parse(text)?.detail || text;
+    } catch {
+      // Keep the plain response body.
+    }
+    throw new Error(message || `HTTP ${res.status}`);
   }
   const body = await res.json();
   if (body && body.success === false) {
@@ -23,6 +29,56 @@ async function request(path, options = {}) {
 
 export function fetchLeagues() {
   return request("/api/leagues");
+}
+
+export function fetchVisualizationSeasons() {
+  return request("/api/visualization/seasons");
+}
+
+export function fetchVisualizationPatterns({
+  leagueId,
+  minSelections = 2,
+}) {
+  const params = new URLSearchParams({
+    league_id: leagueId,
+    min_selections: String(minSelections),
+  });
+  return request(`/api/visualization/patterns?${params}`);
+}
+
+export function fetchTeamSynergies({ leagueId, minSelections = 2 }) {
+  const params = new URLSearchParams({
+    league_id: leagueId,
+    min_selections: String(minSelections),
+  });
+  return request(`/api/visualization/team-synergies?${params}`);
+}
+
+export function fetchDraftModel(leagueId) {
+  return request(`/api/simulations/model?league_id=${encodeURIComponent(leagueId)}`);
+}
+
+export function simulateDraft(state) {
+  return request("/api/simulations/draft", {
+    method: "POST",
+    body: JSON.stringify(state),
+  });
+}
+
+export function syncLeagues() {
+  return request("/api/sync/leagues", { method: "POST" });
+}
+
+export function fetchDataStatus(leagueId) {
+  const params = new URLSearchParams({ league_id: leagueId });
+  return request(`/api/data/status?${params}`);
+}
+
+export function runAnalysisStep({ leagueId, step }) {
+  return request("/api/pipeline/run", {
+    method: "POST",
+    body: JSON.stringify({ league_id: leagueId, step }),
+  });
 }
 
 export function fetchHeroBp({ leagueId, sort = "presence", limit = 40 } = {}) {
@@ -38,6 +94,7 @@ export function syncLeagueBp({ leagueId, matchLimit = null } = {}) {
       league_id: leagueId || null,
       match_limit: matchLimit,
       recompute_stats: true,
+      run_analysis: true,
     }),
   });
 }
