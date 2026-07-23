@@ -13,6 +13,8 @@ import {
 } from "./api";
 import { selectAvailableLeague, selectedLeagueId } from "./selectedLeague";
 import { language } from "./i18n";
+import ladySunLoader from "./lady-sun-loader.png";
+import { finishStartupLoading, startupLoading } from "./startupLoader";
 
 const leagues = ref([]);
 const leagueId = selectedLeagueId;
@@ -30,6 +32,7 @@ const notice = ref("");
 const apiConnected = ref(false);
 let syncTimer = null;
 let processingTimer = null;
+let startupFallbackTimer = null;
 const routePath = ref(window.location.pathname);
 
 const isManagement = computed(() => routePath.value.startsWith("/management"));
@@ -236,6 +239,8 @@ async function loadManagement() {
     await loadStatus();
   } catch (err) {
     error.value = err.message || "Could not connect to the local API.";
+  } finally {
+    finishStartupLoading();
   }
 }
 
@@ -255,10 +260,12 @@ function navigate(path) {
 onMounted(() => {
   window.addEventListener("popstate", handlePopState);
   if (isManagement.value) loadManagement();
+  startupFallbackTimer = window.setTimeout(finishStartupLoading, 12000);
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener("popstate", handlePopState);
+  if (startupFallbackTimer) window.clearTimeout(startupFallbackTimer);
 });
 
 watch(leagueId, () => {
@@ -278,6 +285,28 @@ watch(selectedYear, () => {
 </script>
 
 <template>
+  <Transition name="startup-loader">
+    <section
+      v-if="startupLoading"
+      class="startup-loader"
+      role="status"
+      aria-live="polite"
+      aria-label="Loading KPL Lab"
+    >
+      <div class="startup-loader-card">
+        <div class="startup-mascot">
+          <img :src="ladySunLoader" alt="" />
+          <span class="startup-muzzle-flash" aria-hidden="true"></span>
+        </div>
+        <div class="startup-copy">
+          <span>Loading KPL Lab</span>
+          <span>Lady Sun is clearing the lane…</span>
+        </div>
+        <div class="startup-progress" aria-hidden="true"><span></span></div>
+      </div>
+    </section>
+  </Transition>
+
   <nav class="site-navigation">
     <a class="site-brand" href="/" @click.prevent="navigate('/')">
       KPL<span>LAB</span>
@@ -658,6 +687,96 @@ watch(selectedYear, () => {
 </template>
 
 <style scoped>
+.startup-loader {
+  position: fixed;
+  z-index: 100;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+  background: rgba(243, 246, 244, 0.94);
+  backdrop-filter: blur(8px);
+}
+
+.startup-loader-card {
+  display: grid;
+  justify-items: center;
+  width: min(360px, 100%);
+  padding: 1.25rem 1.25rem 1.45rem;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 1.2rem 3.5rem rgba(16, 42, 46, 0.14);
+}
+
+.startup-mascot {
+  position: relative;
+  width: 210px;
+  height: 170px;
+  margin: -0.7rem 0 -0.25rem;
+  animation: mascot-roll 1.4s ease-in-out infinite;
+}
+
+.startup-mascot img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 0.5rem 0.5rem rgba(16, 42, 46, 0.14));
+  animation: mascot-recoil 1.4s ease-in-out infinite;
+}
+
+.startup-muzzle-flash {
+  position: absolute;
+  right: 1.5%;
+  bottom: 10%;
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  background: #ff6f4f;
+  box-shadow: 0 0 0 5px rgba(255, 185, 103, 0.45), 0 0 18px 8px rgba(255, 125, 76, 0.38);
+  opacity: 0;
+  transform: scale(0.25);
+  animation: muzzle-flash 1.4s ease-in-out infinite;
+}
+
+.startup-copy { display: grid; gap: 0.2rem; text-align: center; }
+.startup-copy span:first-child { color: var(--ink); font: 800 1.05rem var(--display); }
+.startup-copy span:last-child { color: var(--ink-soft); font-size: 0.67rem; letter-spacing: 0.035em; }
+
+.startup-progress {
+  width: min(290px, 100%);
+  height: 8px;
+  margin-top: 1rem;
+  overflow: hidden;
+  border: 1px solid rgba(16, 42, 46, 0.18);
+  border-radius: 999px;
+  background: rgba(16, 42, 46, 0.08);
+}
+
+.startup-progress span {
+  display: block;
+  width: 42%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent-deep), #4eb57b, #ffd16d);
+  box-shadow: 0 0 12px rgba(15, 138, 107, 0.45);
+  animation: progress-shot 1.4s ease-in-out infinite;
+}
+
+.startup-loader-enter-active, .startup-loader-leave-active { transition: opacity 320ms ease; }
+.startup-loader-enter-from, .startup-loader-leave-to { opacity: 0; }
+
+@keyframes mascot-roll { 0%, 100% { transform: translateX(-9px); } 50% { transform: translateX(9px); } }
+@keyframes mascot-recoil { 0%, 65%, 100% { transform: translateX(0) rotate(0deg); } 72% { transform: translateX(-7px) rotate(-1.5deg); } 79% { transform: translateX(3px) rotate(0.6deg); } }
+@keyframes muzzle-flash { 0%, 66%, 82%, 100% { opacity: 0; transform: scale(0.25); } 72% { opacity: 1; transform: scale(1.25); } }
+@keyframes progress-shot { 0% { transform: translateX(-110%); } 64% { transform: translateX(35%); } 73% { transform: translateX(92%); } 100% { transform: translateX(250%); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .startup-mascot, .startup-mascot img, .startup-muzzle-flash, .startup-progress span { animation: none; }
+  .startup-muzzle-flash { opacity: 0.7; transform: scale(0.7); }
+  .startup-progress span { width: 72%; transform: none; }
+}
+
 .site-navigation {
   display: flex;
   width: min(1440px, calc(100% - 2rem));
