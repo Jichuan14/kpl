@@ -21,7 +21,7 @@ export const messages = {
     "Language": "语言",
     "Chinese": "中文",
     "English": "English",
-    "KPL · Local data operations": "KPL · 本地数据管理",
+    "Private · Local data operations": "私有 · 本地数据管理",
     "Data Management": "数据管理",
     "Download official match data, inspect local coverage, and track every JSONL analysis stage from one place.": "下载官方赛事数据、查看本地数据覆盖情况，并在同一处跟踪全部 JSONL 分析流程。",
     "Local API connected": "本地 API 已连接",
@@ -134,7 +134,7 @@ export const messages = {
     "Blue picks": "蓝方选择",
     "Red bans": "红方禁用",
     "Red picks": "红方选择",
-    "Honor of Kings · Season intelligence": "王者荣耀 · 赛季洞察",
+    "Personal analysis practice · Public match information": "个人分析实践 · 公开赛事信息",
     "Draft Pattern Explorer": "BP 模式探索器",
     "Filter the season data to investigate specific counters, combinations, and ban responses.": "筛选赛季数据，分析特定克制、组合与禁用后的应对。",
     "No analyzed seasons": "暂无已分析赛季",
@@ -199,7 +199,7 @@ export const messages = {
     "Chosen / legal": "已选 / 合法",
     "Usual": "常规",
     "Win rate": "胜率",
-    "KPL Lab guide": "KPL Lab 指南",
+    "Draft Atlas guide": "Draft Atlas 指南",
     "How the draft model works": "BP 模型如何工作",
     "This page explains the data used by the draft simulator, how meta heroes are ranked, how hero relationships work, and how the next-action probability is calculated.": "本页说明 BP 模拟器使用的数据、版本英雄的排序方式、英雄关系的工作原理，以及下一步操作概率的计算方式。",
     "The currently selected season model contains": "当前所选赛季模型包含",
@@ -436,6 +436,6 @@ export function setupPageLocalization() {
 watch(language, (value) => {
   window.localStorage.setItem(storageKey, value);
   document.documentElement.lang = value;
-  document.title = value === "zh-CN" ? "KPL LAB · 王者荣耀数据分析" : "KPL LAB · Draft intelligence";
+  document.title = value === "zh-CN" ? "Draft Atlas · 赛事 BP 数据学习工具" : "Draft Atlas · Draft learning tool";
   translateTree();
 }, { immediate: true });

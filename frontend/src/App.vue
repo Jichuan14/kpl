@@ -13,7 +13,6 @@ import {
 } from "./api";
 import { selectAvailableLeague, selectedLeagueId } from "./selectedLeague";
 import { language } from "./i18n";
-import ladySunLoader from "./lady-sun-loader.png";
 import { finishStartupLoading, startupLoading } from "./startupLoader";
 
 const leagues = ref([]);
@@ -30,6 +29,11 @@ const processingElapsed = ref(0);
 const error = ref("");
 const notice = ref("");
 const apiConnected = ref(false);
+const rightsContactEmail = "jichuan1625@gmail.com";
+const firstVisitKey = "draft-atlas-notice-seen";
+const showProjectNotice = ref(
+  window.localStorage.getItem(firstVisitKey) !== "true"
+);
 let syncTimer = null;
 let processingTimer = null;
 let startupFallbackTimer = null;
@@ -39,6 +43,11 @@ const isManagement = computed(() => routePath.value.startsWith("/management"));
 const isMethodology = computed(() => routePath.value.startsWith("/methodology"));
 const isTeams = computed(() => routePath.value.startsWith("/teams"));
 const isSimulator = computed(() => routePath.value.startsWith("/simulator"));
+
+function dismissProjectNotice() {
+  window.localStorage.setItem(firstVisitKey, "true");
+  showProjectNotice.value = false;
+}
 
 const selectedLeague = computed(() =>
   leagues.value.find((league) => league.league_id === leagueId.value)
@@ -291,16 +300,13 @@ watch(selectedYear, () => {
       class="startup-loader"
       role="status"
       aria-live="polite"
-      aria-label="Loading KPL Lab"
+      aria-label="Loading Draft Atlas"
     >
       <div class="startup-loader-card">
-        <div class="startup-mascot">
-          <img :src="ladySunLoader" alt="" />
-          <span class="startup-muzzle-flash" aria-hidden="true"></span>
-        </div>
+        <span class="startup-mark" aria-hidden="true">DA</span>
         <div class="startup-copy">
-          <span>Loading KPL Lab</span>
-          <span>Lady Sun is clearing the lane…</span>
+          <span>Loading Draft Atlas</span>
+          <span>Preparing the analysis workspace…</span>
         </div>
         <div class="startup-progress" aria-hidden="true"><span></span></div>
       </div>
@@ -309,7 +315,7 @@ watch(selectedYear, () => {
 
   <nav class="site-navigation">
     <a class="site-brand" href="/" @click.prevent="navigate('/')">
-      KPL<span>LAB</span>
+      Draft <span>Atlas</span>
     </a>
     <div class="navigation-links">
       <div class="primary-tabs" aria-label="Analysis views">
@@ -346,12 +352,6 @@ watch(selectedYear, () => {
         >
           How it works
         </a>
-        <a
-          href="/management"
-          :class="{ active: isManagement }"
-        >
-          Management
-        </a>
         <label class="language-switcher">
           <span>Language</span>
           <select v-model="language" aria-label="Language">
@@ -366,7 +366,7 @@ watch(selectedYear, () => {
   <main v-if="isManagement" class="page">
     <header class="masthead">
       <div>
-        <p class="eyebrow">KPL · Local data operations</p>
+        <p class="eyebrow">Private · Local data operations</p>
         <h1>Data Management</h1>
         <p class="lede">
           Download official match data, inspect local coverage, and track every
@@ -685,12 +685,30 @@ watch(selectedYear, () => {
   <MethodologyPage v-else-if="isMethodology" />
   <VisualizationPage v-else />
 
-  <footer class="site-footnote" data-i18n-ignore>
+  <footer class="site-footnote">
     <div>
-      <strong>KPL 赛事数据分析平台，数据来源于腾讯官方接口。</strong>
-      <span>免责声明：本项目仅供学习与研究使用，所有赛事数据版权归腾讯及 KPL 联赛所有。不得将数据用于任何商业用途。使用本项目即表示您同意本声明。</span>
+      <strong>赛事 BP 数据学习工具 · 基于公开赛事信息的个人数据分析实践</strong>
+      <span>本站为非官方个人学习与研究项目，仅展示基于赛事信息生成的统计与分析结果，不提供赛事内容、视频、图片或原始数据下载。本站与腾讯、王者荣耀及 KPL 联赛不存在隶属、合作、赞助或认可关系。如权利人认为本站内容涉及其合法权益，请通过 {{ rightsContactEmail }} 联系，我会及时核查和处理。</span>
     </div>
   </footer>
+
+  <Transition name="project-notice">
+    <section
+      v-if="showProjectNotice && !startupLoading"
+      class="project-notice"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="project-notice-title"
+    >
+      <div class="project-notice-card">
+        <p class="eyebrow">Draft Atlas</p>
+        <h2 id="project-notice-title">赛事 BP 数据学习工具</h2>
+        <p>基于公开赛事信息的个人数据分析实践。</p>
+        <p>本站为独立个人学习项目，与腾讯、王者荣耀及 KPL 联赛不存在隶属、合作、赞助或认可关系。</p>
+        <button type="button" @click="dismissProjectNotice">我已了解</button>
+      </div>
+    </section>
+  </Transition>
 </template>
 
 <style scoped>
@@ -716,34 +734,18 @@ watch(selectedYear, () => {
   box-shadow: 0 1.2rem 3.5rem rgba(16, 42, 46, 0.14);
 }
 
-.startup-mascot {
-  position: relative;
-  width: 210px;
-  height: 170px;
-  margin: -0.7rem 0 -0.25rem;
-  animation: mascot-roll 1.4s ease-in-out infinite;
-}
-
-.startup-mascot img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  filter: drop-shadow(0 0.5rem 0.5rem rgba(16, 42, 46, 0.14));
-  animation: mascot-recoil 1.4s ease-in-out infinite;
-}
-
-.startup-muzzle-flash {
-  position: absolute;
-  right: 1.5%;
-  bottom: 10%;
-  width: 19px;
-  height: 19px;
+.startup-mark {
+  display: grid;
+  width: 4rem;
+  height: 4rem;
+  margin: .35rem 0 .8rem;
+  place-items: center;
+  border: 2px solid var(--accent);
   border-radius: 50%;
-  background: #ff6f4f;
-  box-shadow: 0 0 0 5px rgba(255, 185, 103, 0.45), 0 0 18px 8px rgba(255, 125, 76, 0.38);
-  opacity: 0;
-  transform: scale(0.25);
-  animation: muzzle-flash 1.4s ease-in-out infinite;
+  color: var(--accent-deep);
+  font: 800 1rem var(--display);
+  letter-spacing: -.04em;
+  animation: startup-spin 1.4s ease-in-out infinite;
 }
 
 .startup-copy { display: grid; gap: 0.2rem; text-align: center; }
@@ -773,14 +775,11 @@ watch(selectedYear, () => {
 .startup-loader-enter-active, .startup-loader-leave-active { transition: opacity 320ms ease; }
 .startup-loader-enter-from, .startup-loader-leave-to { opacity: 0; }
 
-@keyframes mascot-roll { 0%, 100% { transform: translateX(-9px); } 50% { transform: translateX(9px); } }
-@keyframes mascot-recoil { 0%, 65%, 100% { transform: translateX(0) rotate(0deg); } 72% { transform: translateX(-7px) rotate(-1.5deg); } 79% { transform: translateX(3px) rotate(0.6deg); } }
-@keyframes muzzle-flash { 0%, 66%, 82%, 100% { opacity: 0; transform: scale(0.25); } 72% { opacity: 1; transform: scale(1.25); } }
+@keyframes startup-spin { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(180deg); } }
 @keyframes progress-shot { 0% { transform: translateX(-110%); } 64% { transform: translateX(35%); } 73% { transform: translateX(92%); } 100% { transform: translateX(250%); } }
 
 @media (prefers-reduced-motion: reduce) {
-  .startup-mascot, .startup-mascot img, .startup-muzzle-flash, .startup-progress span { animation: none; }
-  .startup-muzzle-flash { opacity: 0.7; transform: scale(0.7); }
+  .startup-mark, .startup-progress span { animation: none; }
   .startup-progress span { width: 72%; transform: none; }
 }
 
@@ -921,6 +920,42 @@ watch(selectedYear, () => {
   color: var(--ink);
   font-weight: 600;
 }
+
+.project-notice {
+  position: fixed;
+  z-index: 90;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+  background: rgba(16, 42, 46, 0.48);
+  backdrop-filter: blur(4px);
+}
+
+.project-notice-card {
+  width: min(440px, 100%);
+  padding: 1.6rem;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background: #fff;
+  box-shadow: 0 1.2rem 3.5rem rgba(16, 42, 46, 0.22);
+}
+
+.project-notice-card h2 { font-size: 1.7rem; }
+.project-notice-card p { color: var(--ink-soft); font-size: .82rem; line-height: 1.7; }
+.project-notice-card button {
+  min-height: 38px;
+  margin-top: .4rem;
+  padding: .55rem .8rem;
+  border: 1px solid var(--accent-deep);
+  border-radius: .25rem;
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+.project-notice-enter-active, .project-notice-leave-active { transition: opacity 180ms ease; }
+.project-notice-enter-from, .project-notice-leave-to { opacity: 0; }
 
 .page {
   width: min(1240px, calc(100% - 2rem));

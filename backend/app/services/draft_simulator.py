@@ -64,7 +64,6 @@ def metadata(league_id: str) -> dict[str, Any]:
             {
                 "hero_id": hero_id,
                 "hero_name": model["hero_names"].get(str(hero_id), str(hero_id)),
-                "hero_icon": model.get("hero_icons", {}).get(str(hero_id), ""),
                 "positions": model.get("hero_positions", {}).get(str(hero_id), []),
             }
             for hero_id in model["hero_ids"]
