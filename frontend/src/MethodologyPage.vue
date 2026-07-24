@@ -26,7 +26,7 @@ watch(selectedLeagueId, loadModel);
 <template>
   <main class="method-page">
     <header>
-      <p class="eyebrow">KPL Lab guide</p>
+      <p class="eyebrow">Draft Atlas guide</p>
       <h1>How the draft model works</h1>
       <p class="intro">
         This page explains the data used by the draft simulator, how meta heroes

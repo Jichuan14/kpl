@@ -198,7 +198,7 @@ watch(relation, () => {
   <main class="visual-page">
     <section class="explorer-heading">
       <div>
-        <p class="visual-eyebrow">Honor of Kings · Season intelligence</p>
+        <p class="visual-eyebrow">Personal analysis practice · Public match information</p>
         <h1>Draft Pattern Explorer</h1>
         <p>
           Filter the season data to investigate specific counters, combinations,
