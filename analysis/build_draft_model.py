@@ -8,7 +8,7 @@ to legal heroes and normalized to a probability distribution.
 
 Examples:
 
-    # Train from every exported season and write the default 2026 S3 artifact.
+    # Train from supplied exports and write the default 2026 S3 artifact.
     python3 analysis/build_draft_model.py
 
     # Train from explicit exports, then score and simulate a saved board state.
@@ -41,6 +41,10 @@ from common import REPO_ROOT, connect
 DEFAULT_OUTPUT = REPO_ROOT / "analysis" / "outputs" / "20260003" / "draft_model.json"
 DEFAULT_OUTPUT_ROOT = REPO_ROOT / "analysis" / "outputs"
 DEFAULT_INPUTS = sorted((REPO_ROOT / "analysis" / "exports").glob("*/bp_decisions.jsonl"))
+# A season's model includes its own draft decisions plus this many immediately
+# preceding available seasons.  This limits patch/meta drift while retaining a
+# useful historical sample.
+PREVIOUS_SEASONS = 4
 ROLE_FIELDS = {
     "own_pick": "current_team_picks",
     "opponent_pick": "current_opponent_picks",
@@ -503,7 +507,10 @@ def main() -> None:
     parser.add_argument(
         "--per-season",
         action="store_true",
-        help="Write one model per input season, trained on that season and earlier inputs.",
+        help=(
+            "Write one model per input season, trained on that season plus its "
+            f"previous {PREVIOUS_SEASONS} available seasons."
+        ),
     )
     parser.add_argument(
         "--output-root",
@@ -532,14 +539,17 @@ def main() -> None:
         if args.state:
             raise ValueError("--state cannot be used with --per-season; score a specific model afterward")
         ordered_inputs = sorted(inputs, key=lambda path: path.parent.name)
-        for index, target_input in enumerate(ordered_inputs, 1):
+        for index, target_input in enumerate(ordered_inputs):
+            training_inputs = ordered_inputs[
+                max(0, index - PREVIOUS_SEASONS) : index + 1
+            ]
             model = build_model(
-                read_decisions(ordered_inputs[:index]),
+                read_decisions(training_inputs),
                 alpha=args.alpha,
                 min_relation_selections=args.min_relation_selections,
                 shrinkage=args.shrinkage,
                 max_lift=args.max_lift,
-                input_paths=ordered_inputs[:index],
+                input_paths=training_inputs,
             )
             write_model(model, args.output_root / target_input.parent.name / "draft_model.json")
         return

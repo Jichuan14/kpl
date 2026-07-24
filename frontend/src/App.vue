@@ -7,6 +7,7 @@ import VisualizationPage from "./VisualizationPage.vue";
 import {
   fetchDataStatus,
   fetchLeagues,
+  publishFrontendAssets,
   runAnalysisStep,
   syncLeagueBp,
   syncLeagues,
@@ -65,11 +66,19 @@ const seasonLeagues = computed(() =>
   )
 );
 
-const readyStages = computed(
-  () => dataStatus.value?.pipeline?.filter((stage) => stage.ready).length || 0
+const analysisPipeline = computed(() =>
+  (dataStatus.value?.pipeline || []).filter(
+    (stage) => !["download", "players"].includes(stage.key)
+  )
 );
-
-const totalStages = computed(() => dataStatus.value?.pipeline?.length || 0);
+const readyStages = computed(
+  () => analysisPipeline.value.filter((stage) => stage.ready).length
+);
+const totalStages = computed(() => analysisPipeline.value.length);
+const frontendAssets = computed(() => dataStatus.value?.frontend_assets || []);
+const frontendAssetsReady = computed(
+  () => frontendAssets.value.filter((item) => item.ready).length
+);
 
 const artifacts = computed(() => {
   if (!dataStatus.value?.artifacts) return [];
@@ -163,9 +172,7 @@ async function runDownload({ matchLimit = null, mode = "all" } = {}) {
       `${result.bp_rows_written || 0} BP actions · ` +
       `${result.battle_player_rows_written || 0} player mappings · ` +
       `${result.heroes_upserted || 0} heroes`;
-    notice.value = result.analysis_error
-      ? `${downloadSummary} · analysis failed: ${result.analysis_error}`
-      : `${downloadSummary} · season analysis generated`;
+    notice.value = `${downloadSummary} · local source data refreshed`;
     await loadStatus();
   } catch (err) {
     notice.value = "";
@@ -175,6 +182,31 @@ async function runDownload({ matchLimit = null, mode = "all" } = {}) {
     syncTimer = null;
     syncing.value = false;
     syncMode.value = "";
+  }
+}
+
+async function publishAssets() {
+  if (!leagueId.value || processingStep.value || syncing.value) return;
+  processingStep.value = "publish";
+  processingElapsed.value = 0;
+  error.value = "";
+  notice.value = "Writing browser-ready assets from local analysis…";
+  processingTimer = window.setInterval(() => {
+    processingElapsed.value += 1;
+  }, 1000);
+  try {
+    const result = await publishFrontendAssets(leagueId.value);
+    notice.value =
+      `Frontend assets published for ${leagueId.value} · ` +
+      `${(result.files || []).length} files written`;
+    await loadStatus();
+  } catch (err) {
+    notice.value = "";
+    error.value = err.message || "Could not publish frontend assets.";
+  } finally {
+    if (processingTimer) window.clearInterval(processingTimer);
+    processingTimer = null;
+    processingStep.value = "";
   }
 }
 
@@ -504,11 +536,16 @@ watch(selectedYear, () => {
         <article class="panel pipeline-panel">
           <div class="panel-title">
             <div>
-              <p class="kicker">Processing coverage</p>
-              <h2>Download → JSONL → analysis</h2>
+              <p class="kicker">Step 2 · local analysis</p>
+              <h2>Entire analysis pipeline</h2>
             </div>
             <strong class="stage-count">{{ readyStages }}/{{ totalStages }}</strong>
           </div>
+
+          <p class="panel-intro">
+            This checks the JSONL and analysis files already on this machine.
+            Run it only when the source download changed or a stage is missing.
+          </p>
 
           <div class="progress-track" aria-hidden="true">
             <span
@@ -529,63 +566,15 @@ watch(selectedYear, () => {
             >
               {{
                 processingStep === "all"
-                  ? `Running all… ${processingElapsed}s`
-                  : "Run all analysis"
+                  ? `Analyzing… ${processingElapsed}s`
+                  : "Run / rebuild entire analysis"
               }}
-            </button>
-            <button
-              class="button ghost"
-              type="button"
-              :disabled="Boolean(processingStep) || syncing || !pipelineReady('download')"
-              @click="runPipeline('export')"
-            >
-              {{ processingStep === "export" ? `Exporting… ${processingElapsed}s` : "1 · Export JSONL" }}
-            </button>
-            <button
-              class="button ghost"
-              type="button"
-              :disabled="Boolean(processingStep) || syncing || !pipelineReady('matches_jsonl')"
-              @click="runPipeline('decisions')"
-            >
-              {{ processingStep === "decisions" ? `Building… ${processingElapsed}s` : "2 · Build decisions" }}
-            </button>
-            <button
-              class="button ghost"
-              type="button"
-              :disabled="Boolean(processingStep) || syncing || !pipelineReady('decisions_jsonl')"
-              @click="runPipeline('statistics')"
-            >
-              {{ processingStep === "statistics" ? `Computing… ${processingElapsed}s` : "3 · Compute statistics" }}
-            </button>
-            <button
-              class="button ghost"
-              type="button"
-              :disabled="Boolean(processingStep) || syncing || !pipelineReady('decisions_jsonl')"
-              @click="runPipeline('meta')"
-            >
-              {{ processingStep === "meta" ? `Ranking… ${processingElapsed}s` : "4 · Calculate meta heroes" }}
-            </button>
-            <button
-              class="button ghost"
-              type="button"
-              :disabled="Boolean(processingStep) || syncing || !pipelineReady('decisions_jsonl')"
-              @click="runPipeline('team_synergy')"
-            >
-              {{ processingStep === "team_synergy" ? `Grouping… ${processingElapsed}s` : "5 · Calculate team synergies" }}
-            </button>
-            <button
-              class="button ghost"
-              type="button"
-              :disabled="Boolean(processingStep) || syncing || !pipelineReady('decisions_jsonl')"
-              @click="runPipeline('draft_model')"
-            >
-              {{ processingStep === "draft_model" ? `Training… ${processingElapsed}s` : "6 · Build draft model" }}
             </button>
           </div>
 
           <ol class="pipeline">
             <li
-              v-for="(stage, index) in dataStatus.pipeline"
+              v-for="(stage, index) in analysisPipeline"
               :key="stage.key"
               :class="{ ready: stage.ready }"
             >
@@ -605,33 +594,58 @@ watch(selectedYear, () => {
           <p class="quality-note">{{ dataStatus.processing_note }}</p>
         </article>
 
-        <article class="panel freshness-panel">
+        <article class="panel publish-panel">
           <div class="panel-title">
             <div>
-              <p class="kicker">Local freshness</p>
-              <h2>Last database updates</h2>
+              <p class="kicker">Step 3 · public files</p>
+              <h2>Populate frontend assets</h2>
             </div>
+            <strong class="stage-count">{{ frontendAssetsReady }}/{{ frontendAssets.length }}</strong>
           </div>
-          <dl class="freshness-list">
-            <div>
-              <dt>Matches</dt>
-              <dd>{{ dateTime(dataStatus.freshness.matches) }}</dd>
-            </div>
-            <div>
-              <dt>Battles</dt>
-              <dd>{{ dateTime(dataStatus.freshness.battles) }}</dd>
-            </div>
-            <div>
-              <dt>Hero aggregates</dt>
-              <dd>{{ dateTime(dataStatus.freshness.hero_stats) }}</dd>
-            </div>
-          </dl>
-          <p class="terminal-note">
-            JSONL processing remains an explicit local pipeline. The dashboard
-            lists generated files without treating flagged source rows as
-            deleted or corrected.
+          <p class="panel-intro">
+            Copies the selected season’s completed local analysis into the
+            browser folder. This does not download KPL data or rerun analysis.
+          </p>
+          <div class="pipeline-actions">
+            <button
+              class="button primary"
+              type="button"
+              :disabled="Boolean(processingStep) || syncing || !dataStatus.analysis_ready"
+              @click="publishAssets"
+            >
+              {{ processingStep === "publish" ? `Publishing… ${processingElapsed}s` : "Populate frontend assets" }}
+            </button>
+          </div>
+          <ul class="public-assets">
+            <li v-for="item in frontendAssets" :key="item.key">
+              <span class="file-state" :class="{ ready: item.ready }">
+                {{ item.ready ? "Ready" : item.exists ? "Stale" : "Missing" }}
+              </span>
+              <div>
+                <strong>{{ item.label }}</strong>
+                <small>{{ item.path }} · {{ dateTime(item.updated_at) }}</small>
+              </div>
+            </li>
+          </ul>
+          <p v-if="!dataStatus.analysis_ready" class="terminal-note">
+            Complete the analysis pipeline first; this prevents publishing a
+            partial frontend dataset.
           </p>
         </article>
+      </section>
+
+      <section class="panel freshness-panel">
+        <div class="panel-title">
+          <div>
+            <p class="kicker">Local freshness</p>
+            <h2>Last database updates</h2>
+          </div>
+        </div>
+        <dl class="freshness-list">
+          <div><dt>Matches</dt><dd>{{ dateTime(dataStatus.freshness.matches) }}</dd></div>
+          <div><dt>Battles</dt><dd>{{ dateTime(dataStatus.freshness.battles) }}</dd></div>
+          <div><dt>Hero aggregates</dt><dd>{{ dateTime(dataStatus.freshness.hero_stats) }}</dd></div>
+        </dl>
       </section>
 
       <section class="panel artifacts-panel">
@@ -1197,6 +1211,7 @@ select {
 }
 
 .pipeline-panel,
+.publish-panel,
 .freshness-panel,
 .artifacts-panel {
   padding: 1.15rem;
@@ -1241,6 +1256,44 @@ select {
   min-height: 36px;
   padding: 0.45rem 0.65rem;
   font-size: 0.72rem;
+}
+
+.panel-intro {
+  margin: .65rem 0 .85rem;
+  color: var(--ink-soft);
+  font-size: .76rem;
+  line-height: 1.55;
+}
+
+.public-assets {
+  display: grid;
+  gap: .7rem;
+  margin: .85rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.public-assets li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: .55rem;
+  align-items: start;
+  padding-top: .7rem;
+  border-top: 1px solid var(--line);
+}
+
+.public-assets strong,
+.public-assets small {
+  display: block;
+}
+
+.public-assets small {
+  margin-top: .15rem;
+  overflow: hidden;
+  color: var(--ink-soft);
+  font-size: .68rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .pipeline {
