@@ -127,7 +127,14 @@ function heroName(heroId) {
 }
 
 function heroIcon(heroId) {
-  return heroes.value.find((hero) => Number(hero.hero_id) === Number(heroId))?.hero_icon || "";
+  const hero = heroes.value.find(
+    (candidate) => Number(candidate.hero_id) === Number(heroId)
+  );
+  if (hero?.hero_icon) return hero.hero_icon;
+  const id = Number(heroId);
+  return Number.isInteger(id) && id > 0
+    ? `https://res.edata.qq.com/sgame/static/images/hero/${id}.jpg`
+    : "";
 }
 
 async function loadSeasons() {
@@ -459,7 +466,7 @@ watch(leagueId, loadModel);
             :title="`${hero.hero_name} · ${percent(probabilityByHeroId.get(Number(hero.hero_id)) || 0)}`"
             @click="chooseHero(hero.hero_id)"
           >
-            <img v-if="hero.hero_icon" :src="hero.hero_icon" :alt="hero.hero_name" />
+            <img v-if="heroIcon(hero.hero_id)" :src="heroIcon(hero.hero_id)" :alt="hero.hero_name" />
             <span v-else>{{ hero.hero_name.slice(0, 1) }}</span>
             <small>{{ percent(probabilityByHeroId.get(Number(hero.hero_id)) || 0) }}</small>
           </button>

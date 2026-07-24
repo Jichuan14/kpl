@@ -5,20 +5,24 @@ import {
   fetchVisualizationSeasons,
 } from "./api";
 import { selectAvailableLeague, selectedLeagueId } from "./selectedLeague";
-import { language } from "./i18n";
+import { language, t } from "./i18n";
 import { finishStartupLoading } from "./startupLoader";
 
 const seasons = ref([]);
 const leagueId = selectedLeagueId;
 const payload = ref(null);
 const loading = ref(false);
+const metaLoading = ref(false);
 const error = ref("");
+const metaHistory = ref([]);
+const selectedMetaHeroId = ref("");
+const hoveredMetaPoint = ref(null);
 
 const relation = ref("counter_pick");
 const responseScope = ref("all");
 const context = ref("overall");
 const side = ref("all");
-const metric = ref("smoothed_lift");
+const metric = ref("selections");
 const support = ref(3);
 const resultCount = ref("20");
 const search = ref("");
@@ -52,6 +56,78 @@ const rows = computed(() => payload.value?.rows || []);
 const topMetaHeroes = computed(() =>
   (payload.value?.meta_heroes || [])
     .filter((hero) => hero.early_priority_count > 0)
+    .slice(0, 12)
+);
+
+const metaHeroOptions = computed(() => {
+  const heroes = new Map();
+  for (const entry of metaHistory.value) {
+    for (const hero of entry.meta_heroes) {
+      if (hero.early_priority_count > 0 && !heroes.has(Number(hero.hero_id))) {
+        heroes.set(Number(hero.hero_id), hero);
+      }
+    }
+  }
+  const currentPopularity = new Map(
+    (payload.value?.meta_heroes || []).map((hero) => [
+      Number(hero.hero_id),
+      Number(hero.early_priority_rate || 0),
+    ])
+  );
+  return [...heroes.values()].sort((a, b) => {
+    const popularityA = currentPopularity.get(Number(a.hero_id)) || 0;
+    const popularityB = currentPopularity.get(Number(b.hero_id)) || 0;
+    return popularityB - popularityA || a.hero_name.localeCompare(b.hero_name, language.value);
+  });
+});
+
+const metaSeries = computed(() =>
+  metaHistory.value.map((entry) => {
+    const hero = entry.meta_heroes.find(
+      (candidate) => Number(candidate.hero_id) === Number(selectedMetaHeroId.value)
+    );
+    return {
+      ...entry.season,
+      hero,
+      rate: Number(hero?.early_priority_rate || 0),
+      rank: hero?.priority_rank || null,
+    };
+  })
+);
+
+const metaMaximumRate = computed(() =>
+  Math.max(...metaSeries.value.map((entry) => entry.rate), 0.01)
+);
+
+const metaChartPoints = computed(() => {
+  const width = 620;
+  const left = 26;
+  const right = 12;
+  const top = 12;
+  const bottom = 28;
+  const height = 180;
+  const span = Math.max(1, metaSeries.value.length - 1);
+  return metaSeries.value.map((entry, index) => ({
+    ...entry,
+    x: left + ((width - left - right) * index) / span,
+    y: height - bottom - ((height - top - bottom) * entry.rate) / metaMaximumRate.value,
+  }));
+});
+
+const metaChartLine = computed(() =>
+  metaChartPoints.value.map((entry) => `${entry.x},${entry.y}`).join(" ")
+);
+
+const selectedMetaHero = computed(() =>
+  metaHeroOptions.value.find(
+    (hero) => Number(hero.hero_id) === Number(selectedMetaHeroId.value)
+  )
+);
+
+const currentSeasonMetaHeroes = computed(() =>
+  (payload.value?.meta_heroes || [])
+    .filter((hero) => hero.early_priority_count > 0)
+    .sort((a, b) => a.priority_rank - b.priority_rank)
     .slice(0, 12)
 );
 
@@ -136,6 +212,14 @@ function initial(name) {
   return String(name || "?").slice(0, 1);
 }
 
+function heroIcon(heroId, icon = "") {
+  if (icon) return icon;
+  const id = Number(heroId);
+  return Number.isInteger(id) && id > 0
+    ? `https://res.edata.qq.com/sgame/static/images/hero/${id}.jpg`
+    : "";
+}
+
 function barWidth(row) {
   const value = Math.max(0, metricValue(row));
   return `${Math.max(1.5, (value / maximumMetric.value) * 100)}%`;
@@ -177,10 +261,38 @@ async function loadPatterns() {
   }
 }
 
+async function loadMetaHistory() {
+  metaLoading.value = true;
+  try {
+    const entries = await Promise.all(
+      seasons.value.map(async (season) => ({
+        season,
+        meta_heroes: (await fetchVisualizationPatterns({
+          leagueId: season.league_id,
+          minSelections: 2,
+        })).meta_heroes || [],
+      }))
+    );
+    metaHistory.value = entries.sort(
+      (a, b) =>
+        Number(a.season.year || 0) - Number(b.season.year || 0) ||
+        Number(a.season.season || 0) - Number(b.season.season || 0)
+    );
+    if (!metaHeroOptions.value.some((hero) => Number(hero.hero_id) === Number(selectedMetaHeroId.value))) {
+      selectedMetaHeroId.value = String(topMetaHeroes.value[0]?.hero_id || metaHeroOptions.value[0]?.hero_id || "");
+    }
+  } catch {
+    metaHistory.value = [];
+  } finally {
+    metaLoading.value = false;
+  }
+}
+
 onMounted(async () => {
   try {
     await loadSeasons();
     await loadPatterns();
+    await loadMetaHistory();
   } catch (err) {
     error.value = err.message || "Could not load visualization data.";
   } finally {
@@ -189,6 +301,9 @@ onMounted(async () => {
 });
 
 watch(leagueId, loadPatterns);
+watch(selectedMetaHeroId, () => {
+  hoveredMetaPoint.value = null;
+});
 watch(relation, () => {
   if (relation.value !== "ban_response") responseScope.value = "all";
 });
@@ -246,12 +361,14 @@ watch(relation, () => {
             v-for="hero in topMetaHeroes"
             :key="hero.hero_id"
             class="meta-hero"
+            :class="{ active: Number(selectedMetaHeroId) === Number(hero.hero_id) }"
+            @mouseenter="selectedMetaHeroId = String(hero.hero_id)"
           >
             <span class="meta-rank">{{ hero.priority_rank }}</span>
             <div class="meta-avatar">
               <img
-                v-if="hero.hero_icon"
-                :src="hero.hero_icon"
+                v-if="heroIcon(hero.hero_id, hero.hero_icon)"
+                :src="heroIcon(hero.hero_id, hero.hero_icon)"
                 :alt="hero.hero_name"
               />
               <span v-else>{{ initial(hero.hero_name) }}</span>
@@ -279,6 +396,103 @@ watch(relation, () => {
             </strong>
           </article>
         </div>
+      </section>
+
+      <section v-if="metaHeroOptions.length" class="meta-evolution">
+        <div class="meta-evolution-heading">
+          <div>
+            <p class="visual-eyebrow">Season comparison</p>
+            <h2>Meta evolution</h2>
+            <p>Track how opening-draft priority rises and falls between seasons.</p>
+          </div>
+          <div class="meta-hero-controls">
+            <label>
+              <span>Hero</span>
+              <select v-model="selectedMetaHeroId">
+                <option v-for="hero in metaHeroOptions" :key="hero.hero_id" :value="String(hero.hero_id)">
+                  {{ hero.hero_name }}
+                </option>
+              </select>
+            </label>
+            <div class="current-meta-icons" aria-label="Current season meta heroes">
+              <button
+                v-for="hero in currentSeasonMetaHeroes"
+                :key="hero.hero_id"
+                type="button"
+                :class="{ active: Number(selectedMetaHeroId) === Number(hero.hero_id) }"
+                :title="`#${hero.priority_rank} · ${hero.hero_name} · ${percent(hero.early_priority_rate)}`"
+                @click="selectedMetaHeroId = String(hero.hero_id)"
+              >
+                <img
+                  :src="heroIcon(hero.hero_id, hero.hero_icon)"
+                  :alt="hero.hero_name"
+                />
+                <small>#{{ hero.priority_rank }}</small>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="metaLoading" class="meta-evolution-message">Loading season history…</div>
+        <template v-else>
+          <div class="meta-selected-hero">
+            <div class="meta-avatar">
+              <img
+                v-if="selectedMetaHero && heroIcon(selectedMetaHero.hero_id, selectedMetaHero.hero_icon)"
+                :src="heroIcon(selectedMetaHero.hero_id, selectedMetaHero.hero_icon)"
+                :alt="selectedMetaHero.hero_name"
+              />
+            </div>
+            <div>
+              <strong>{{ selectedMetaHero?.hero_name }}</strong>
+              <small>Opening bans + Blue first picks, divided by eligible drafts.</small>
+            </div>
+          </div>
+          <div class="meta-chart-wrap" :aria-label="`${selectedMetaHero?.hero_name || 'Selected hero'} priority by season`">
+            <svg viewBox="0 0 620 180" preserveAspectRatio="none">
+              <line x1="26" y1="152" x2="608" y2="152" class="meta-chart-axis" />
+              <polyline :points="metaChartLine" class="meta-chart-line" />
+              <circle
+                v-for="entry in metaChartPoints"
+                :key="entry.league_id"
+                :cx="entry.x"
+                :cy="entry.y"
+                r="5"
+                class="meta-chart-dot"
+                @mouseenter="hoveredMetaPoint = entry"
+                @mouseleave="hoveredMetaPoint = null"
+              />
+            </svg>
+            <div
+              v-if="hoveredMetaPoint"
+              class="meta-chart-tooltip"
+              :style="{
+                left: `${(hoveredMetaPoint.x / 620) * 100}%`,
+                top: `${(hoveredMetaPoint.y / 180) * 100}%`,
+              }"
+            >
+              <strong>{{ hoveredMetaPoint.year }} · S{{ hoveredMetaPoint.season }}</strong>
+              <span>{{ percent(hoveredMetaPoint.rate) }} {{ t("priority") }}</span>
+              <small>
+                {{ hoveredMetaPoint.rank ? `${t("Rank")} #${hoveredMetaPoint.rank}` : t("Not a priority hero") }}
+                <template v-if="hoveredMetaPoint.hero">
+                  · {{ hoveredMetaPoint.hero.opening_ban_count }} {{ t("bans") }} ·
+                  {{ hoveredMetaPoint.hero.blue_first_pick_count }} {{ t("Blue first picks") }}
+                </template>
+              </small>
+            </div>
+            <div class="meta-chart-labels">
+              <span v-for="entry in metaSeries" :key="entry.league_id">{{ entry.year }} S{{ entry.season }}</span>
+            </div>
+          </div>
+          <div class="meta-season-values">
+            <article v-for="entry in metaSeries" :key="entry.league_id">
+              <span>{{ entry.year }} · S{{ entry.season }}</span>
+              <strong>{{ percent(entry.rate) }}</strong>
+              <small>{{ entry.rank ? `${t("Rank")} #${entry.rank}` : t("Not a priority hero") }}</small>
+            </article>
+          </div>
+        </template>
       </section>
 
     <section class="relation-tabs" aria-label="Relationship type">
@@ -395,16 +609,16 @@ watch(relation, () => {
               <div class="hero-pair">
                 <div class="hero-avatar">
                   <img
-                    v-if="row.source_hero_icon"
-                    :src="row.source_hero_icon"
+                    v-if="heroIcon(row.source_hero_id, row.source_hero_icon)"
+                    :src="heroIcon(row.source_hero_id, row.source_hero_icon)"
                     :alt="row.source_hero_name"
                   />
                   <span v-else>{{ initial(row.source_hero_name) }}</span>
                 </div>
                 <div class="hero-avatar target">
                   <img
-                    v-if="row.target_hero_icon"
-                    :src="row.target_hero_icon"
+                    v-if="heroIcon(row.target_hero_id, row.target_hero_icon)"
+                    :src="heroIcon(row.target_hero_id, row.target_hero_icon)"
                     :alt="row.target_hero_name"
                   />
                   <span v-else>{{ initial(row.target_hero_name) }}</span>
@@ -647,6 +861,15 @@ watch(relation, () => {
   background: #fff;
 }
 
+.meta-hero:hover,
+.meta-hero.active {
+  background: rgba(15, 138, 107, 0.08);
+}
+
+.meta-hero:hover {
+  cursor: pointer;
+}
+
 .meta-rank {
   color: var(--ink-soft);
   font-size: 0.7rem;
@@ -717,6 +940,235 @@ watch(relation, () => {
   font: 0.55rem var(--mono);
   letter-spacing: 0.06em;
   text-transform: uppercase;
+}
+
+.meta-evolution {
+  margin-top: 1rem;
+  padding: 1.25rem;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.meta-evolution-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 1.5rem;
+}
+
+.meta-evolution-heading h2 {
+  margin: 0;
+  font: 700 1.8rem/1 var(--display);
+  letter-spacing: -0.04em;
+}
+
+.meta-evolution-heading p:last-child,
+.meta-selected-hero small {
+  margin: 0.5rem 0 0;
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+}
+
+.meta-evolution-heading label {
+  display: grid;
+  min-width: 180px;
+  gap: 0.4rem;
+}
+
+.meta-hero-controls {
+  display: flex;
+  align-items: end;
+  gap: 0.7rem;
+}
+
+.meta-evolution-heading label > span {
+  color: var(--ink-soft);
+  font-size: 0.66rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.meta-evolution-heading select {
+  min-height: 42px;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+}
+
+.current-meta-icons {
+  display: flex;
+  max-width: 344px;
+  gap: 0.25rem;
+  overflow-x: auto;
+  padding: 0.2rem;
+}
+
+.current-meta-icons button {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  background: #dbe7e1;
+}
+
+.current-meta-icons button.active {
+  border-color: var(--accent-deep);
+  box-shadow: 0 0 0 2px rgba(15, 138, 107, 0.18);
+}
+
+.current-meta-icons img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.current-meta-icons small {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  min-width: 14px;
+  padding: 0 2px;
+  border-radius: 3px 0 0 0;
+  background: var(--ink);
+  color: #fff;
+  font-size: 0.52rem;
+  line-height: 1.2;
+}
+
+.meta-selected-hero {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+}
+
+.meta-selected-hero strong,
+.meta-selected-hero small {
+  display: block;
+}
+
+.meta-selected-hero strong {
+  font: 700 1.1rem var(--display);
+}
+
+.meta-chart-wrap {
+  position: relative;
+  margin-top: 1rem;
+  padding: 0.5rem 0.75rem 0;
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, rgba(15, 138, 107, 0.08), transparent);
+}
+
+.meta-chart-wrap svg {
+  display: block;
+  width: 100%;
+  height: 180px;
+  overflow: visible;
+}
+
+.meta-chart-axis {
+  stroke: rgba(16, 42, 46, 0.22);
+  stroke-width: 1;
+}
+
+.meta-chart-line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.meta-chart-dot {
+  fill: #fff;
+  stroke: var(--accent-deep);
+  stroke-width: 3;
+  cursor: pointer;
+}
+
+.meta-chart-dot:hover {
+  fill: var(--accent);
+  stroke: #fff;
+  stroke-width: 4;
+}
+
+.meta-chart-tooltip {
+  position: absolute;
+  z-index: 2;
+  display: grid;
+  min-width: 152px;
+  gap: 0.18rem;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid rgba(16, 42, 46, 0.2);
+  background: var(--ink);
+  color: #fff;
+  font-size: 0.64rem;
+  line-height: 1.35;
+  pointer-events: none;
+  transform: translate(-50%, calc(-100% - 8px));
+}
+
+.meta-chart-tooltip strong {
+  font-family: var(--display);
+  font-size: 0.8rem;
+}
+
+.meta-chart-tooltip span {
+  color: #91e0c8;
+}
+
+.meta-chart-tooltip small {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.58rem;
+}
+
+.meta-chart-labels,
+.meta-season-values {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+  gap: 0.5rem;
+}
+
+.meta-chart-labels {
+  margin: -0.5rem 0 0.65rem;
+  color: var(--ink-soft);
+  font-size: 0.62rem;
+  text-align: center;
+}
+
+.meta-season-values {
+  margin-top: 0.75rem;
+}
+
+.meta-season-values article {
+  display: grid;
+  gap: 0.12rem;
+  padding: 0.7rem;
+  border: 1px solid var(--line);
+  background: #fff;
+}
+
+.meta-season-values span,
+.meta-season-values small {
+  color: var(--ink-soft);
+  font-size: 0.62rem;
+}
+
+.meta-season-values strong {
+  color: var(--accent-deep);
+  font: 700 1.05rem var(--display);
+}
+
+.meta-evolution-message {
+  margin-top: 1rem;
+  color: var(--ink-soft);
+  font-size: 0.72rem;
 }
 
 .relation-tabs {
@@ -1091,6 +1543,20 @@ th {
     align-items: flex-start;
     flex-direction: column;
     gap: 0.75rem;
+  }
+
+  .meta-evolution-heading,
+  .meta-hero-controls {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .meta-evolution-heading label {
+    min-width: 0;
+  }
+
+  .current-meta-icons {
+    max-width: 100%;
   }
 
   .meta-grid {

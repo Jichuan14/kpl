@@ -111,6 +111,14 @@ function initial(name) {
   return String(name || "?").slice(0, 1);
 }
 
+function heroIcon(heroId, icon = "") {
+  if (icon) return icon;
+  const id = Number(heroId);
+  return Number.isInteger(id) && id > 0
+    ? `https://res.edata.qq.com/sgame/static/images/hero/${id}.jpg`
+    : "";
+}
+
 function barWidth(row) {
   const value = Math.max(0, metricValue(row));
   return `${Math.max(1.5, (value / maximumMetric.value) * 100)}%`;
@@ -318,16 +326,16 @@ watch(leagueId, loadTeamSynergies);
                   <div class="pair-portraits">
                     <div class="pair-avatar">
                       <img
-                        v-if="row.hero_a_icon"
-                        :src="row.hero_a_icon"
+                        v-if="heroIcon(row.hero_a_id, row.hero_a_icon)"
+                        :src="heroIcon(row.hero_a_id, row.hero_a_icon)"
                         :alt="row.hero_a_name"
                       />
                       <span v-else>{{ initial(row.hero_a_name) }}</span>
                     </div>
                     <div class="pair-avatar second">
                       <img
-                        v-if="row.hero_b_icon"
-                        :src="row.hero_b_icon"
+                        v-if="heroIcon(row.hero_b_id, row.hero_b_icon)"
+                        :src="heroIcon(row.hero_b_id, row.hero_b_icon)"
                         :alt="row.hero_b_name"
                       />
                       <span v-else>{{ initial(row.hero_b_name) }}</span>
