@@ -31,19 +31,6 @@ def _write_json(path: Path, value: object) -> None:
     path.chmod(0o644)
 
 
-def _remove_icon_urls(value: object) -> None:
-    """Keep public analysis payloads free of third-party image URLs."""
-    if isinstance(value, dict):
-        for key in list(value):
-            if key.endswith("_icon") or key.endswith("_icons"):
-                value.pop(key)
-            else:
-                _remove_icon_urls(value[key])
-    elif isinstance(value, list):
-        for item in value:
-            _remove_icon_urls(item)
-
-
 def _publish_seasons(db: Session) -> None:
     leagues = db.scalars(
         select(League).order_by(League.year.desc(), League.season.desc(), League.id.desc())
@@ -80,19 +67,16 @@ def publish_league(db: Session, league_id: str) -> dict[str, object]:
 
     if statistics_ready(league_id):
         patterns = visualization_patterns(league_id=league_id, min_selections=2, db=db).data
-        _remove_icon_urls(patterns)
         _write_json(directory / "patterns.json", patterns)
         published.append("patterns.json")
 
     if (OUTPUT_ROOT / league_id / "team_synergy_stats.jsonl").is_file():
         teams = team_synergies(league_id=league_id, min_selections=2, db=db).data
-        _remove_icon_urls(teams)
         _write_json(directory / "team-synergies.json", teams)
         published.append("team-synergies.json")
 
     if (OUTPUT_ROOT / league_id / "draft_model.json").is_file():
         model = metadata(league_id)
-        _remove_icon_urls(model)
         _write_json(directory / "draft-model.json", model)
         published.append("draft-model.json")
 
