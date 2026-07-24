@@ -127,13 +127,8 @@ hero_bp_stats    (precomputed rates for frontend)
 
 Win rate for a hero = picks where `pick.camp == battle.win_camp` / pick count.
 
-## Hosting later
+## Hosting
 
-Good cheap path for a personal site:
-
-1. **Postgres** on Railway / Neon / Supabase / Render  
-2. Set `DATABASE_URL=postgresql+psycopg://...` (add `psycopg[binary]` to requirements)  
-3. Deploy this FastAPI app on **Railway**, **Render**, or **Fly.io**  
-4. Frontend (Vue/React/static) on **Vercel** / **Netlify**, calling your API  
-
-You do **not** need Redis or Java for v1. Add a cache only if the site gets real traffic.
+This project uses one SQLite database stored at `backend/data/kpl_bp.db`.
+Keep the API to one process and retain that file alongside the analysis and
+published-asset directories. See `deploy/README.md` for the ECS deployment.

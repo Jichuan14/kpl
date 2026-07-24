@@ -23,7 +23,22 @@ def run_pipeline(
         raise HTTPException(status_code=404, detail="League not found")
     try:
         result = AnalysisPipeline(body.league_id).run(body.step)
-        result["published"] = publish_league(db, body.league_id)
     except (ValueError, RuntimeError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return ApiResponse(message=f"{body.step} completed", data=result)
+
+
+@router.post("/publish")
+def publish_frontend_assets(
+    body: AnalysisRunRequest,
+    db: Session = Depends(get_db),
+) -> ApiResponse:
+    """Write the selected season's browser-ready files from local analysis."""
+    league = db.scalar(select(League).where(League.league_id == body.league_id))
+    if league is None:
+        raise HTTPException(status_code=404, detail="League not found")
+    try:
+        result = publish_league(db, body.league_id)
+    except (ValueError, RuntimeError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return ApiResponse(message="frontend assets published", data=result)

@@ -1,6 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
@@ -19,6 +20,13 @@ class Settings(BaseSettings):
     tga_base_url: str = "https://tga-openapi.tga.qq.com"
     sync_request_delay: float = 0.2
     cors_origins: str = "http://localhost:5173,http://localhost:3000"
+
+    @field_validator("database_url")
+    @classmethod
+    def sqlite_only(cls, value: str) -> str:
+        if not value.startswith("sqlite:"):
+            raise ValueError("Only SQLite database URLs are supported")
+        return value
 
 
 @lru_cache

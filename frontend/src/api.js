@@ -88,20 +88,27 @@ export function runAnalysisStep({ leagueId, step }) {
   });
 }
 
+export function publishFrontendAssets(leagueId) {
+  return request("/api/pipeline/publish", {
+    method: "POST",
+    body: JSON.stringify({ league_id: leagueId }),
+  });
+}
+
 export function fetchHeroBp({ leagueId, sort = "presence", limit = 40 } = {}) {
   const params = new URLSearchParams({ sort, limit: String(limit) });
   if (leagueId) params.set("league_id", leagueId);
   return request(`/api/bp/heroes?${params}`);
 }
 
-export function syncLeagueBp({ leagueId, matchLimit = null } = {}) {
+export function syncLeagueBp({ leagueId, matchLimit = null, runAnalysis = false } = {}) {
   return request("/api/sync/league-bp", {
     method: "POST",
     body: JSON.stringify({
       league_id: leagueId || null,
       match_limit: matchLimit,
       recompute_stats: true,
-      run_analysis: true,
+      run_analysis: runAnalysis,
       incremental: true,
     }),
   });

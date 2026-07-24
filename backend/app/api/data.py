@@ -15,6 +15,7 @@ router = APIRouter(prefix="/api/data", tags=["data"])
 REPO_ROOT = Path(__file__).resolve().parents[3]
 EXPORT_DIR = REPO_ROOT / "analysis" / "exports"
 OUTPUT_DIR = REPO_ROOT / "analysis" / "outputs"
+PUBLISHED_DIR = REPO_ROOT / "analysis" / "published" / "data"
 
 STAT_ARTIFACTS = (
     ("ban_response", "ban_response_stats.jsonl"),
@@ -266,6 +267,49 @@ def data_status(
                 )
         except (OSError, ValueError, json.JSONDecodeError):
             draft_model["records"] = 0
+
+    # The public site reads only these generated JSON files.  Keep this scan
+    # separate from the analysis artifacts so the management page can show the
+    # precise point at which a completed analysis has (or has not) been made
+    # available to visitors.
+    published_dir = PUBLISHED_DIR / league_id
+    frontend_assets = [
+        artifact(published_dir / "patterns.json", "patterns", "Draft patterns"),
+        artifact(
+            published_dir / "team-synergies.json",
+            "team_synergies",
+            "Team synergies",
+        ),
+        artifact(published_dir / "draft-model.json", "draft_model", "Draft model"),
+    ]
+    frontend_sources = [
+        [league_output_dir / filename for _, filename in STAT_ARTIFACTS]
+        + [meta_path],
+        [team_synergy_path],
+        [draft_model_path],
+    ]
+    for public_file, sources in zip(frontend_assets, frontend_sources, strict=True):
+        newest_source = max(
+            (source.stat().st_mtime for source in sources if source.is_file()),
+            default=None,
+        )
+        public_path = published_dir / {
+            "patterns": "patterns.json",
+            "team_synergies": "team-synergies.json",
+            "draft_model": "draft-model.json",
+        }[public_file["key"]]
+        public_file["ready"] = bool(
+            newest_source is not None
+            and public_path.is_file()
+            and public_path.stat().st_mtime >= newest_source
+        )
+    analysis_ready = bool(
+        decisions["ready"]
+        and statistics_ready
+        and meta["ready"]
+        and team_synergy["ready"]
+        and draft_model["ready"]
+    )
     pipeline = [
         {
             "key": "download",
@@ -347,6 +391,8 @@ def data_status(
                 "team_synergy": team_synergy,
                 "draft_model": draft_model,
             },
+            "frontend_assets": frontend_assets,
+            "analysis_ready": analysis_ready,
             "processing_note": (
                 "JSONL processing preserves questionable source rows and marks "
                 "them with quality flags; it does not silently delete them."

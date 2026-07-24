@@ -144,8 +144,9 @@ class AnalysisPipeline:
                 "2",
             ]
         if step == "draft_model":
-            # Per-season artifacts are cumulative: each season is trained on
-            # its own decision export plus every earlier available season.
+            # Each season uses a rolling window of itself plus its four most
+            # recent available predecessors.  Rebuilding updates every
+            # per-season model when a newly available season is included.
             return [
                 python,
                 str(ANALYSIS_DIR / "build_draft_model.py"),
