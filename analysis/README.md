@@ -139,7 +139,8 @@ the artifact to the 2026 S3 output folder.
 python3 analysis/build_draft_model.py
 
 # Write one artifact per season. Each uses that season and its four most
-# recent available predecessors (up to five seasons total) as training data.
+# recent available predecessors (up to five seasons total), with the selected
+# season weighted much more heavily than older data.
 python3 analysis/build_draft_model.py --per-season
 
 # Score the next action and simulate the rest of an example draft.

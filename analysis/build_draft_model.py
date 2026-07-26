@@ -45,6 +45,15 @@ DEFAULT_INPUTS = sorted((REPO_ROOT / "analysis" / "exports").glob("*/bp_decision
 # preceding available seasons.  This limits patch/meta drift while retaining a
 # useful historical sample.
 PREVIOUS_SEASONS = 4
+# Earlier seasons remain useful evidence, but the selected season should drive
+# the recommendation.  With the default, the selected season has weight 1.0,
+# then 0.45, 0.20, 0.09, and 0.04 for preceding seasons.
+DEFAULT_RECENCY_DECAY = 0.45
+# Own-pick relations are the model's hero-pair/synergy signal.  Give them more
+# influence than reactions to an opponent pick or either ban.
+DEFAULT_OWN_PICK_RELATION_WEIGHT = 2.0
+DEFAULT_META_WEIGHT = 0.65
+DEFAULT_MAX_META_LIFT = 4.0
 ROLE_FIELDS = {
     "own_pick": "current_team_picks",
     "opponent_pick": "current_opponent_picks",
@@ -179,6 +188,10 @@ def build_model(
     min_relation_selections: int,
     shrinkage: float,
     max_lift: float,
+    recency_decay: float,
+    own_pick_relation_weight: float,
+    meta_weight: float,
+    max_meta_lift: float,
     input_paths: list[Path],
 ) -> dict[str, Any]:
     usable = [
@@ -194,26 +207,49 @@ def build_model(
     action_selections: Counter[tuple[str, int]] = Counter()
     action_opportunities: Counter[tuple[str, int]] = Counter()
     relation_selections: Counter[str] = Counter()
+    meta_selections: Counter[int] = Counter()
+    meta_opportunities: Counter[int] = Counter()
     hero_names: dict[int, str] = {}
+    ordered_league_ids = [path.parent.name for path in input_paths]
+    latest_index = len(ordered_league_ids) - 1
+    season_weights = {
+        league_id: recency_decay ** (latest_index - index)
+        for index, league_id in enumerate(ordered_league_ids)
+    }
 
     for row in usable:
+        sample_weight = season_weights.get(str(row.get("league_id") or ""), 1.0)
         context = context_key(row)
         action = str(row["action"])
         selected = int(row["selected_hero_id"])
         hero_names[selected] = str(row.get("selected_hero_name") or selected)
-        base_selections[(context, selected)] += 1
-        action_selections[(action, selected)] += 1
+        base_selections[(context, selected)] += sample_weight
+        action_selections[(action, selected)] += sample_weight
         for candidate in legal_heroes(row):
-            base_opportunities[(context, candidate)] += 1
-            action_opportunities[(action, candidate)] += 1
+            base_opportunities[(context, candidate)] += sample_weight
+            action_opportunities[(action, candidate)] += sample_weight
         for role, source in visible_sources(row):
-            relation_selections[relation_key(context, role, source, selected)] += 1
+            relation_selections[relation_key(context, role, source, selected)] += sample_weight
+        # Mirror the opening-priority definition used by the meta analysis:
+        # opening bans plus Blue's first pick.  This becomes a bounded signal
+        # only for the opening draft actions at prediction time.
+        is_opening_ban = action == "ban" and 1 <= int(row.get("bp_order") or 0) <= 4
+        is_blue_first_pick = (
+            action == "pick"
+            and str(row.get("side") or "") == "blue"
+            and int(row.get("team_action_type_number") or 0) == 1
+        )
+        if is_opening_ban or is_blue_first_pick:
+            meta_selections[selected] += sample_weight
+            for candidate in legal_heroes(row):
+                meta_opportunities[candidate] += sample_weight
 
     retained_relations = {
         key for key, selections in relation_selections.items() if selections >= min_relation_selections
     }
     relation_opportunities: Counter[str] = Counter()
     for row in usable:
+        sample_weight = season_weights.get(str(row.get("league_id") or ""), 1.0)
         context = context_key(row)
         legal = legal_heroes(row)
         for role, source in visible_sources(row):
@@ -221,7 +257,7 @@ def build_model(
             for candidate in legal:
                 key = f"{prefix}{candidate}"
                 if key in retained_relations:
-                    relation_opportunities[key] += 1
+                    relation_opportunities[key] += sample_weight
 
     all_hero_ids = sorted({hero for _, hero in action_opportunities})
     catalog = load_hero_metadata()
@@ -257,6 +293,9 @@ def build_model(
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "training_inputs": [path_label(path) for path in input_paths],
         "training_decisions": len(usable),
+        "effective_training_decisions": sum(
+            season_weights.get(str(row.get("league_id") or ""), 1.0) for row in usable
+        ),
         "hero_ids": all_hero_ids,
         "hero_names": {
             str(hero_id): catalog.get(hero_id, {}).get("hero_name")
@@ -284,10 +323,23 @@ def build_model(
             "min_relation_selections": min_relation_selections,
             "shrinkage": shrinkage,
             "max_lift": max_lift,
+            "recency_decay": recency_decay,
+            "own_pick_relation_weight": own_pick_relation_weight,
+            "meta_weight": meta_weight,
+            "max_meta_lift": max_meta_lift,
         },
         "base": base_rows,
         "action": action_rows,
         "relations": relation_rows,
+        "meta": {
+            "selections": {str(hero_id): selections for hero_id, selections in meta_selections.items()},
+            "opportunities": {str(hero_id): opportunities for hero_id, opportunities in meta_opportunities.items()},
+            "baseline_rate": (
+                sum(meta_selections.values()) / sum(meta_opportunities.values())
+                if meta_opportunities
+                else 0.0
+            ),
+        },
     }
 
 
@@ -380,6 +432,7 @@ def predict(index: dict[str, Any], state: dict[str, Any], step: dict[str, Any]) 
     action = step["action"]
     alpha = float(config["alpha"])
     max_log_lift = math.log(float(config["max_lift"]))
+    max_meta_log_lift = math.log(float(config.get("max_meta_lift", 1.0)))
     candidates = legal_state_heroes(state, model, step)
     sources = list(state_sources(state, step["side"]))
     scored: list[tuple[int, float]] = []
@@ -399,6 +452,19 @@ def predict(index: dict[str, Any], state: dict[str, Any], step: dict[str, Any]) 
             else action_probability
         )
         score = math.log(max(base_probability, 1e-12))
+        # Opening-priority is separate from the context baseline, so heroes
+        # that dominate the current meta remain prominent in the opening BP.
+        if int(step["bp_order"]) <= 5:
+            meta = model.get("meta", {})
+            opportunities = float(meta.get("opportunities", {}).get(str(hero_id), 0))
+            if opportunities:
+                meta_rate = float(meta.get("selections", {}).get(str(hero_id), 0)) / opportunities
+                baseline_rate = float(meta.get("baseline_rate", 0))
+                if baseline_rate:
+                    score += float(config.get("meta_weight", 0.0)) * max(
+                        -max_meta_log_lift,
+                        min(max_meta_log_lift, math.log(max(meta_rate, 1e-12) / baseline_rate)),
+                    )
         for role, source_id in sources:
             relation = index["relations"].get(relation_key(context, role, source_id, hero_id))
             if not relation:
@@ -410,7 +476,12 @@ def predict(index: dict[str, Any], state: dict[str, Any], step: dict[str, Any]) 
             weight = relation["opportunities"] / (
                 relation["opportunities"] + float(config["shrinkage"])
             )
-            score += weight * max(-max_log_lift, min(max_log_lift, math.log(lift)))
+            role_weight = (
+                float(config.get("own_pick_relation_weight", 1.0))
+                if role == "own_pick"
+                else 1.0
+            )
+            score += role_weight * weight * max(-max_log_lift, min(max_log_lift, math.log(lift)))
         scored.append((hero_id, score))
 
     maximum = max((score for _, score in scored), default=0.0)
@@ -522,6 +593,12 @@ def main() -> None:
     parser.add_argument("--min-relation-selections", type=int, default=2)
     parser.add_argument("--shrinkage", type=float, default=20.0)
     parser.add_argument("--max-lift", type=float, default=3.0)
+    parser.add_argument("--recency-decay", type=float, default=DEFAULT_RECENCY_DECAY)
+    parser.add_argument(
+        "--own-pick-relation-weight", type=float, default=DEFAULT_OWN_PICK_RELATION_WEIGHT
+    )
+    parser.add_argument("--meta-weight", type=float, default=DEFAULT_META_WEIGHT)
+    parser.add_argument("--max-meta-lift", type=float, default=DEFAULT_MAX_META_LIFT)
     parser.add_argument("--state", type=Path, help="Optional state JSON to score and simulate")
     parser.add_argument("--rollouts", type=int, default=1000)
     parser.add_argument("--seed", type=int)
@@ -532,6 +609,10 @@ def main() -> None:
         raise FileNotFoundError(f"Missing input files: {', '.join(map(str, missing))}")
     if args.alpha <= 0 or args.shrinkage <= 0 or args.max_lift <= 1:
         raise ValueError("--alpha and --shrinkage must be positive; --max-lift must exceed 1")
+    if not 0 < args.recency_decay <= 1:
+        raise ValueError("--recency-decay must be greater than 0 and at most 1")
+    if args.own_pick_relation_weight < 0 or args.meta_weight < 0 or args.max_meta_lift <= 1:
+        raise ValueError("relationship and meta weights must be non-negative; --max-meta-lift must exceed 1")
     if args.min_relation_selections < 1 or args.rollouts < 1:
         raise ValueError("--min-relation-selections and --rollouts must be at least 1")
 
@@ -549,6 +630,10 @@ def main() -> None:
                 min_relation_selections=args.min_relation_selections,
                 shrinkage=args.shrinkage,
                 max_lift=args.max_lift,
+                recency_decay=args.recency_decay,
+                own_pick_relation_weight=args.own_pick_relation_weight,
+                meta_weight=args.meta_weight,
+                max_meta_lift=args.max_meta_lift,
                 input_paths=training_inputs,
             )
             write_model(model, args.output_root / target_input.parent.name / "draft_model.json")
@@ -560,6 +645,10 @@ def main() -> None:
         min_relation_selections=args.min_relation_selections,
         shrinkage=args.shrinkage,
         max_lift=args.max_lift,
+        recency_decay=args.recency_decay,
+        own_pick_relation_weight=args.own_pick_relation_weight,
+        meta_weight=args.meta_weight,
+        max_meta_lift=args.max_meta_lift,
         input_paths=inputs,
     )
     write_model(model, args.output)

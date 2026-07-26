@@ -62,7 +62,13 @@ export function fetchTeamSynergies({ leagueId, minSelections = 2 }) {
 }
 
 export function fetchDraftModel(leagueId) {
-  return staticData(`/assets/data/${encodeURIComponent(leagueId)}/draft-model.json`);
+  const params = new URLSearchParams({ league_id: leagueId });
+  return request(`/api/simulations/model?${params}`);
+}
+
+export function fetchLearnedFeatureSpace(leagueId) {
+  const params = new URLSearchParams({ league_id: leagueId });
+  return request(`/api/simulations/feature-space?${params}`);
 }
 
 export function simulateDraft(state) {

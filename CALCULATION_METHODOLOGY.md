@@ -268,7 +268,9 @@ The management pipeline runs `--per-season`: each season's model trains on
 that season plus up to its four immediately preceding available season exports
 (at most five seasons). Training excludes peak battles and requires a valid
 ban/pick action, positive selected hero ID, and a nonempty effective legal
-pool.
+pool. The selected season receives weight `1.00`; each preceding season is
+discounted by `0.45`, giving default weights of `1.00`, `0.45`, `0.20`,
+`0.09`, and `0.04` from newest to oldest.
 
 The model stores:
 
@@ -325,6 +327,18 @@ score(B) = log(p) + Σ [w_i × clamp(log(L_i), -log(3), log(3))]
 raw weight(B) = exp(score(B))
 probability(B) = raw weight(B) / Σ(raw weight of every legal candidate)
 ```
+
+`own_pick` is the hero-pair/synergy relationship. Its effect is multiplied by
+`2.0`, while the other three relationship types retain weight `1.0`, so a
+well-supported pair has more influence on a later pick.
+
+### Opening meta effect
+
+For opening actions (orders 1–5), the model also measures each hero's weighted
+opening priority: opening bans plus Blue's first pick, divided by its weighted
+legal opportunities. Relative to the overall opening rate, that lift is capped
+at `4×` and adds `0.65 × log(lift)` to the candidate's score. This makes
+current-season meta heroes more prominent without affecting later draft phases.
 
 The final normalization means the probability list always sums to 1 across
 the candidates that survive legality filtering.
