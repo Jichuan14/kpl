@@ -1,6 +1,8 @@
 <script setup>
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import {
+  fetchMetaHistory,
+  fetchPatternManifest,
   fetchVisualizationPatterns,
   fetchVisualizationSeasons,
 } from "./api";
@@ -11,7 +13,7 @@ import { finishStartupLoading } from "./startupLoader";
 
 const seasons = ref([]);
 const leagueId = selectedLeagueId;
-const payload = ref(null);
+const payload = shallowRef(null);
 const loading = ref(false);
 const metaLoading = ref(false);
 const error = ref("");
@@ -27,6 +29,9 @@ const metric = ref("selections");
 const support = ref(3);
 const resultCount = ref("20");
 const search = ref("");
+const debouncedSearch = ref("");
+let patternController = null;
+let searchTimer = null;
 
 const relationOptions = [
   { value: "counter_pick", label: "Counter picks", short: "Counter picks" },
@@ -133,7 +138,7 @@ const currentSeasonMetaHeroes = computed(() =>
 );
 
 const filteredRows = computed(() => {
-  const needle = search.value.trim().toLocaleLowerCase();
+  const needle = debouncedSearch.value.trim().toLocaleLowerCase();
   return rows.value
     .filter(
       (row) =>
@@ -160,9 +165,14 @@ const filteredRows = computed(() => {
 });
 
 const shownRows = computed(() => {
-  if (resultCount.value === "all") return filteredRows.value;
+  // The visual chart stays responsive even if a user asks to inspect all rows.
+  if (resultCount.value === "all") return filteredRows.value.slice(0, 50);
   return filteredRows.value.slice(0, Number(resultCount.value));
 });
+
+const tableRows = computed(() =>
+  resultCount.value === "all" ? filteredRows.value.slice(0, 200) : shownRows.value
+);
 
 const maximumMetric = computed(() =>
   Math.max(...shownRows.value.map((row) => Math.max(0, metricValue(row))), 0.001)
@@ -243,33 +253,38 @@ async function loadSeasons() {
 
 async function loadPatterns() {
   if (!leagueId.value) return;
+  patternController?.abort();
+  const controller = new AbortController();
+  patternController = controller;
   loading.value = true;
   error.value = "";
   try {
-    payload.value = await fetchVisualizationPatterns({
-      leagueId: leagueId.value,
-      minSelections: 2,
-    });
+    const [manifest, patterns] = await Promise.all([
+      fetchPatternManifest(leagueId.value, { signal: controller.signal }),
+      fetchVisualizationPatterns({
+        leagueId: leagueId.value,
+        minSelections: 2,
+        relation: relation.value,
+        context: context.value,
+        signal: controller.signal,
+      }),
+    ]);
+    if (patternController !== controller) return;
+    payload.value = { ...manifest, rows: patterns.rows || [] };
   } catch (err) {
+    if (patternController !== controller) return;
+    if (err.name === "AbortError") return;
     payload.value = null;
     error.value = err.message || "Could not load this season's patterns.";
   } finally {
-    loading.value = false;
+    if (patternController === controller) loading.value = false;
   }
 }
 
 async function loadMetaHistory() {
   metaLoading.value = true;
   try {
-    const entries = await Promise.all(
-      seasons.value.map(async (season) => ({
-        season,
-        meta_heroes: (await fetchVisualizationPatterns({
-          leagueId: season.league_id,
-          minSelections: 2,
-        })).meta_heroes || [],
-      }))
-    );
+    const entries = await fetchMetaHistory();
     metaHistory.value = entries.sort(
       (a, b) =>
         Number(a.season.year || 0) - Number(b.season.year || 0) ||
@@ -298,11 +313,20 @@ onMounted(async () => {
 });
 
 watch(leagueId, loadPatterns);
+watch([relation, context], loadPatterns);
+watch(search, (value) => {
+  if (searchTimer) window.clearTimeout(searchTimer);
+  searchTimer = window.setTimeout(() => { debouncedSearch.value = value; }, 160);
+});
 watch(selectedMetaHeroId, () => {
   hoveredMetaPoint.value = null;
 });
 watch(relation, () => {
   if (relation.value !== "ban_response") responseScope.value = "all";
+});
+onBeforeUnmount(() => {
+  patternController?.abort();
+  if (searchTimer) window.clearTimeout(searchTimer);
 });
 </script>
 
@@ -359,7 +383,13 @@ watch(relation, () => {
             :key="hero.hero_id"
             class="meta-hero"
             :class="{ active: Number(selectedMetaHeroId) === Number(hero.hero_id) }"
+            role="button"
+            tabindex="0"
+            :aria-pressed="Number(selectedMetaHeroId) === Number(hero.hero_id)"
             @mouseenter="selectedMetaHeroId = String(hero.hero_id)"
+            @click="selectedMetaHeroId = String(hero.hero_id)"
+            @keydown.enter.prevent="selectedMetaHeroId = String(hero.hero_id)"
+            @keydown.space.prevent="selectedMetaHeroId = String(hero.hero_id)"
           >
             <span class="meta-rank">{{ hero.priority_rank }}</span>
             <div class="meta-avatar">
@@ -367,6 +397,10 @@ watch(relation, () => {
                 v-if="heroIcon(hero.hero_id)"
                 :src="heroIcon(hero.hero_id)"
                 :alt="hero.hero_name"
+                width="48"
+                height="48"
+                loading="lazy"
+                decoding="async"
               />
               <span v-else>{{ initial(hero.hero_name) }}</span>
             </div>
@@ -456,8 +490,16 @@ watch(relation, () => {
                 :cy="entry.y"
                 r="5"
                 class="meta-chart-dot"
+                tabindex="0"
+                role="button"
+                :aria-label="`${entry.year} season ${entry.season}: ${percent(entry.rate)}`"
                 @mouseenter="hoveredMetaPoint = entry"
                 @mouseleave="hoveredMetaPoint = null"
+                @focus="hoveredMetaPoint = entry"
+                @blur="hoveredMetaPoint = null"
+                @click="hoveredMetaPoint = entry"
+                @keydown.enter.prevent="hoveredMetaPoint = entry"
+                @keydown.space.prevent="hoveredMetaPoint = entry"
               />
             </svg>
             <div
@@ -554,7 +596,7 @@ watch(relation, () => {
             <option value="20">Top 20</option>
             <option value="50">Top 50</option>
             <option value="100">Top 100</option>
-            <option value="all">Show all</option>
+            <option value="all">Show all (table: first 200)</option>
           </select>
         </label>
         <label class="search-control">
@@ -697,7 +739,7 @@ watch(relation, () => {
             </thead>
             <tbody>
               <tr
-                v-for="row in shownRows"
+                v-for="row in tableRows"
                 :key="`table-${row.relation}-${row.source_hero_id}-${row.target_hero_id}-${row.context_description}`"
               >
                 <td><strong>{{ row.relationship }}</strong></td>
@@ -713,6 +755,9 @@ watch(relation, () => {
               </tr>
             </tbody>
           </table>
+          <p v-if="resultCount === 'all' && filteredRows.length > tableRows.length" class="table-limit-note">
+            Showing the first {{ number(tableRows.length) }} matching rows. Narrow the filters to inspect the rest.
+          </p>
         </div>
       </section>
     </template>

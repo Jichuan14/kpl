@@ -27,17 +27,28 @@ async function request(path, options = {}) {
   return body.data;
 }
 
-async function staticData(path) {
+const staticCache = new Map();
+
+async function staticData(path, { signal, cache = true } = {}) {
+  if (cache && staticCache.has(path)) return staticCache.get(path);
+  const load = (async () => {
   let res;
   try {
-    res = await fetch(path);
+    res = await fetch(path, { signal });
   } catch (err) {
+    if (err.name === "AbortError") throw err;
     throw new Error(`Cannot load published analysis (${err.message}).`);
   }
   if (!res.ok) {
     throw new Error("Published analysis is not available yet. Run the analysis pipeline.");
   }
   return res.json();
+  })();
+  if (cache) {
+    staticCache.set(path, load);
+    load.catch(() => staticCache.delete(path));
+  }
+  return load;
 }
 
 export function fetchLeagues() {
@@ -48,12 +59,33 @@ export function fetchVisualizationSeasons() {
   return staticData("/assets/data/seasons.json");
 }
 
+export function fetchMetaHistory(options) {
+  return staticData("/assets/data/meta-history.json", options);
+}
+
 export function fetchVisualizationPatterns({
   leagueId,
   minSelections = 2,
+  relation,
+  context,
+  signal,
 }) {
   void minSelections;
-  return staticData(`/assets/data/${encodeURIComponent(leagueId)}/patterns.json`);
+  if (!relation || !context) {
+    throw new Error("A pattern relation and context are required.");
+  }
+  return staticData(
+    `/assets/data/${encodeURIComponent(leagueId)}/patterns/${encodeURIComponent(relation)}/${encodeURIComponent(context)}.json`,
+    { signal }
+  );
+}
+
+export function fetchPatternManifest(leagueId, options) {
+  return staticData(`/assets/data/${encodeURIComponent(leagueId)}/overview.json`, options);
+}
+
+export function fetchHeroResponses(leagueId, options) {
+  return staticData(`/assets/data/${encodeURIComponent(leagueId)}/hero-responses.json`, options);
 }
 
 export function fetchTeamSynergies({ leagueId, minSelections = 2 }) {
