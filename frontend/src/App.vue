@@ -4,6 +4,7 @@ import MethodologyPage from "./MethodologyPage.vue";
 import DraftSimulatorPage from "./DraftSimulatorPage.vue";
 import TeamSynergyPage from "./TeamSynergyPage.vue";
 import VisualizationPage from "./VisualizationPage.vue";
+import HeroFeatureSpacePage from "./HeroFeatureSpacePage.vue";
 import {
   fetchDataStatus,
   fetchLeagues,
@@ -44,6 +45,7 @@ const isManagement = computed(() => routePath.value.startsWith("/management"));
 const isMethodology = computed(() => routePath.value.startsWith("/methodology"));
 const isTeams = computed(() => routePath.value.startsWith("/teams"));
 const isSimulator = computed(() => routePath.value.startsWith("/simulator"));
+const isFeatureSpace = computed(() => routePath.value.startsWith("/feature-space"));
 
 function dismissProjectNotice() {
   window.localStorage.setItem(firstVisitKey, "true");
@@ -353,7 +355,7 @@ watch(selectedYear, () => {
       <div class="primary-tabs" aria-label="Analysis views">
         <a
           href="/"
-          :class="{ active: !isManagement && !isMethodology && !isTeams && !isSimulator }"
+          :class="{ active: !isManagement && !isMethodology && !isTeams && !isSimulator && !isFeatureSpace }"
           @click.prevent="navigate('/')"
         >
           <span>Explore</span>
@@ -374,6 +376,14 @@ watch(selectedYear, () => {
         >
           <span>Simulate</span>
           <strong>BP draft</strong>
+        </a>
+        <a
+          href="/feature-space"
+          :class="{ active: isFeatureSpace }"
+          @click.prevent="navigate('/feature-space')"
+        >
+          <span>Explore</span>
+          <strong>Hero space</strong>
         </a>
       </div>
       <div class="utility-links">
@@ -696,6 +706,7 @@ watch(selectedYear, () => {
   </main>
   <TeamSynergyPage v-else-if="isTeams" />
   <DraftSimulatorPage v-else-if="isSimulator" />
+  <HeroFeatureSpacePage v-else-if="isFeatureSpace" />
   <MethodologyPage v-else-if="isMethodology" />
   <VisualizationPage v-else />
 
