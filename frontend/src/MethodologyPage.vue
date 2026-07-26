@@ -45,13 +45,14 @@ watch(selectedLeagueId, loadModel);
       <a href="#meta">Meta heroes</a>
       <a href="#relations">Four relationships</a>
       <a href="#example">Example</a>
+      <a href="#learnable">Learnable model</a>
       <a href="#rules">Rules and limits</a>
     </nav>
 
     <section id="summary">
       <h2>Summary</h2>
       <ol class="steps">
-        <li><strong>Start with historical drafts.</strong> Each normal ban or pick from the selected season becomes one example.</li>
+        <li><strong>Prioritize recent drafts.</strong> The selected season has the most weight; each older season is discounted.</li>
         <li><strong>Find the same draft moment.</strong> A Blue first pick, Red second pick, and Blue third ban are separate contexts.</li>
         <li><strong>Remove illegal heroes.</strong> The model only scores heroes that can actually be selected now.</li>
         <li><strong>Adjust for the visible board.</strong> Earlier picks and bans can increase or decrease a candidate’s score.</li>
@@ -112,6 +113,10 @@ watch(selectedLeagueId, loadModel);
         counters or causes another. A relationship can also reflect patches,
         team strategy, or other heroes already on the board.
       </p>
+      <p class="small">
+        A team's earlier pick is the synergy signal. Its supported effect is
+        weighted more strongly than the other three relationship types.
+      </p>
     </section>
 
     <section id="example">
@@ -146,6 +151,62 @@ watch(selectedLeagueId, loadModel);
       <p>Every other legal hero is scored the same way. If all legal raw scores add up to 181.7, then 戈娅’s final next-pick chance is 9.45 ÷ 181.7 = <strong>5.2%</strong>. All legal hero chances together always equal 100%.</p>
     </section>
 
+    <section id="learnable">
+      <h2>Learnable hybrid model</h2>
+      <p>
+        The BP simulator also offers a Learnable hybrid option when a trained
+        artifact is available for the selected season. It predicts the same
+        next legal pick or ban probability as the statistical model, but learns
+        its scoring weights from draft examples instead of storing a separate
+        hand-smoothed rate for every relationship.
+      </p>
+
+      <h3>What it learns from each hero and draft state</h3>
+      <table>
+        <thead><tr><th>Signal</th><th>How the learnable model uses it</th></tr></thead>
+        <tbody>
+          <tr><td>Hero specialty profile</td><td>Lane, damage types, control, mobility, unstoppable status, and healing are projected into a learnable hero representation.</td></tr>
+          <tr><td>Hero identity</td><td>Each hero has a small learned residual, allowing the model to capture kit-specific or meta effects that the specialty profile does not describe.</td></tr>
+          <tr><td>Visible draft board</td><td>Own and opponent picks and bans each have a separate learned context, so the model can learn composition, response, and ban-plan patterns.</td></tr>
+          <tr><td>Draft moment and legal pool</td><td>Action, side, and draft slot are learned context inputs. Illegal heroes are removed before the remaining scores are converted to probabilities.</td></tr>
+        </tbody>
+      </table>
+
+      <h3>How its probability is formed</h3>
+      <p>
+        For each legal candidate, the model combines the candidate’s learned
+        representation with the current draft-state representation to produce
+        one score. A softmax then normalizes the legal candidates, so their
+        displayed probabilities still add up to 100%.
+      </p>
+      <pre data-i18n-ignore>candidate score = learned hero representation · learned draft context
+probability(candidate) = exp(score) ÷ sum(exp(score) for every legal candidate)</pre>
+
+      <div class="example-box">
+        <h3>Example: giving a battle-winning pick more influence</h3>
+        <p>
+          Training starts with the season-recency weight, then applies a 1.5×
+          multiplier only when the action is a pick made by the team that won
+          that battle. Bans keep their normal recency weight.
+        </p>
+        <table>
+          <thead><tr><th>Historical action</th><th>Recency weight</th><th>Battle-result multiplier</th><th>Final training weight</th></tr></thead>
+          <tbody>
+            <tr><td>Current season: pick by the battle winner</td><td>1.00</td><td>1.50×</td><td><strong>1.50</strong></td></tr>
+            <tr><td>Current season: pick by the battle loser</td><td>1.00</td><td>1.00×</td><td><strong>1.00</strong></td></tr>
+            <tr><td>Previous season: pick by the battle winner</td><td>0.45</td><td>1.50×</td><td><strong>0.675</strong></td></tr>
+          </tbody>
+        </table>
+        <p class="small">
+          If two otherwise similar historical picks support different heroes,
+          the pick from the battle-winning side contributes 50% more evidence.
+          This is not a direct win-probability model: it learns which choices
+          were associated with winning battles more often, while still
+          predicting observed pick/ban behavior.
+        </p>
+      </div>
+    </section>
+
     <section id="rules">
       <h2>Rules, smoothing, and limits</h2>
       <h3>Legal picks come before probability</h3>
@@ -172,7 +233,7 @@ watch(selectedLeagueId, loadModel);
         <li>Repeat until the draft ends. Many simulated drafts estimate results such as “banned by end.”</li>
       </ol>
 
-      <p class="scope"><strong>What the model does not currently include:</strong> team identity, player form, match score, BO length, patch notes, and win rate are not separate model features. Read a prediction as: “Teams in this historical data tended to make this choice from boards like this.”</p>
+      <p class="scope"><strong>What the model does not currently include:</strong> team identity, player form, match score, BO length, and patch notes are not separate model features. The learnable model gives battle-winning picks more training weight, but it does not estimate a pick’s direct chance to win. Read a prediction as: “Teams in this historical data tended to make this choice from boards like this.”</p>
     </section>
   </main>
 </template>

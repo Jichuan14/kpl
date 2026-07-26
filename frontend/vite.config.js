@@ -11,10 +11,10 @@ function publishedAssets() {
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
         const pathname = decodeURIComponent((req.url || "").split("?", 1)[0]);
-        const match = pathname.match(/^\/assets\/(data|heroes)\/(.+)$/);
+        const match = pathname.match(/^\/assets\/data\/(.+)$/);
         if (!match) return next();
 
-        const filePath = resolve(publishedRoot, match[1], match[2]);
+        const filePath = resolve(publishedRoot, "data", match[1]);
         if (!filePath.startsWith(`${publishedRoot}${sep}`) || !existsSync(filePath)) {
           res.statusCode = 404;
           return res.end("Published asset not found");

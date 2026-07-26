@@ -5,6 +5,7 @@ import {
   fetchVisualizationSeasons,
 } from "./api";
 import { selectAvailableLeague, selectedLeagueId } from "./selectedLeague";
+import { heroAsset } from "./heroAssets";
 import { language } from "./i18n";
 import { finishStartupLoading } from "./startupLoader";
 
@@ -109,6 +110,10 @@ function number(value) {
 
 function initial(name) {
   return String(name || "?").slice(0, 1);
+}
+
+function heroIcon(heroId) {
+  return heroAsset(heroId);
 }
 
 function barWidth(row) {
@@ -318,16 +323,16 @@ watch(leagueId, loadTeamSynergies);
                   <div class="pair-portraits">
                     <div class="pair-avatar">
                       <img
-                        v-if="row.hero_a_icon"
-                        :src="row.hero_a_icon"
+                        v-if="heroIcon(row.hero_a_id, row.hero_a_icon)"
+                        :src="heroIcon(row.hero_a_id, row.hero_a_icon)"
                         :alt="row.hero_a_name"
                       />
                       <span v-else>{{ initial(row.hero_a_name) }}</span>
                     </div>
                     <div class="pair-avatar second">
                       <img
-                        v-if="row.hero_b_icon"
-                        :src="row.hero_b_icon"
+                        v-if="heroIcon(row.hero_b_id, row.hero_b_icon)"
+                        :src="heroIcon(row.hero_b_id, row.hero_b_icon)"
                         :alt="row.hero_b_name"
                       />
                       <span v-else>{{ initial(row.hero_b_name) }}</span>

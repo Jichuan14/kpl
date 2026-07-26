@@ -73,6 +73,7 @@ class AnalysisRunRequest(BaseModel):
 
 class DraftSimulationRequest(BaseModel):
     league_id: str = Field(min_length=1, max_length=32)
+    model_type: Literal["stats", "learnable"] = "stats"
     bp_order: int = Field(ge=1, le=20)
     blue_picks: list[int] = Field(default_factory=list)
     red_picks: list[int] = Field(default_factory=list)

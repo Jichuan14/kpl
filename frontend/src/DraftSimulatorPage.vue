@@ -6,6 +6,7 @@ import {
   simulateDraft,
 } from "./api";
 import { selectAvailableLeague, selectedLeagueId } from "./selectedLeague";
+import { heroAsset } from "./heroAssets";
 import { language, t } from "./i18n";
 import { finishStartupLoading } from "./startupLoader";
 
@@ -18,13 +19,20 @@ const simulating = ref(false);
 const error = ref("");
 const search = ref("");
 const rollouts = ref(100);
+const modelType = ref("stats");
 const bpOrder = ref(1);
 const board = ref(emptyBoard());
 const history = ref([]);
 const globalMode = ref("single");
 const seriesGame = ref(1);
 const bestOf = ref(5);
-const globalUsed = ref({ blue: [], red: [] });
+const TEAM_A = "team-a";
+const TEAM_B = "team-b";
+const globalUsed = ref({ [TEAM_A]: [], [TEAM_B]: [] });
+const teamNames = ref({ [TEAM_A]: "", [TEAM_B]: "" });
+const teamsBySide = ref({ blue: TEAM_A, red: TEAM_B });
+const winnerSide = ref(null);
+const nextBlueTeam = ref(null);
 const pickerTarget = ref("draft");
 
 function emptyBoard() {
@@ -57,12 +65,24 @@ const usedHeroIds = computed(
 );
 
 const heroes = computed(() => model.value?.heroes || []);
+const availableModels = computed(() => model.value?.available_models || []);
+const selectedModel = computed(() =>
+  availableModels.value.find((candidate) => candidate.id === modelType.value)
+);
 
 const pickerTitle = computed(() => {
-  if (pickerTarget.value === "global-blue") return t("Add Blue's earlier-game hero");
-  if (pickerTarget.value === "global-red") return t("Add Red's earlier-game hero");
+  if (pickerTarget.value === "global-blue") return addEarlierHeroLabel(teamsBySide.value.blue);
+  if (pickerTarget.value === "global-red") return addEarlierHeroLabel(teamsBySide.value.red);
   return currentLabel.value;
 });
+
+const losingSide = computed(() =>
+  winnerSide.value === "blue" ? "red" : winnerSide.value === "red" ? "blue" : null
+);
+
+const losingTeam = computed(() =>
+  losingSide.value ? teamsBySide.value[losingSide.value] : null
+);
 
 const probabilityByHeroId = computed(
   () =>
@@ -77,6 +97,7 @@ const probabilityByHeroId = computed(
 const availableHeroes = computed(() => {
   const needle = search.value.trim().toLocaleLowerCase();
   const targetSide = pickerTarget.value.replace("global-", "");
+  const targetTeam = teamsBySide.value[targetSide];
   const candidates =
     pickerTarget.value === "draft" && result.value
       ? result.value.next_action_probabilities
@@ -89,7 +110,7 @@ const availableHeroes = computed(() => {
       const unavailableForTarget =
         pickerTarget.value === "draft"
           ? usedHeroIds.value.has(heroId)
-          : globalUsed.value[targetSide].includes(heroId) || usedHeroIds.value.has(heroId);
+          : globalUsed.value[targetTeam].includes(heroId) || usedHeroIds.value.has(heroId);
       return !unavailableForTarget && (!needle || hero.hero_name.toLocaleLowerCase().includes(needle));
     })
     .sort(
@@ -105,10 +126,10 @@ const selectedSeason = computed(() =>
 );
 
 const boardGroups = computed(() => [
-  { key: "blue_bans", title: t("Blue bans"), tone: "blue" },
-  { key: "blue_picks", title: t("Blue picks"), tone: "blue" },
-  { key: "red_bans", title: t("Red bans"), tone: "red" },
-  { key: "red_picks", title: t("Red picks"), tone: "red" },
+  { key: "blue_bans", title: `${t("Blue bans")} · ${teamName(teamsBySide.value.blue)}`, tone: "blue" },
+  { key: "blue_picks", title: `${t("Blue picks")} · ${teamName(teamsBySide.value.blue)}`, tone: "blue" },
+  { key: "red_bans", title: `${t("Red bans")} · ${teamName(teamsBySide.value.red)}`, tone: "red" },
+  { key: "red_picks", title: `${t("Red picks")} · ${teamName(teamsBySide.value.red)}`, tone: "red" },
 ]);
 
 function percent(value) {
@@ -127,7 +148,57 @@ function heroName(heroId) {
 }
 
 function heroIcon(heroId) {
-  return heroes.value.find((hero) => Number(hero.hero_id) === Number(heroId))?.hero_icon || "";
+  return heroAsset(heroId);
+}
+
+function teamName(team) {
+  return teamNames.value[team].trim() || t(team === TEAM_A ? "Blue Team" : "Red Team");
+}
+
+function sideLabel(side) {
+  return t(side === "blue" ? "Blue" : "Red");
+}
+
+function sideUsedLabel(side) {
+  return `${sideLabel(side)} · ${teamName(teamsBySide.value[side])} ${t("used earlier")}`;
+}
+
+function addEarlierHeroLabel(team) {
+  return t("Add {team}'s earlier-game hero").replace("{team}", teamName(team));
+}
+
+function earlierGamesLabel(team) {
+  return t("{team} earlier games").replace("{team}", teamName(team));
+}
+
+function gameWinnerLabel(game) {
+  return t("Game {game} winner").replace("{game}", game);
+}
+
+function loserColorChoiceLabel(team) {
+  return t("{team} chooses next color").replace("{team}", teamName(team));
+}
+
+function startGameLabel(game) {
+  return t("Start game {game}").replace("{game}", game);
+}
+
+function seriesStatusLabel() {
+  return `BO${bestOf.value} · ${t("Game")} ${seriesGame.value} · ${t(
+    globalMode.value === "custom" ? "custom prior usage" : "tracked from earlier games"
+  )}`;
+}
+
+function forecastLabel() {
+  const step = result.value?.next_step;
+  return step ? `${sideLabel(step.side)} ${t(step.action)}` : "";
+}
+
+function resetSeriesTeams() {
+  globalUsed.value = { [TEAM_A]: [], [TEAM_B]: [] };
+  teamsBySide.value = { blue: TEAM_A, red: TEAM_B };
+  winnerSide.value = null;
+  nextBlueTeam.value = null;
 }
 
 async function loadSeasons() {
@@ -140,13 +211,15 @@ async function loadModel() {
   loading.value = true;
   error.value = "";
   result.value = null;
+  model.value = null;
+  modelType.value = "stats";
   board.value = emptyBoard();
   history.value = [];
   bpOrder.value = 1;
   globalMode.value = "single";
   seriesGame.value = 1;
   bestOf.value = 5;
-  globalUsed.value = { blue: [], red: [] };
+  resetSeriesTeams();
   pickerTarget.value = "draft";
   try {
     model.value = await fetchDraftModel(leagueId.value);
@@ -166,10 +239,11 @@ async function forecast() {
   try {
     result.value = await simulateDraft({
       league_id: leagueId.value,
+      model_type: modelType.value,
       bp_order: bpOrder.value,
       ...board.value,
-      blue_used_previous_battles: globalUsed.value.blue,
-      red_used_previous_battles: globalUsed.value.red,
+      blue_used_previous_battles: globalUsed.value[teamsBySide.value.blue],
+      red_used_previous_battles: globalUsed.value[teamsBySide.value.red],
       rollouts: rollouts.value,
     });
   } catch (err) {
@@ -183,8 +257,9 @@ async function forecast() {
 async function chooseHero(heroId) {
   if (pickerTarget.value !== "draft") {
     const side = pickerTarget.value.replace("global-", "");
-    if (globalUsed.value[side].includes(Number(heroId))) return;
-    globalUsed.value[side].push(Number(heroId));
+    const team = teamsBySide.value[side];
+    if (globalUsed.value[team].includes(Number(heroId))) return;
+    globalUsed.value[team].push(Number(heroId));
     search.value = "";
     await forecast();
     return;
@@ -220,7 +295,7 @@ async function reset() {
 async function startGlobalBp() {
   globalMode.value = "match";
   seriesGame.value = 1;
-  globalUsed.value = { blue: [], red: [] };
+  resetSeriesTeams();
   board.value = emptyBoard();
   history.value = [];
   bpOrder.value = 1;
@@ -231,7 +306,7 @@ async function startGlobalBp() {
 async function customizeGlobalBp() {
   globalMode.value = "custom";
   seriesGame.value = 2;
-  globalUsed.value = { blue: [], red: [] };
+  resetSeriesTeams();
   board.value = emptyBoard();
   history.value = [];
   bpOrder.value = 1;
@@ -242,25 +317,38 @@ async function customizeGlobalBp() {
 async function clearGlobalBp() {
   globalMode.value = "single";
   seriesGame.value = 1;
-  globalUsed.value = { blue: [], red: [] };
+  resetSeriesTeams();
   pickerTarget.value = "draft";
   await forecast();
 }
 
 async function startNextBattle() {
-  if (currentStep.value || seriesGame.value >= bestOf.value) return;
+  if (
+    currentStep.value ||
+    seriesGame.value >= bestOf.value ||
+    !winnerSide.value ||
+    !nextBlueTeam.value
+  ) return;
   for (const side of ["blue", "red"]) {
-    globalUsed.value[side] = [...new Set([...globalUsed.value[side], ...board.value[`${side}_picks`]])];
+    const team = teamsBySide.value[side];
+    globalUsed.value[team] = [
+      ...new Set([...globalUsed.value[team], ...board.value[`${side}_picks`]]),
+    ];
   }
+  const nextRedTeam = nextBlueTeam.value === TEAM_A ? TEAM_B : TEAM_A;
+  teamsBySide.value = { blue: nextBlueTeam.value, red: nextRedTeam };
   board.value = emptyBoard();
   history.value = [];
   bpOrder.value = 1;
   seriesGame.value += 1;
+  winnerSide.value = null;
+  nextBlueTeam.value = null;
   await forecast();
 }
 
 async function removeGlobalHero(side, heroId) {
-  globalUsed.value[side] = globalUsed.value[side].filter((id) => id !== heroId);
+  const team = teamsBySide.value[side];
+  globalUsed.value[team] = globalUsed.value[team].filter((id) => id !== heroId);
   await forecast();
 }
 
@@ -283,6 +371,7 @@ onMounted(async () => {
 });
 
 watch(leagueId, loadModel);
+watch(modelType, forecast);
 </script>
 
 <template>
@@ -311,6 +400,27 @@ watch(leagueId, loadModel);
     <p v-else-if="loading" class="simulator-message">Loading draft model…</p>
 
     <template v-else-if="model">
+      <section class="model-choice" aria-label="Forecast model">
+        <div>
+          <p class="simulator-eyebrow">{{ t("Forecast model") }}</p>
+          <h2>{{ t("Choose how the next legal BP action is predicted") }}</h2>
+        </div>
+        <div class="model-choice-options">
+          <button
+            v-for="candidate in availableModels"
+            :key="candidate.id"
+            type="button"
+            :class="{ active: modelType === candidate.id }"
+            :disabled="!candidate.available || simulating"
+            @click="modelType = candidate.id"
+          >
+            <strong>{{ t(candidate.label) }}</strong>
+            <span>{{ t(candidate.description) }}</span>
+            <small v-if="!candidate.available">{{ t("Not available for this season") }}</small>
+          </button>
+        </div>
+      </section>
+
       <section class="simulator-status">
         <div>
           <span>Next action</span>
@@ -337,14 +447,21 @@ watch(leagueId, loadModel);
           <p class="simulator-eyebrow">Match format</p>
           <h2>Global BP</h2>
           <p>
-            Earlier-game picks are unavailable to the same team in later games,
-            while remaining available to its opponent.
+            {{ t("Earlier-game picks follow the team, even when it changes between Blue and Red. After each game, record the winner, then let the losing team choose its next color.") }}
           </p>
         </div>
         <div class="global-actions">
           <button type="button" :class="{ active: globalMode === 'single' }" @click="clearGlobalBp">Single game</button>
           <button type="button" :class="{ active: globalMode === 'match' }" @click="startGlobalBp">Start Global BP</button>
           <button type="button" :class="{ active: globalMode === 'custom' }" @click="customizeGlobalBp">Customize used heroes</button>
+          <label class="team-name">
+            <span>{{ t("Blue in game 1") }}</span>
+            <input v-model="teamNames[TEAM_A]" type="text" maxlength="40" :placeholder="t('Blue Team')" />
+          </label>
+          <label class="team-name">
+            <span>{{ t("Red in game 1") }}</span>
+            <input v-model="teamNames[TEAM_B]" type="text" maxlength="40" :placeholder="t('Red Team')" />
+          </label>
           <label class="series-format">
             <span>Series</span>
             <select v-model.number="bestOf" :disabled="globalMode === 'single'">
@@ -354,10 +471,10 @@ watch(leagueId, loadModel);
           </label>
         </div>
         <div v-if="globalMode !== 'single'" class="global-used">
-          <div v-for="side in ['blue', 'red']" :key="side" :class="side">
-            <span>{{ side === 'blue' ? 'Blue used earlier' : 'Red used earlier' }}</span>
+          <div v-for="side in ['blue', 'red']" :key="side" class="used-team" :class="side">
+            <span data-i18n-ignore>{{ sideUsedLabel(side) }}</span>
             <button
-              v-for="heroId in globalUsed[side]"
+              v-for="heroId in globalUsed[teamsBySide[side]]"
               :key="`${side}-${heroId}`"
               type="button"
               :title="`Remove ${heroName(heroId)}`"
@@ -365,24 +482,33 @@ watch(leagueId, loadModel);
             >
               <img :src="heroIcon(heroId)" :alt="heroName(heroId)" />
             </button>
-            <small v-if="!globalUsed[side].length">None selected</small>
+            <small v-if="!globalUsed[teamsBySide[side]].length">None selected</small>
           </div>
-          <button
-            v-if="globalMode === 'match'"
-            class="next-battle"
-            type="button"
-            :disabled="Boolean(currentStep) || seriesGame >= bestOf"
-            @click="startNextBattle"
-          >
-            {{
-              seriesGame >= bestOf
-                ? `BO${bestOf} complete`
-                : currentStep
-                  ? 'Finish this draft to continue'
-                  : `Start game ${seriesGame + 1}`
-            }}
-          </button>
-          <small v-else>BO{{ bestOf }} · Game {{ seriesGame }} · {{ globalMode === 'custom' ? 'custom prior usage' : 'tracked from earlier games' }}</small>
+          <div v-if="globalMode === 'match'" class="next-battle series-progress">
+            <small>BO{{ bestOf }} · Game {{ seriesGame }}</small>
+            <template v-if="seriesGame >= bestOf">
+              <strong>{{ t("Series complete") }}</strong>
+            </template>
+            <template v-else-if="currentStep">
+              <strong>Finish this draft to continue</strong>
+            </template>
+            <template v-else>
+              <span data-i18n-ignore>{{ gameWinnerLabel(seriesGame) }}</span>
+              <div class="series-choice">
+                <button type="button" :class="{ active: winnerSide === 'blue' }" @click="winnerSide = 'blue'; nextBlueTeam = null">{{ t("Blue wins") }}</button>
+                <button type="button" :class="{ active: winnerSide === 'red' }" @click="winnerSide = 'red'; nextBlueTeam = null">{{ t("Red wins") }}</button>
+              </div>
+              <template v-if="losingTeam">
+                <span data-i18n-ignore>{{ loserColorChoiceLabel(losingTeam) }}</span>
+                <div class="series-choice">
+                  <button type="button" :class="{ active: nextBlueTeam === losingTeam }" @click="nextBlueTeam = losingTeam">{{ t("Play Blue") }}</button>
+                  <button type="button" :class="{ active: nextBlueTeam !== null && nextBlueTeam !== losingTeam }" @click="nextBlueTeam = losingTeam === TEAM_A ? TEAM_B : TEAM_A">{{ t("Play Red") }}</button>
+                </div>
+              </template>
+              <button type="button" :disabled="!winnerSide || !nextBlueTeam" @click="startNextBattle" data-i18n-ignore>{{ startGameLabel(seriesGame + 1) }}</button>
+            </template>
+          </div>
+          <small v-else data-i18n-ignore>{{ seriesStatusLabel() }}</small>
         </div>
       </section>
 
@@ -416,7 +542,8 @@ watch(leagueId, loadModel);
           <div class="forecast-heading">
             <div>
               <p class="simulator-eyebrow">Model forecast</p>
-              <h2>{{ result?.next_step?.side === "blue" ? "Blue" : "Red" }} {{ result?.next_step?.action }}</h2>
+              <h2 data-i18n-ignore>{{ forecastLabel() }}</h2>
+              <small v-if="selectedModel">{{ t(selectedModel.label) }}</small>
             </div>
             <span v-if="simulating">Updating…</span>
           </div>
@@ -447,8 +574,8 @@ watch(leagueId, loadModel);
         </div>
         <div v-if="globalMode !== 'single'" class="picker-targets">
           <button type="button" :class="{ active: pickerTarget === 'draft' }" @click="pickerTarget = 'draft'">Current draft</button>
-          <button type="button" :class="{ active: pickerTarget === 'global-blue' }" @click="pickerTarget = 'global-blue'">Blue earlier games</button>
-          <button type="button" :class="{ active: pickerTarget === 'global-red' }" @click="pickerTarget = 'global-red'">Red earlier games</button>
+          <button type="button" :class="{ active: pickerTarget === 'global-blue' }" @click="pickerTarget = 'global-blue'" data-i18n-ignore>{{ earlierGamesLabel(teamsBySide.blue) }}</button>
+          <button type="button" :class="{ active: pickerTarget === 'global-red' }" @click="pickerTarget = 'global-red'" data-i18n-ignore>{{ earlierGamesLabel(teamsBySide.red) }}</button>
         </div>
         <div class="hero-options">
           <button
@@ -459,7 +586,7 @@ watch(leagueId, loadModel);
             :title="`${hero.hero_name} · ${percent(probabilityByHeroId.get(Number(hero.hero_id)) || 0)}`"
             @click="chooseHero(hero.hero_id)"
           >
-            <img v-if="hero.hero_icon" :src="hero.hero_icon" :alt="hero.hero_name" />
+            <img v-if="heroIcon(hero.hero_id)" :src="heroIcon(hero.hero_id)" :alt="hero.hero_name" />
             <span v-else>{{ hero.hero_name.slice(0, 1) }}</span>
             <small>{{ percent(probabilityByHeroId.get(Number(hero.hero_id)) || 0) }}</small>
           </button>
@@ -482,20 +609,21 @@ watch(leagueId, loadModel);
 .simulator-season select, .simulator-actions select, .picker-heading input { min-height: 42px; padding: .55rem .7rem; border: 1px solid var(--line); background: rgba(255,255,255,.85); color: var(--ink); font: inherit; }
 .simulator-season small { color: var(--ink-soft); font-size: .66rem; }
 .simulator-message { margin: 1.5rem 0; color: var(--ink-soft); }.simulator-message.error { color: var(--warn); }
+.model-choice { display:grid; grid-template-columns:minmax(14rem, .8fr) minmax(30rem, 1.8fr); gap:1rem 1.5rem; align-items:center; margin-top:1.5rem; padding:1rem 1.15rem; border:1px solid var(--accent-deep); background:linear-gradient(120deg, rgba(232,191,108,.24), rgba(255,255,255,.82)); }.model-choice h2 { margin:0; font:700 1.28rem var(--display); letter-spacing:-.035em; }.model-choice-options { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:.65rem; }.model-choice button { display:grid; gap:.22rem; min-height:84px; padding:.7rem .8rem; border:1px solid var(--line); background:rgba(255,255,255,.86); color:var(--ink); text-align:left; font:inherit; cursor:pointer; }.model-choice button strong { font-size:.8rem; }.model-choice button span, .model-choice button small { color:var(--ink-soft); font-size:.66rem; line-height:1.35; }.model-choice button.active { border-color:var(--accent-deep); box-shadow:inset 3px 0 var(--accent-deep); background:#fffaf0; }.model-choice button:disabled { cursor:not-allowed; opacity:.58; }
 .simulator-status { align-items: center; margin-top: 1.5rem; padding: 1rem 1.15rem; border: 1px solid var(--line); background: rgba(255,255,255,.72); }
 .simulator-status > div:first-child span, .simulator-status small { display: block; color: var(--ink-soft); font-size: .65rem; letter-spacing: .08em; text-transform: uppercase; }
 .simulator-status strong { display: block; margin: .18rem 0; font: 700 1.25rem var(--display); }
 .simulator-actions { display: flex; align-items: end; gap: .5rem; }.simulator-actions label { display: grid; gap: .3rem; }
 .simulator-actions button, .hero-options button, .draft-slots button { border: 1px solid var(--line); background: rgba(255,255,255,.86); color: var(--ink); font: inherit; cursor: pointer; }
 .simulator-actions button { min-height: 42px; padding: .55rem .75rem; }.simulator-actions button:disabled, .hero-options button:disabled, .draft-slots button:disabled { cursor: default; opacity: .45; }
-.global-bp-panel { display:grid; grid-template-columns:minmax(14rem, 1fr) auto; gap:1rem 1.5rem; margin-top:.75rem; padding:1rem 1.15rem; border:1px solid var(--line); background:rgba(255,255,255,.72); }.global-bp-panel h2 { margin:0; font:700 1.35rem var(--display); letter-spacing:-.04em; }.global-bp-panel > div:first-child > p:last-child { max-width:38rem; margin:.4rem 0 0; color:var(--ink-soft); font-size:.72rem; }.global-actions, .picker-targets { display:flex; flex-wrap:wrap; gap:.45rem; align-items:center; }.global-actions button, .picker-targets button, .next-battle { min-height:36px; padding:.45rem .6rem; border:1px solid var(--line); background:rgba(255,255,255,.86); color:var(--ink-soft); font:inherit; font-size:.67rem; cursor:pointer; }.global-actions button.active, .picker-targets button.active { border-color:var(--accent-deep); background:var(--ink); color:#fff; }.series-format { display:grid; gap:.12rem; color:var(--ink-soft); font-size:.58rem; letter-spacing:.08em; text-transform:uppercase; }.series-format select { min-height:30px; border:1px solid var(--line); background:rgba(255,255,255,.86); color:var(--ink); font:inherit; font-size:.67rem; }.global-used { display:grid; grid-template-columns:1fr 1fr auto; gap:.8rem; grid-column:1 / -1; padding-top:.8rem; border-top:1px solid var(--line); }.global-used > div { display:flex; align-items:center; flex-wrap:wrap; gap:.35rem; }.global-used > div > span { width:100%; color:var(--ink-soft); font-size:.62rem; letter-spacing:.08em; text-transform:uppercase; }.global-used > div button { width:2rem; height:2rem; padding:0; border:1px solid var(--line); background:#fff; cursor:pointer; }.global-used img { width:100%; height:100%; object-fit:cover; }.global-used small { align-self:center; color:var(--ink-soft); font-size:.66rem; }.global-used > .next-battle { align-self:end; min-height:36px; width:auto; height:auto; padding:.45rem .6rem; border-color:var(--accent-deep); background:var(--accent); color:#fff; white-space:nowrap; }.global-used > .next-battle:disabled { cursor:not-allowed; opacity:.5; }
+.global-bp-panel { display:grid; grid-template-columns:minmax(14rem, 1fr) auto; gap:1rem 1.5rem; margin-top:.75rem; padding:1rem 1.15rem; border:1px solid var(--line); background:rgba(255,255,255,.72); }.global-bp-panel h2 { margin:0; font:700 1.35rem var(--display); letter-spacing:-.04em; }.global-bp-panel > div:first-child > p:last-child { max-width:38rem; margin:.4rem 0 0; color:var(--ink-soft); font-size:.72rem; }.global-actions, .picker-targets { display:flex; flex-wrap:wrap; gap:.45rem; align-items:center; }.global-actions button, .picker-targets button, .next-battle { min-height:36px; padding:.45rem .6rem; border:1px solid var(--line); background:rgba(255,255,255,.86); color:var(--ink-soft); font:inherit; font-size:.67rem; cursor:pointer; }.global-actions button.active, .picker-targets button.active, .series-choice button.active { border-color:var(--accent-deep); background:var(--ink); color:#fff; }.series-format, .team-name { display:grid; gap:.12rem; color:var(--ink-soft); font-size:.58rem; letter-spacing:.08em; text-transform:uppercase; }.series-format select, .team-name input { min-height:30px; border:1px solid var(--line); background:rgba(255,255,255,.86); color:var(--ink); font:inherit; font-size:.67rem; }.team-name input { width:9rem; padding:0 .45rem; text-transform:none; letter-spacing:normal; }.global-used { display:grid; grid-template-columns:1fr 1fr auto; gap:.8rem; grid-column:1 / -1; padding-top:.8rem; border-top:1px solid var(--line); }.global-used > .used-team { display:flex; align-items:center; flex-wrap:wrap; gap:.35rem; }.global-used > .used-team > span { width:100%; color:var(--ink-soft); font-size:.62rem; letter-spacing:.08em; text-transform:uppercase; }.global-used > .used-team button { width:2rem; height:2rem; padding:0; border:1px solid var(--line); background:#fff; cursor:pointer; }.global-used img { width:100%; height:100%; object-fit:cover; }.global-used small { align-self:center; color:var(--ink-soft); font-size:.66rem; }.global-used > .next-battle { align-self:end; min-height:36px; width:auto; height:auto; padding:.45rem .6rem; border-color:var(--accent-deep); background:var(--accent); color:#fff; white-space:nowrap; }.series-progress { display:grid; gap:.45rem; min-width:13rem; }.series-progress > span { font-size:.67rem; }.series-choice { display:flex; gap:.35rem; }.series-choice button, .series-progress > button { min-height:30px; padding:.35rem .5rem; border:1px solid rgba(255,255,255,.6); background:rgba(255,255,255,.18); color:#fff; font:inherit; font-size:.67rem; cursor:pointer; }.series-progress > button:disabled { cursor:not-allowed; opacity:.55; }.global-used > .next-battle:disabled { cursor:not-allowed; opacity:.5; }
 .simulator-layout { align-items: stretch; margin-top: .75rem; }.draft-board { display: grid; flex: 1; grid-template-columns: repeat(2, minmax(0,1fr)); gap: .75rem; }
 .draft-group, .forecast-panel, .hero-picker { border: 1px solid var(--line); background: rgba(255,255,255,.76); }.draft-group { min-height: 160px; padding: 1rem; }.draft-group > p { margin: 0 0 .8rem; font-size: .67rem; letter-spacing: .1em; text-transform: uppercase; }.draft-group.blue > p { color: #286999; }.draft-group.red > p { color: #a84b4b; }
 .draft-slots { display: flex; flex-wrap: wrap; gap: .45rem; }.draft-slots button, .draft-slots span { display:grid; place-items:center; width:4rem; height:4rem; padding:0; font-size:.7rem; text-align:left; }.draft-slots button img { width:100%; height:100%; object-fit:cover; }.draft-slots span { border: 1px dashed var(--line); color: var(--ink-soft); }
-.forecast-panel { width: min(100%, 390px); padding: 1rem; }.forecast-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }.forecast-heading h2 { font-size: 1.5rem; }.forecast-heading > span { color: var(--ink-soft); font-size: .68rem; }
+.forecast-panel { width: min(100%, 390px); padding: 1rem; }.forecast-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }.forecast-heading h2 { font-size: 1.5rem; }.forecast-heading > span, .forecast-heading small { color: var(--ink-soft); font-size: .68rem; }
 .probability-list { margin-top: 1rem; }.probability-list > div { display: grid; grid-template-columns:2rem minmax(4rem,1.8fr) 3rem; gap: .55rem; align-items: center; margin-top: .55rem; font-size: .7rem; }.probability-list img { width:2rem; height:2rem; object-fit:cover; }.probability-list em { color: var(--ink-soft); font-style: normal; text-align: right; }.probability-track { height: .42rem; overflow: hidden; background: rgba(16,42,46,.1); }.probability-track i { display:block; height:100%; background: var(--accent); }
 .end-ban-list { margin-top: 1.2rem; padding-top: .85rem; border-top: 1px solid var(--line); }.end-ban-list p { margin:0 0 .5rem; color: var(--ink-soft); font-size:.65rem; }.end-ban-list span { display:inline-flex; align-items:center; gap:.25rem; margin:.25rem .6rem 0 0; font-size:.7rem; }.end-ban-list img { width:1.6rem; height:1.6rem; object-fit:cover; }
 .hero-picker { margin-top: .75rem; padding: 1rem; }.picker-heading { display:flex; align-items:end; justify-content:space-between; gap:1rem; }.picker-heading h2 { font-size:1.4rem; }.picker-heading input { width:min(100%, 260px); }.picker-targets { margin-top:.85rem; }.hero-options { display:grid; grid-template-columns:repeat(auto-fill, minmax(3.6rem, 1fr)); gap:.45rem; margin-top:1rem; max-height:360px; overflow:auto; }.hero-options button { position:relative; display:grid; place-items:center; aspect-ratio:1; padding:0; overflow:hidden; }.hero-options button img { width:100%; height:100%; object-fit:cover; }.hero-options button small { position:absolute; right:0; bottom:0; padding:.14rem .2rem; background:rgba(16,42,46,.84); color:#fff; font-size:.56rem; }.hero-options button:hover:not(:disabled), .draft-slots button:not(:disabled):hover { border-color: var(--accent); color: var(--accent-deep); }
-@media (max-width: 860px) { .simulator-hero, .simulator-status, .simulator-layout { flex-direction:column; align-items:stretch; }.simulator-season, .forecast-panel { width:100%; }.simulator-actions { justify-content:space-between; }.draft-board { grid-template-columns:1fr; }.global-bp-panel { grid-template-columns:1fr; }.global-used { grid-template-columns:1fr; }.next-battle { justify-self:start; } }
+@media (max-width: 860px) { .simulator-hero, .simulator-status, .simulator-layout { flex-direction:column; align-items:stretch; }.simulator-season, .forecast-panel { width:100%; }.model-choice { grid-template-columns:1fr; }.simulator-actions { justify-content:space-between; }.draft-board { grid-template-columns:1fr; }.global-bp-panel { grid-template-columns:1fr; }.global-used { grid-template-columns:1fr; }.next-battle { justify-self:start; } }
 @media (max-width: 620px) { .simulator-page { width:calc(100% - 1rem); padding-top:1.25rem; }.simulator-status { gap:1rem; }.simulator-actions { flex-wrap:wrap; }.picker-heading { align-items:stretch; flex-direction:column; }.picker-heading input { width:100%; }.hero-options { grid-template-columns:repeat(auto-fill, minmax(3.25rem, 1fr)); } }
 </style>
