@@ -5,6 +5,7 @@ import {
   fetchVisualizationSeasons,
 } from "./api";
 import { selectAvailableLeague, selectedLeagueId } from "./selectedLeague";
+import { heroAsset } from "./heroAssets";
 import { language, t } from "./i18n";
 import { finishStartupLoading } from "./startupLoader";
 
@@ -212,12 +213,8 @@ function initial(name) {
   return String(name || "?").slice(0, 1);
 }
 
-function heroIcon(heroId, icon = "") {
-  if (icon) return icon;
-  const id = Number(heroId);
-  return Number.isInteger(id) && id > 0
-    ? `https://res.edata.qq.com/sgame/static/images/hero/${id}.jpg`
-    : "";
+function heroIcon(heroId) {
+  return heroAsset(heroId);
 }
 
 function barWidth(row) {
@@ -367,8 +364,8 @@ watch(relation, () => {
             <span class="meta-rank">{{ hero.priority_rank }}</span>
             <div class="meta-avatar">
               <img
-                v-if="heroIcon(hero.hero_id, hero.hero_icon)"
-                :src="heroIcon(hero.hero_id, hero.hero_icon)"
+                v-if="heroIcon(hero.hero_id)"
+                :src="heroIcon(hero.hero_id)"
                 :alt="hero.hero_name"
               />
               <span v-else>{{ initial(hero.hero_name) }}</span>
@@ -424,7 +421,7 @@ watch(relation, () => {
                 @click="selectedMetaHeroId = String(hero.hero_id)"
               >
                 <img
-                  :src="heroIcon(hero.hero_id, hero.hero_icon)"
+                  :src="heroIcon(hero.hero_id)"
                   :alt="hero.hero_name"
                 />
                 <small>#{{ hero.priority_rank }}</small>
@@ -438,8 +435,8 @@ watch(relation, () => {
           <div class="meta-selected-hero">
             <div class="meta-avatar">
               <img
-                v-if="selectedMetaHero && heroIcon(selectedMetaHero.hero_id, selectedMetaHero.hero_icon)"
-                :src="heroIcon(selectedMetaHero.hero_id, selectedMetaHero.hero_icon)"
+                v-if="selectedMetaHero && heroIcon(selectedMetaHero.hero_id)"
+                :src="heroIcon(selectedMetaHero.hero_id)"
                 :alt="selectedMetaHero.hero_name"
               />
             </div>
@@ -609,16 +606,16 @@ watch(relation, () => {
               <div class="hero-pair">
                 <div class="hero-avatar">
                   <img
-                    v-if="heroIcon(row.source_hero_id, row.source_hero_icon)"
-                    :src="heroIcon(row.source_hero_id, row.source_hero_icon)"
+                    v-if="heroIcon(row.source_hero_id)"
+                    :src="heroIcon(row.source_hero_id)"
                     :alt="row.source_hero_name"
                   />
                   <span v-else>{{ initial(row.source_hero_name) }}</span>
                 </div>
                 <div class="hero-avatar target">
                   <img
-                    v-if="heroIcon(row.target_hero_id, row.target_hero_icon)"
-                    :src="heroIcon(row.target_hero_id, row.target_hero_icon)"
+                    v-if="heroIcon(row.target_hero_id)"
+                    :src="heroIcon(row.target_hero_id)"
                     :alt="row.target_hero_name"
                   />
                   <span v-else>{{ initial(row.target_hero_name) }}</span>

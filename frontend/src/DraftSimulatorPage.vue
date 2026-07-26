@@ -6,6 +6,7 @@ import {
   simulateDraft,
 } from "./api";
 import { selectAvailableLeague, selectedLeagueId } from "./selectedLeague";
+import { heroAsset } from "./heroAssets";
 import { language, t } from "./i18n";
 import { finishStartupLoading } from "./startupLoader";
 
@@ -18,6 +19,7 @@ const simulating = ref(false);
 const error = ref("");
 const search = ref("");
 const rollouts = ref(100);
+const modelType = ref("stats");
 const bpOrder = ref(1);
 const board = ref(emptyBoard());
 const history = ref([]);
@@ -63,6 +65,10 @@ const usedHeroIds = computed(
 );
 
 const heroes = computed(() => model.value?.heroes || []);
+const availableModels = computed(() => model.value?.available_models || []);
+const selectedModel = computed(() =>
+  availableModels.value.find((candidate) => candidate.id === modelType.value)
+);
 
 const pickerTitle = computed(() => {
   if (pickerTarget.value === "global-blue") return addEarlierHeroLabel(teamsBySide.value.blue);
@@ -142,14 +148,7 @@ function heroName(heroId) {
 }
 
 function heroIcon(heroId) {
-  const hero = heroes.value.find(
-    (candidate) => Number(candidate.hero_id) === Number(heroId)
-  );
-  if (hero?.hero_icon) return hero.hero_icon;
-  const id = Number(heroId);
-  return Number.isInteger(id) && id > 0
-    ? `https://res.edata.qq.com/sgame/static/images/hero/${id}.jpg`
-    : "";
+  return heroAsset(heroId);
 }
 
 function teamName(team) {
@@ -212,6 +211,8 @@ async function loadModel() {
   loading.value = true;
   error.value = "";
   result.value = null;
+  model.value = null;
+  modelType.value = "stats";
   board.value = emptyBoard();
   history.value = [];
   bpOrder.value = 1;
@@ -238,6 +239,7 @@ async function forecast() {
   try {
     result.value = await simulateDraft({
       league_id: leagueId.value,
+      model_type: modelType.value,
       bp_order: bpOrder.value,
       ...board.value,
       blue_used_previous_battles: globalUsed.value[teamsBySide.value.blue],
@@ -369,6 +371,7 @@ onMounted(async () => {
 });
 
 watch(leagueId, loadModel);
+watch(modelType, forecast);
 </script>
 
 <template>
@@ -397,6 +400,27 @@ watch(leagueId, loadModel);
     <p v-else-if="loading" class="simulator-message">Loading draft model…</p>
 
     <template v-else-if="model">
+      <section class="model-choice" aria-label="Forecast model">
+        <div>
+          <p class="simulator-eyebrow">{{ t("Forecast model") }}</p>
+          <h2>{{ t("Choose how the next legal BP action is predicted") }}</h2>
+        </div>
+        <div class="model-choice-options">
+          <button
+            v-for="candidate in availableModels"
+            :key="candidate.id"
+            type="button"
+            :class="{ active: modelType === candidate.id }"
+            :disabled="!candidate.available || simulating"
+            @click="modelType = candidate.id"
+          >
+            <strong>{{ t(candidate.label) }}</strong>
+            <span>{{ t(candidate.description) }}</span>
+            <small v-if="!candidate.available">{{ t("Not available for this season") }}</small>
+          </button>
+        </div>
+      </section>
+
       <section class="simulator-status">
         <div>
           <span>Next action</span>
@@ -519,6 +543,7 @@ watch(leagueId, loadModel);
             <div>
               <p class="simulator-eyebrow">Model forecast</p>
               <h2 data-i18n-ignore>{{ forecastLabel() }}</h2>
+              <small v-if="selectedModel">{{ t(selectedModel.label) }}</small>
             </div>
             <span v-if="simulating">Updating…</span>
           </div>
@@ -584,6 +609,7 @@ watch(leagueId, loadModel);
 .simulator-season select, .simulator-actions select, .picker-heading input { min-height: 42px; padding: .55rem .7rem; border: 1px solid var(--line); background: rgba(255,255,255,.85); color: var(--ink); font: inherit; }
 .simulator-season small { color: var(--ink-soft); font-size: .66rem; }
 .simulator-message { margin: 1.5rem 0; color: var(--ink-soft); }.simulator-message.error { color: var(--warn); }
+.model-choice { display:grid; grid-template-columns:minmax(14rem, .8fr) minmax(30rem, 1.8fr); gap:1rem 1.5rem; align-items:center; margin-top:1.5rem; padding:1rem 1.15rem; border:1px solid var(--accent-deep); background:linear-gradient(120deg, rgba(232,191,108,.24), rgba(255,255,255,.82)); }.model-choice h2 { margin:0; font:700 1.28rem var(--display); letter-spacing:-.035em; }.model-choice-options { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:.65rem; }.model-choice button { display:grid; gap:.22rem; min-height:84px; padding:.7rem .8rem; border:1px solid var(--line); background:rgba(255,255,255,.86); color:var(--ink); text-align:left; font:inherit; cursor:pointer; }.model-choice button strong { font-size:.8rem; }.model-choice button span, .model-choice button small { color:var(--ink-soft); font-size:.66rem; line-height:1.35; }.model-choice button.active { border-color:var(--accent-deep); box-shadow:inset 3px 0 var(--accent-deep); background:#fffaf0; }.model-choice button:disabled { cursor:not-allowed; opacity:.58; }
 .simulator-status { align-items: center; margin-top: 1.5rem; padding: 1rem 1.15rem; border: 1px solid var(--line); background: rgba(255,255,255,.72); }
 .simulator-status > div:first-child span, .simulator-status small { display: block; color: var(--ink-soft); font-size: .65rem; letter-spacing: .08em; text-transform: uppercase; }
 .simulator-status strong { display: block; margin: .18rem 0; font: 700 1.25rem var(--display); }
@@ -594,10 +620,10 @@ watch(leagueId, loadModel);
 .simulator-layout { align-items: stretch; margin-top: .75rem; }.draft-board { display: grid; flex: 1; grid-template-columns: repeat(2, minmax(0,1fr)); gap: .75rem; }
 .draft-group, .forecast-panel, .hero-picker { border: 1px solid var(--line); background: rgba(255,255,255,.76); }.draft-group { min-height: 160px; padding: 1rem; }.draft-group > p { margin: 0 0 .8rem; font-size: .67rem; letter-spacing: .1em; text-transform: uppercase; }.draft-group.blue > p { color: #286999; }.draft-group.red > p { color: #a84b4b; }
 .draft-slots { display: flex; flex-wrap: wrap; gap: .45rem; }.draft-slots button, .draft-slots span { display:grid; place-items:center; width:4rem; height:4rem; padding:0; font-size:.7rem; text-align:left; }.draft-slots button img { width:100%; height:100%; object-fit:cover; }.draft-slots span { border: 1px dashed var(--line); color: var(--ink-soft); }
-.forecast-panel { width: min(100%, 390px); padding: 1rem; }.forecast-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }.forecast-heading h2 { font-size: 1.5rem; }.forecast-heading > span { color: var(--ink-soft); font-size: .68rem; }
+.forecast-panel { width: min(100%, 390px); padding: 1rem; }.forecast-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }.forecast-heading h2 { font-size: 1.5rem; }.forecast-heading > span, .forecast-heading small { color: var(--ink-soft); font-size: .68rem; }
 .probability-list { margin-top: 1rem; }.probability-list > div { display: grid; grid-template-columns:2rem minmax(4rem,1.8fr) 3rem; gap: .55rem; align-items: center; margin-top: .55rem; font-size: .7rem; }.probability-list img { width:2rem; height:2rem; object-fit:cover; }.probability-list em { color: var(--ink-soft); font-style: normal; text-align: right; }.probability-track { height: .42rem; overflow: hidden; background: rgba(16,42,46,.1); }.probability-track i { display:block; height:100%; background: var(--accent); }
 .end-ban-list { margin-top: 1.2rem; padding-top: .85rem; border-top: 1px solid var(--line); }.end-ban-list p { margin:0 0 .5rem; color: var(--ink-soft); font-size:.65rem; }.end-ban-list span { display:inline-flex; align-items:center; gap:.25rem; margin:.25rem .6rem 0 0; font-size:.7rem; }.end-ban-list img { width:1.6rem; height:1.6rem; object-fit:cover; }
 .hero-picker { margin-top: .75rem; padding: 1rem; }.picker-heading { display:flex; align-items:end; justify-content:space-between; gap:1rem; }.picker-heading h2 { font-size:1.4rem; }.picker-heading input { width:min(100%, 260px); }.picker-targets { margin-top:.85rem; }.hero-options { display:grid; grid-template-columns:repeat(auto-fill, minmax(3.6rem, 1fr)); gap:.45rem; margin-top:1rem; max-height:360px; overflow:auto; }.hero-options button { position:relative; display:grid; place-items:center; aspect-ratio:1; padding:0; overflow:hidden; }.hero-options button img { width:100%; height:100%; object-fit:cover; }.hero-options button small { position:absolute; right:0; bottom:0; padding:.14rem .2rem; background:rgba(16,42,46,.84); color:#fff; font-size:.56rem; }.hero-options button:hover:not(:disabled), .draft-slots button:not(:disabled):hover { border-color: var(--accent); color: var(--accent-deep); }
-@media (max-width: 860px) { .simulator-hero, .simulator-status, .simulator-layout { flex-direction:column; align-items:stretch; }.simulator-season, .forecast-panel { width:100%; }.simulator-actions { justify-content:space-between; }.draft-board { grid-template-columns:1fr; }.global-bp-panel { grid-template-columns:1fr; }.global-used { grid-template-columns:1fr; }.next-battle { justify-self:start; } }
+@media (max-width: 860px) { .simulator-hero, .simulator-status, .simulator-layout { flex-direction:column; align-items:stretch; }.simulator-season, .forecast-panel { width:100%; }.model-choice { grid-template-columns:1fr; }.simulator-actions { justify-content:space-between; }.draft-board { grid-template-columns:1fr; }.global-bp-panel { grid-template-columns:1fr; }.global-used { grid-template-columns:1fr; }.next-battle { justify-self:start; } }
 @media (max-width: 620px) { .simulator-page { width:calc(100% - 1rem); padding-top:1.25rem; }.simulator-status { gap:1rem; }.simulator-actions { flex-wrap:wrap; }.picker-heading { align-items:stretch; flex-direction:column; }.picker-heading input { width:100%; }.hero-options { grid-template-columns:repeat(auto-fill, minmax(3.25rem, 1fr)); } }
 </style>

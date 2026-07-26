@@ -5,6 +5,7 @@ import {
   fetchVisualizationSeasons,
 } from "./api";
 import { selectAvailableLeague, selectedLeagueId } from "./selectedLeague";
+import { heroAsset } from "./heroAssets";
 import { language } from "./i18n";
 import { finishStartupLoading } from "./startupLoader";
 
@@ -111,12 +112,8 @@ function initial(name) {
   return String(name || "?").slice(0, 1);
 }
 
-function heroIcon(heroId, icon = "") {
-  if (icon) return icon;
-  const id = Number(heroId);
-  return Number.isInteger(id) && id > 0
-    ? `https://res.edata.qq.com/sgame/static/images/hero/${id}.jpg`
-    : "";
+function heroIcon(heroId) {
+  return heroAsset(heroId);
 }
 
 function barWidth(row) {
