@@ -31,6 +31,7 @@ const TEAM_B = "team-b";
 const globalUsed = ref({ [TEAM_A]: [], [TEAM_B]: [] });
 const teamNames = ref({ [TEAM_A]: "", [TEAM_B]: "" });
 const teamsBySide = ref({ blue: TEAM_A, red: TEAM_B });
+const seriesWins = ref({ [TEAM_A]: 0, [TEAM_B]: 0 });
 const winnerSide = ref(null);
 const nextBlueTeam = ref(null);
 const pickerTarget = ref("draft");
@@ -82,6 +83,12 @@ const losingSide = computed(() =>
 
 const losingTeam = computed(() =>
   losingSide.value ? teamsBySide.value[losingSide.value] : null
+);
+
+const winsNeeded = computed(() => Math.ceil(bestOf.value / 2));
+
+const seriesWinner = computed(() =>
+  [TEAM_A, TEAM_B].find((team) => seriesWins.value[team] >= winsNeeded.value) || null
 );
 
 const probabilityByHeroId = computed(
@@ -183,6 +190,10 @@ function startGameLabel(game) {
   return t("Start game {game}").replace("{game}", game);
 }
 
+function seriesWinnerLabel() {
+  return `${teamName(seriesWinner.value)} wins BO${bestOf.value}`;
+}
+
 function seriesStatusLabel() {
   return `BO${bestOf.value} · ${t("Game")} ${seriesGame.value} · ${t(
     globalMode.value === "custom" ? "custom prior usage" : "tracked from earlier games"
@@ -197,6 +208,7 @@ function forecastLabel() {
 function resetSeriesTeams() {
   globalUsed.value = { [TEAM_A]: [], [TEAM_B]: [] };
   teamsBySide.value = { blue: TEAM_A, red: TEAM_B };
+  seriesWins.value = { [TEAM_A]: 0, [TEAM_B]: 0 };
   winnerSide.value = null;
   nextBlueTeam.value = null;
 }
@@ -325,7 +337,7 @@ async function clearGlobalBp() {
 async function startNextBattle() {
   if (
     currentStep.value ||
-    seriesGame.value >= bestOf.value ||
+    seriesWinner.value ||
     !winnerSide.value ||
     !nextBlueTeam.value
   ) return;
@@ -344,6 +356,18 @@ async function startNextBattle() {
   winnerSide.value = null;
   nextBlueTeam.value = null;
   await forecast();
+}
+
+function recordGameWinner(side) {
+  if (winnerSide.value === side) return;
+  if (winnerSide.value) {
+    const previousWinner = teamsBySide.value[winnerSide.value];
+    seriesWins.value[previousWinner] -= 1;
+  }
+  const winner = teamsBySide.value[side];
+  seriesWins.value[winner] += 1;
+  winnerSide.value = side;
+  nextBlueTeam.value = null;
 }
 
 async function removeGlobalHero(side, heroId) {
@@ -485,9 +509,9 @@ watch(modelType, forecast);
             <small v-if="!globalUsed[teamsBySide[side]].length">None selected</small>
           </div>
           <div v-if="globalMode === 'match'" class="next-battle series-progress">
-            <small>BO{{ bestOf }} · Game {{ seriesGame }}</small>
-            <template v-if="seriesGame >= bestOf">
-              <strong>{{ t("Series complete") }}</strong>
+            <small>BO{{ bestOf }} · {{ teamName(TEAM_A) }} {{ seriesWins[TEAM_A] }}–{{ seriesWins[TEAM_B] }} {{ teamName(TEAM_B) }} · Game {{ seriesGame }}</small>
+            <template v-if="seriesWinner">
+              <strong data-i18n-ignore>{{ seriesWinnerLabel() }}</strong>
             </template>
             <template v-else-if="currentStep">
               <strong>Finish this draft to continue</strong>
@@ -495,8 +519,8 @@ watch(modelType, forecast);
             <template v-else>
               <span data-i18n-ignore>{{ gameWinnerLabel(seriesGame) }}</span>
               <div class="series-choice">
-                <button type="button" :class="{ active: winnerSide === 'blue' }" @click="winnerSide = 'blue'; nextBlueTeam = null">{{ t("Blue wins") }}</button>
-                <button type="button" :class="{ active: winnerSide === 'red' }" @click="winnerSide = 'red'; nextBlueTeam = null">{{ t("Red wins") }}</button>
+                <button type="button" :class="{ active: winnerSide === 'blue' }" @click="recordGameWinner('blue')">{{ t("Blue wins") }}</button>
+                <button type="button" :class="{ active: winnerSide === 'red' }" @click="recordGameWinner('red')">{{ t("Red wins") }}</button>
               </div>
               <template v-if="losingTeam">
                 <span data-i18n-ignore>{{ loserColorChoiceLabel(losingTeam) }}</span>
