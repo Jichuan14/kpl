@@ -152,13 +152,12 @@ watch(selectedLeagueId, loadModel);
     </section>
 
     <section id="learnable">
-      <h2>Learnable hybrid model</h2>
+      <h2>Team-aware learnable hybrid model</h2>
       <p>
-        The BP simulator also offers a Learnable hybrid option when a trained
-        artifact is available for the selected season. It predicts the same
-        next legal pick or ban probability as the statistical model, but learns
-        its scoring weights from draft examples instead of storing a separate
-        hand-smoothed rate for every relationship.
+        The BP simulator offers a team-aware Learnable hybrid option when a
+        trained artifact is available for the selected season. It learns the
+        next legal pick or ban probability directly from draft examples,
+        including which team is acting and which team it is facing.
       </p>
 
       <h3>What it learns from each hero and draft state</h3>
@@ -167,6 +166,7 @@ watch(selectedLeagueId, loadModel);
         <tbody>
           <tr><td>Hero specialty profile</td><td>Lane, damage types, control, mobility, unstoppable status, and healing are projected into a learnable hero representation.</td></tr>
           <tr><td>Hero identity</td><td>Each hero has a small learned residual, allowing the model to capture kit-specific or meta effects that the specialty profile does not describe.</td></tr>
+          <tr><td>Team identities</td><td>The acting team and opponent each have a learned embedding, allowing the same board to produce different probabilities for different matchups.</td></tr>
           <tr><td>Visible draft board</td><td>Own and opponent picks and bans each have a separate learned context, so the model can learn composition, response, and ban-plan patterns.</td></tr>
           <tr><td>Draft moment and legal pool</td><td>Action, side, and draft slot are learned context inputs. Illegal heroes are removed before the remaining scores are converted to probabilities.</td></tr>
         </tbody>
@@ -175,9 +175,10 @@ watch(selectedLeagueId, loadModel);
       <h3>How its probability is formed</h3>
       <p>
         For each legal candidate, the model combines the candidate’s learned
-        representation with the current draft-state representation to produce
-        one score. A softmax then normalizes the legal candidates, so their
-        displayed probabilities still add up to 100%.
+        representation with the current draft-state, acting-team, and
+        opponent-team representation to produce one score. A softmax then
+        normalizes the legal candidates, so their displayed probabilities
+        still add up to 100%.
       </p>
       <pre data-i18n-ignore>candidate score = learned hero representation · learned draft context
 probability(candidate) = exp(score) ÷ sum(exp(score) for every legal candidate)</pre>
@@ -233,7 +234,7 @@ probability(candidate) = exp(score) ÷ sum(exp(score) for every legal candidate)
         <li>Repeat until the draft ends. Many simulated drafts estimate results such as “banned by end.”</li>
       </ol>
 
-      <p class="scope"><strong>What the model does not currently include:</strong> team identity, player form, match score, BO length, and patch notes are not separate model features. The learnable model gives battle-winning picks more training weight, but it does not estimate a pick’s direct chance to win. Read a prediction as: “Teams in this historical data tended to make this choice from boards like this.”</p>
+      <p class="scope"><strong>What the model does not currently include:</strong> player form, match score, BO length, and patch notes are not separate model features. Team and opponent identities are learned features. The learnable model gives battle-winning picks more training weight, but it does not estimate a pick’s direct chance to win. Read a prediction as: “This matchup tended to make this choice from boards like this.”</p>
     </section>
   </main>
 </template>
