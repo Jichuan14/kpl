@@ -274,7 +274,7 @@ def data_status(
     # available to visitors.
     published_dir = PUBLISHED_DIR / league_id
     frontend_assets = [
-        artifact(published_dir / "patterns.json", "patterns", "Draft patterns"),
+        artifact(published_dir / "overview.json", "patterns", "Draft patterns"),
         artifact(
             published_dir / "team-synergies.json",
             "team_synergies",
@@ -294,7 +294,7 @@ def data_status(
             default=None,
         )
         public_path = published_dir / {
-            "patterns": "patterns.json",
+            "patterns": "overview.json",
             "team_synergies": "team-synergies.json",
             "draft_model": "draft-model.json",
         }[public_file["key"]]

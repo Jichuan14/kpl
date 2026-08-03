@@ -13,6 +13,7 @@
 backend/data
 analysis/exports
 analysis/outputs
+analysis/published
 *.db
 *.sqlite*
 *.log

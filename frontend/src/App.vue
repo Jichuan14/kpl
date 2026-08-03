@@ -1,10 +1,10 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import MethodologyPage from "./MethodologyPage.vue";
-import DraftSimulatorPage from "./DraftSimulatorPage.vue";
-import TeamSynergyPage from "./TeamSynergyPage.vue";
-import VisualizationPage from "./VisualizationPage.vue";
-import HeroFeatureSpacePage from "./HeroFeatureSpacePage.vue";
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from "vue";
+const MethodologyPage = defineAsyncComponent(() => import("./MethodologyPage.vue"));
+const DraftSimulatorPage = defineAsyncComponent(() => import("./DraftSimulatorPage.vue"));
+const TeamSynergyPage = defineAsyncComponent(() => import("./TeamSynergyPage.vue"));
+const VisualizationPage = defineAsyncComponent(() => import("./VisualizationPage.vue"));
+const HeroFeatureSpacePage = defineAsyncComponent(() => import("./HeroFeatureSpacePage.vue"));
 import {
   fetchDataStatus,
   fetchLeagues,
@@ -316,7 +316,7 @@ watch(leagueId, () => {
     (league) => league.league_id === leagueId.value
   );
   if (selected) selectedYear.value = String(selected.year || "");
-  loadStatus();
+  if (isManagement.value) loadStatus();
 });
 watch(selectedYear, () => {
   if (
@@ -1459,7 +1459,7 @@ select {
   }
 }
 
-@media (max-width: 760px) {
+@media (max-width: 1080px) {
   .site-navigation {
     width: min(100% - 1rem, 1440px);
     align-items: flex-start;
