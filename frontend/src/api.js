@@ -14,7 +14,13 @@ async function request(path, options = {}) {
     const text = await res.text().catch(() => "");
     let message = text;
     try {
-      message = JSON.parse(text)?.detail || text;
+      const detail = JSON.parse(text)?.detail;
+      if (detail && typeof detail === "object") {
+        message = detail.message || `HTTP ${res.status}`;
+        if (detail.request_id) message += ` · ${detail.request_id}`;
+      } else {
+        message = detail || text;
+      }
     } catch {
       // Keep the plain response body.
     }
@@ -53,6 +59,10 @@ async function staticData(path, { signal, cache = true } = {}) {
 
 export function fetchLeagues() {
   return request("/api/leagues");
+}
+
+export function fetchSeasonTeams(leagueId) {
+  return request(`/api/leagues/${encodeURIComponent(leagueId)}/teams`);
 }
 
 export function fetchVisualizationSeasons() {
@@ -107,6 +117,13 @@ export function simulateDraft(state) {
   return request("/api/simulations/draft", {
     method: "POST",
     body: JSON.stringify(state),
+  });
+}
+
+export function askDraftCoach(payload) {
+  return request("/api/coach", {
+    method: "POST",
+    body: JSON.stringify(payload),
   });
 }
 

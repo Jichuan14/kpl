@@ -12,6 +12,7 @@ PipelineStep = Literal[
     "statistics",
     "meta",
     "team_synergy",
+    "team_profiles",
     "draft_model",
     "all",
 ]
@@ -45,6 +46,7 @@ class AnalysisPipeline:
                 "statistics",
                 "meta",
                 "team_synergy",
+                "team_profiles",
                 "draft_model",
             ]
             if step == "all"
@@ -142,6 +144,19 @@ class AnalysisPipeline:
                 str(self.output_dir / "team_synergy_stats.jsonl"),
                 "--min-selections",
                 "2",
+            ]
+        if step == "team_profiles":
+            return [
+                python,
+                str(ANALYSIS_DIR / "compute_team_draft_profiles.py"),
+                "--league-id",
+                self.league_id,
+                "--decisions",
+                str(self.decisions_path),
+                "--matches",
+                str(self.matches_path),
+                "--output-dir",
+                str(self.output_dir),
             ]
         if step == "draft_model":
             # Each season uses a rolling window of itself plus its four most

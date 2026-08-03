@@ -11,7 +11,7 @@ The script calculates three related measures for normal BP battles:
 
 Example:
 
-    python3 analysis/compute_meta_heroes.py --league-id 20260002
+    python3 analysis/compute_meta_heroes.py --league-id 20260003
 """
 
 from __future__ import annotations
@@ -23,9 +23,9 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any, Iterable
 
-from common import DB_PATH, REPO_ROOT, connect
+from common import CURRENT_LEAGUE_ID, DB_PATH, REPO_ROOT, connect
 
-DEFAULT_LEAGUE_ID = "20260002"
+DEFAULT_LEAGUE_ID = CURRENT_LEAGUE_ID
 
 
 def read_decisions(path: Path) -> list[dict[str, Any]]:

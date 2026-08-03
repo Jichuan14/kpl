@@ -1,0 +1,175 @@
+"""HTTP boundary for the evidence-backed KPL Draft Coach."""
+
+from __future__ import annotations
+
+import logging
+from typing import NoReturn
+from uuid import uuid4
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from openai import (
+    APIConnectionError,
+    APIStatusError,
+    APITimeoutError,
+    AuthenticationError,
+    RateLimitError,
+)
+
+from app.agent.service import (
+    CoachInput,
+    CoachLoopLimitError,
+    KimiCoachService,
+    KimiConfigurationError,
+)
+from app.database import get_db
+from app.schemas import ApiResponse
+from app.services.season_teams import validate_season_team_pair
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/api/coach", tags=["coach"])
+
+
+def _http_error(
+    *,
+    status_code: int,
+    code: str,
+    message: str,
+    request_id: str,
+) -> NoReturn:
+    raise HTTPException(
+        status_code=status_code,
+        detail={
+            "code": code,
+            "message": message,
+            "request_id": request_id,
+        },
+    )
+
+
+@router.post("")
+def ask_coach(
+    body: CoachInput,
+    db: Session = Depends(get_db),
+) -> ApiResponse:
+    """Answer one question with Kimi and approved local evidence tools."""
+    request_id = uuid4().hex
+    try:
+        if body.draft_state is not None:
+            teams = validate_season_team_pair(
+                db,
+                body.league_id,
+                body.draft_state.blue_team_id,
+                body.draft_state.red_team_id,
+            )
+            body.draft_state.blue_team_name = str(teams["blue"]["team_name"])
+            body.draft_state.red_team_name = str(teams["red"]["team_name"])
+        result = KimiCoachService().ask(body, request_id=request_id)
+    except ValueError as exc:
+        _http_error(
+            status_code=422,
+            code="invalid_team_context",
+            message=str(exc),
+            request_id=request_id,
+        )
+    except (KimiConfigurationError, AuthenticationError) as exc:
+        logger.error(
+            "coach_api_unavailable",
+            extra={
+                "request_id": request_id,
+                "error_type": type(exc).__name__,
+            },
+        )
+        _http_error(
+            status_code=503,
+            code="coach_unavailable",
+            message="The Draft Coach provider is not configured or authenticated.",
+            request_id=request_id,
+        )
+    except RateLimitError as exc:
+        logger.warning(
+            "coach_api_rate_limited",
+            extra={"request_id": request_id, "error_type": type(exc).__name__},
+        )
+        _http_error(
+            status_code=429,
+            code="coach_rate_limited",
+            message="The Draft Coach is temporarily rate limited. Try again later.",
+            request_id=request_id,
+        )
+    except APITimeoutError as exc:
+        logger.warning(
+            "coach_api_timeout",
+            extra={"request_id": request_id, "error_type": type(exc).__name__},
+        )
+        _http_error(
+            status_code=504,
+            code="coach_timeout",
+            message="The Draft Coach provider timed out. Try again.",
+            request_id=request_id,
+        )
+    except (APIConnectionError, APIStatusError) as exc:
+        logger.warning(
+            "coach_api_provider_failure",
+            extra={
+                "request_id": request_id,
+                "error_type": type(exc).__name__,
+                "provider_status": getattr(exc, "status_code", None),
+            },
+        )
+        _http_error(
+            status_code=502,
+            code="coach_provider_error",
+            message="The Draft Coach provider could not complete the request.",
+            request_id=request_id,
+        )
+    except (CoachLoopLimitError, RuntimeError) as exc:
+        logger.warning(
+            "coach_api_incomplete",
+            extra={"request_id": request_id, "error_type": type(exc).__name__},
+        )
+        _http_error(
+            status_code=502,
+            code="coach_incomplete",
+            message="The Draft Coach could not finish within its safety limits.",
+            request_id=request_id,
+        )
+    except Exception as exc:
+        # Do not log the exception string: provider errors can contain request
+        # details. The type and request ID are enough for safe correlation.
+        logger.error(
+            "coach_api_internal_failure",
+            extra={"request_id": request_id, "error_type": type(exc).__name__},
+        )
+        _http_error(
+            status_code=500,
+            code="coach_internal_error",
+            message="The Draft Coach encountered an internal error.",
+            request_id=request_id,
+        )
+
+    evidence: list[dict[str, object]] = []
+    warnings: list[str] = []
+    for call in result["tool_calls"]:
+        if call["success"]:
+            evidence.append(
+                {
+                    "tool": call["name"],
+                    "data": call["result"],
+                }
+            )
+        else:
+            warnings.append(f"{call['name']}: {call['error']}")
+
+    return ApiResponse(
+        message="coach response completed",
+        data={
+            "request_id": result["request_id"],
+            "model": result["model"],
+            "answer": result["answer"],
+            "evidence": evidence,
+            "warnings": warnings,
+            "usage": result["usage"],
+        },
+    )
