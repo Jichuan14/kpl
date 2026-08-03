@@ -12,6 +12,13 @@ from app.services.analysis_pipeline import ANALYSIS_DIR, OUTPUT_ROOT
 
 _CACHE: dict[Path, tuple[int, dict[str, Any]]] = {}
 _LEARNABLE_CACHE: dict[Path, tuple[int, dict[str, Any]]] = {}
+_TEAM_TENDENCY_CACHE: dict[
+    Path,
+    tuple[
+        int,
+        dict[tuple[str, str, str, str, int, str], dict[int, dict[str, Any]]],
+    ],
+] = {}
 SPECIALTY_FEATURES_PATH = ANALYSIS_DIR / "hero_specialty_vectors_thermometer.json"
 
 
@@ -45,6 +52,7 @@ def load_model(league_id: str) -> dict[str, Any]:
         model = json.load(source)
     if model.get("schema_version") != 1:
         raise ValueError("Unsupported draft model version")
+    model["_league_id"] = league_id
     model["_base_index"] = {
         (row["context"], int(row["hero_id"])): row for row in model.get("base", [])
     }
@@ -82,7 +90,11 @@ def load_learnable_model(league_id: str) -> dict[str, Any]:
         )
     with path.open(encoding="utf-8") as source:
         model = json.load(source)
-    if model.get("schema_version") != 1 or model.get("model_type") != "recency_weighted_hybrid_bilinear_choice":
+    if (
+        model.get("schema_version") != 2
+        or model.get("model_type")
+        != "team_aware_recency_weighted_hybrid_bilinear_choice"
+    ):
         raise ValueError("Unsupported learnable draft model version")
     if str(model.get("target_season")) != league_id:
         raise ValueError("Learnable draft model target season does not match the requested league")
@@ -105,6 +117,10 @@ def load_learnable_model(league_id: str) -> dict[str, Any]:
     if not hero_ids:
         raise ValueError("Learnable draft model has no hero vocabulary")
     hero_to_index = {hero_id: index for index, hero_id in enumerate(hero_ids)}
+    team_ids = [str(team_id) for team_id in model.get("team_ids", [])]
+    if not team_ids or len(set(team_ids)) != len(team_ids):
+        raise ValueError("Learnable draft model has an invalid team vocabulary")
+    team_to_index = {team_id: index for index, team_id in enumerate(team_ids)}
     specialty_by_id = {
         int(row["hero_id"]): [*row["vector"], float(row.get("feature_known", True))]
         for row in specialty_artifact.get("rows", [])
@@ -121,6 +137,8 @@ def load_learnable_model(league_id: str) -> dict[str, Any]:
         "context_embedding",
         "state_projection",
         "source_embedding",
+        "acting_team_embedding",
+        "opponent_team_embedding",
         "hero_bias",
     }
     if set(parameters) != required_parameters:
@@ -147,6 +165,16 @@ def load_learnable_model(league_id: str) -> dict[str, Any]:
             or any(len(row) != embedding_dim for row in role_rows)
             for role_rows in parameters["source_embedding"]
         )
+        or len(parameters["acting_team_embedding"]) != len(team_ids)
+        or any(
+            len(row) != embedding_dim
+            for row in parameters["acting_team_embedding"]
+        )
+        or len(parameters["opponent_team_embedding"]) != len(team_ids)
+        or any(
+            len(row) != embedding_dim
+            for row in parameters["opponent_team_embedding"]
+        )
     ):
         raise ValueError("Learnable draft model parameter dimensions are invalid")
     context_to_index = {
@@ -164,6 +192,7 @@ def load_learnable_model(league_id: str) -> dict[str, Any]:
     ]
     model["_hero_ids"] = hero_ids
     model["_hero_to_index"] = hero_to_index
+    model["_team_to_index"] = team_to_index
     model["_feature_matrix"] = feature_matrix
     model["_parameters"] = parameters
     model["_context_to_index"] = context_to_index
@@ -223,7 +252,7 @@ def metadata(league_id: str) -> dict[str, Any]:
             for hero_id in model["hero_ids"]
         ],
         "draft_sequence": model["draft_sequence"],
-        "default_model_type": "stats",
+        "default_model_type": "learnable" if learnable_ready else "stats",
         "available_models": [
             {
                 "id": "stats",
@@ -233,9 +262,11 @@ def metadata(league_id: str) -> dict[str, Any]:
             },
             {
                 "id": "learnable",
-                "label": "Learnable hybrid",
+                "label": "Team-aware learnable hybrid",
                 "available": learnable_ready,
-                "description": "Learned specialty, hero, and draft-context embeddings.",
+                "description": (
+                    "Learned team, opponent, specialty, hero, and draft-context embeddings."
+                ),
             },
         ],
     }
@@ -441,6 +472,21 @@ def _predict_learnable(
         )
         for dimension in range(embedding_dim)
     ]
+    side = str(step["side"])
+    opponent_side = "red" if side == "blue" else "blue"
+    acting_team_id = str(state.get(f"{side}_team_id") or "")
+    opponent_team_id = str(state.get(f"{opponent_side}_team_id") or "")
+    team_to_index = learnable_model["_team_to_index"]
+    acting_team_index = team_to_index.get(acting_team_id)
+    opponent_team_index = team_to_index.get(opponent_team_id)
+    for parameter_name, team_index in (
+        ("acting_team_embedding", acting_team_index),
+        ("opponent_team_embedding", opponent_team_index),
+    ):
+        if team_index is None:
+            continue
+        for dimension in range(embedding_dim):
+            query[dimension] += parameters[parameter_name][team_index][dimension]
     for role_index, hero_ids in enumerate(role_hero_ids):
         for hero_id in hero_ids:
             hero_index = hero_to_index.get(hero_id)
@@ -461,11 +507,26 @@ def _predict_learnable(
     weights = [math.exp(score - maximum) for score in candidate_logits]
     total = sum(weights)
     probabilities = [weight / total for weight in weights]
+    team_metadata = (
+        {
+            "team_context_level": "learned_embeddings",
+            "team_context_decisions": int(
+                learnable_model.get("team_training_decisions", {}).get(
+                    acting_team_id, 0
+                )
+            ),
+            "acting_team_known": acting_team_index is not None,
+            "opponent_team_known": opponent_team_index is not None,
+        }
+        if acting_team_index is not None or opponent_team_index is not None
+        else {}
+    )
     rows = [
         {
             "hero_id": hero_id,
             "hero_name": base_model["hero_names"].get(str(hero_id), str(hero_id)),
             "probability": float(probability),
+            **team_metadata,
         }
         for hero_id, probability in zip(
             (hero_id for hero_id in legal_hero_ids if hero_id in hero_to_index),
@@ -483,7 +544,153 @@ def _predict(
 ) -> list[dict[str, Any]]:
     if learnable_model is not None:
         return _predict_learnable(model, learnable_model, state, step)
-    return _predict_stats(model, state, step)
+    return _apply_team_tendency(model, state, step, _predict_stats(model, state, step))
+
+
+def _team_tendency_index(
+    rows: tuple[dict[str, Any], ...],
+) -> dict[tuple[str, str, str, str, int, str], dict[int, dict[str, Any]]]:
+    index: dict[
+        tuple[str, str, str, str, int, str],
+        dict[int, dict[str, Any]],
+    ] = {}
+    for row in rows:
+        level = str(row.get("context_level") or "")
+        if level not in {"slot", "opponent_slot"}:
+            continue
+        key = (
+            str(row.get("team_id") or ""),
+            level,
+            str(row.get("side") or ""),
+            str(row.get("action") or ""),
+            int(row.get("team_action_type_number") or 0),
+            str(row.get("opponent_team_id") or ""),
+        )
+        index.setdefault(key, {})[int(row["hero_id"])] = row
+    return index
+
+
+def _load_team_tendency_index(
+    league_id: str,
+) -> tuple[
+    dict[tuple[str, str, str, str, int, str], dict[int, dict[str, Any]]],
+    str,
+]:
+    path = OUTPUT_ROOT / league_id / "team_action_tendencies.jsonl"
+    modified = path.stat().st_mtime_ns
+    cached = _TEAM_TENDENCY_CACHE.get(path)
+    if cached and cached[0] == modified:
+        return cached[1], str(modified)
+    rows: list[dict[str, Any]] = []
+    with path.open(encoding="utf-8") as source:
+        for line in source:
+            if line.strip():
+                rows.append(json.loads(line))
+    index = _team_tendency_index(tuple(rows))
+    _TEAM_TENDENCY_CACHE[path] = (modified, index)
+    return index, str(modified)
+
+
+def _apply_team_tendency(
+    model: dict[str, Any],
+    state: dict[str, Any],
+    step: dict[str, Any],
+    base_rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Blend the league model with precomputed acting-team BP tendencies."""
+    league_id = str(model.get("_league_id") or "")
+    side = str(step.get("side") or "")
+    team_id = str(state.get(f"{side}_team_id") or "")
+    opponent_side = "red" if side == "blue" else "blue"
+    opponent_id = str(state.get(f"{opponent_side}_team_id") or "")
+    if not league_id or not team_id or not base_rows:
+        return base_rows
+    try:
+        index, artifact_version = _load_team_tendency_index(league_id)
+    except FileNotFoundError:
+        return base_rows
+
+    action = str(step.get("action") or "")
+    slot = int(step.get("team_action_type_number") or 0)
+    opponent_key = (
+        team_id,
+        "opponent_slot",
+        side,
+        action,
+        slot,
+        opponent_id,
+    )
+    slot_key = (team_id, "slot", side, action, slot, "")
+    tendency_rows = index.get(opponent_key, {}) if opponent_id else {}
+    context_level = "opponent_slot"
+    context_support = max(
+        (int(row.get("context_decision_count") or 0) for row in tendency_rows.values()),
+        default=0,
+    )
+    if context_support < 3:
+        tendency_rows = index.get(slot_key, {})
+        context_level = "slot"
+        context_support = max(
+            (
+                int(row.get("context_decision_count") or 0)
+                for row in tendency_rows.values()
+            ),
+            default=0,
+        )
+    if not tendency_rows or context_support <= 0:
+        return base_rows
+
+    blend_weight = min(0.7, context_support / (context_support + 8.0))
+    weighted: list[dict[str, Any]] = []
+    for base in base_rows:
+        hero_id = int(base["hero_id"])
+        tendency = tendency_rows.get(hero_id)
+        lift = float(tendency.get("smoothed_lift") or 1.0) if tendency else 1.0
+        lift = min(3.0, max(0.35, lift))
+        adjusted = float(base["probability"]) * (lift**blend_weight)
+        weighted.append(
+            {
+                **base,
+                "league_probability": float(base["probability"]),
+                "team_adjustment_lift": lift,
+                "team_context_level": context_level,
+                "team_context_decisions": context_support,
+                "team_context_artifact_version": artifact_version,
+                "_adjusted_weight": adjusted,
+            }
+        )
+    total = sum(float(row["_adjusted_weight"]) for row in weighted) or 1.0
+    result = [
+        {
+            **{key: value for key, value in row.items() if key != "_adjusted_weight"},
+            "probability": float(row["_adjusted_weight"]) / total,
+        }
+        for row in weighted
+    ]
+    return sorted(result, key=lambda row: row["probability"], reverse=True)
+
+
+def _prediction_context(
+    state: dict[str, Any],
+    step: dict[str, Any],
+    probabilities: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    side = str(step.get("side") or "")
+    team_id = state.get(f"{side}_team_id")
+    if not team_id or not probabilities or "team_context_level" not in probabilities[0]:
+        return None
+    opponent = "red" if side == "blue" else "blue"
+    return {
+        "acting_team_id": str(team_id),
+        "acting_team_name": str(state.get(f"{side}_team_name") or team_id),
+        "opponent_team_id": str(state.get(f"{opponent}_team_id") or ""),
+        "opponent_team_name": str(state.get(f"{opponent}_team_name") or ""),
+        "side": side,
+        "context_level": probabilities[0]["team_context_level"],
+        "context_decisions": probabilities[0]["team_context_decisions"],
+        "acting_team_known": probabilities[0].get("acting_team_known", True),
+        "opponent_team_known": probabilities[0].get("opponent_team_known", True),
+    }
 
 
 def _apply(state: dict[str, Any], step: dict[str, Any], hero_id: int) -> None:
@@ -495,18 +702,25 @@ def _apply(state: dict[str, Any], step: dict[str, Any], hero_id: int) -> None:
         ]
 
 
-def simulate(
+def _prepare_prediction(
     league_id: str,
     state: dict[str, Any],
-    rollouts: int,
-    seed: int | None,
-    *,
-    model_type: str = "stats",
-) -> dict[str, Any]:
+    model_type: str,
+) -> tuple[
+    dict[str, Any],
+    dict[str, Any] | None,
+    list[dict[str, Any]],
+    int,
+    dict[str, Any],
+    list[dict[str, Any]],
+]:
+    """Validate one draft state and calculate its next-action distribution."""
     model = load_model(league_id)
     if model_type not in {"stats", "learnable"}:
         raise ValueError(f"Unsupported draft model type: {model_type}")
-    learnable_model = load_learnable_model(league_id) if model_type == "learnable" else None
+    learnable_model = (
+        load_learnable_model(league_id) if model_type == "learnable" else None
+    )
     for side in ("blue", "red"):
         picks = [int(hero_id) for hero_id in state.get(f"{side}_picks", [])]
         if not _roles_are_feasible(model, picks):
@@ -519,12 +733,20 @@ def simulate(
         }
         if overlap:
             raise ValueError(
-                f"{side.title()} cannot pick heroes used in an earlier battle: {sorted(overlap)}"
+                f"{side.title()} cannot pick heroes used in an earlier battle: "
+                f"{sorted(overlap)}"
             )
     sequence = model["draft_sequence"]
-    start_order = int(state["bp_order"])
+    try:
+        start_order = int(state["bp_order"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError("A valid bp_order is required") from exc
     start_index = next(
-        (index for index, step in enumerate(sequence) if int(step["bp_order"]) == start_order),
+        (
+            index
+            for index, step in enumerate(sequence)
+            if int(step["bp_order"]) == start_order
+        ),
         None,
     )
     if start_index is None:
@@ -533,13 +755,83 @@ def simulate(
     next_probabilities = _predict(model, state, next_step, learnable_model)
     if not next_probabilities:
         raise ValueError("No legal heroes remain")
+    return (
+        model,
+        learnable_model,
+        sequence,
+        start_index,
+        next_step,
+        next_probabilities,
+    )
+
+
+def predict_next_action(
+    league_id: str,
+    state: dict[str, Any],
+    *,
+    model_type: str = "stats",
+    limit: int = 5,
+) -> dict[str, Any]:
+    """Return the next legal BP distribution without running future rollouts."""
+    if limit < 1:
+        raise ValueError("limit must be at least 1")
+    model, _, _, _, next_step, probabilities = _prepare_prediction(
+        league_id,
+        state,
+        model_type,
+    )
+    team_context = _prediction_context(state, next_step, probabilities)
+    return {
+        "model_generated_at": model["generated_at"],
+        "model_type": model_type,
+        "model_label": (
+            (
+                "Team-aware learnable hybrid"
+                if model_type == "learnable"
+                else "Statistical model"
+            )
+            + (
+                " + team context"
+                if team_context and model_type == "stats"
+                else ""
+            )
+        ),
+        "team_context": team_context,
+        "next_step": next_step,
+        "candidate_count": len(probabilities),
+        "next_action_probabilities": probabilities[:limit],
+    }
+
+
+def simulate(
+    league_id: str,
+    state: dict[str, Any],
+    rollouts: int,
+    seed: int | None,
+    *,
+    model_type: str = "stats",
+    max_actions: int | None = None,
+) -> dict[str, Any]:
+    if max_actions is not None and max_actions < 1:
+        raise ValueError("max_actions must be at least 1")
+    (
+        model,
+        learnable_model,
+        sequence,
+        start_index,
+        next_step,
+        next_probabilities,
+    ) = _prepare_prediction(league_id, state, model_type)
 
     randomizer = random.Random(seed)
     event_counts: dict[int, dict[int, int]] = {}
     ban_counts: dict[int, int] = {}
+    remaining_sequence = sequence[start_index:]
+    if max_actions is not None:
+        remaining_sequence = remaining_sequence[:max_actions]
     for _ in range(rollouts):
         current = json.loads(json.dumps(state))
-        for index, step in enumerate(sequence[start_index:]):
+        for index, step in enumerate(remaining_sequence):
             probabilities = (
                 next_probabilities
                 if index == 0
@@ -566,14 +858,28 @@ def simulate(
             for hero_id, count in sorted(counts.items(), key=lambda item: item[1], reverse=True)[:limit]
         ]
 
+    team_context = _prediction_context(state, next_step, next_probabilities)
     return {
         "model_generated_at": model["generated_at"],
         "model_type": model_type,
-        "model_label": "Learnable hybrid" if model_type == "learnable" else "Statistical model",
+        "model_label": (
+            (
+                "Team-aware learnable hybrid"
+                if model_type == "learnable"
+                else "Statistical model"
+            )
+            + (
+                " + team context"
+                if team_context and model_type == "stats"
+                else ""
+            )
+        ),
+        "team_context": team_context,
         "next_step": next_step,
         "next_action_probabilities": next_probabilities,
         "simulation": {
             "rollouts": rollouts,
+            "actions_simulated": len(remaining_sequence),
             "next_actions": {str(order): rows(counts, 8) for order, counts in event_counts.items()},
             "banned_by_end": rows(ban_counts, 20),
         },

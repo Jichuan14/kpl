@@ -2,9 +2,12 @@
 import { computed, onMounted, ref, watch } from "vue";
 import {
   fetchDraftModel,
+  fetchSeasonTeams,
   fetchVisualizationSeasons,
   simulateDraft,
 } from "./api";
+import DraftCoachPanel from "./DraftCoachPanel.vue";
+import TeamCombobox from "./TeamCombobox.vue";
 import { selectAvailableLeague, selectedLeagueId } from "./selectedLeague";
 import { heroAsset } from "./heroAssets";
 import { language, t } from "./i18n";
@@ -19,7 +22,7 @@ const simulating = ref(false);
 const error = ref("");
 const search = ref("");
 const rollouts = ref(100);
-const modelType = ref("stats");
+const modelType = ref("learnable");
 const bpOrder = ref(1);
 const board = ref(emptyBoard());
 const history = ref([]);
@@ -29,7 +32,8 @@ const bestOf = ref(5);
 const TEAM_A = "team-a";
 const TEAM_B = "team-b";
 const globalUsed = ref({ [TEAM_A]: [], [TEAM_B]: [] });
-const teamNames = ref({ [TEAM_A]: "", [TEAM_B]: "" });
+const seasonTeams = ref([]);
+const selectedTeamIds = ref({ [TEAM_A]: "", [TEAM_B]: "" });
 const teamsBySide = ref({ blue: TEAM_A, red: TEAM_B });
 const seriesWins = ref({ [TEAM_A]: 0, [TEAM_B]: 0 });
 const winnerSide = ref(null);
@@ -132,12 +136,42 @@ const selectedSeason = computed(() =>
   seasons.value.find((season) => season.league_id === leagueId.value)
 );
 
+const teamsReady = computed(
+  () =>
+    Boolean(selectedTeam(TEAM_A) && selectedTeam(TEAM_B)) &&
+    selectedTeamIds.value[TEAM_A] !== selectedTeamIds.value[TEAM_B]
+);
+
 const boardGroups = computed(() => [
   { key: "blue_bans", title: `${t("Blue bans")} · ${teamName(teamsBySide.value.blue)}`, tone: "blue" },
   { key: "blue_picks", title: `${t("Blue picks")} · ${teamName(teamsBySide.value.blue)}`, tone: "blue" },
   { key: "red_bans", title: `${t("Red bans")} · ${teamName(teamsBySide.value.red)}`, tone: "red" },
   { key: "red_picks", title: `${t("Red picks")} · ${teamName(teamsBySide.value.red)}`, tone: "red" },
 ]);
+
+const coachDraftState = computed(() => {
+  if (!currentStep.value || !teamsReady.value) return null;
+  const blue = selectedTeam(teamsBySide.value.blue);
+  const red = selectedTeam(teamsBySide.value.red);
+  return {
+    model_type: modelType.value,
+    blue_team_id: String(blue.team_id),
+    blue_team_name: blue.team_name,
+    red_team_id: String(red.team_id),
+    red_team_name: red.team_name,
+    bp_order: bpOrder.value,
+    blue_picks: [...board.value.blue_picks],
+    red_picks: [...board.value.red_picks],
+    blue_bans: [...board.value.blue_bans],
+    red_bans: [...board.value.red_bans],
+    blue_used_previous_battles: [
+      ...globalUsed.value[teamsBySide.value.blue],
+    ],
+    red_used_previous_battles: [
+      ...globalUsed.value[teamsBySide.value.red],
+    ],
+  };
+});
 
 function percent(value) {
   return `${(Number(value || 0) * 100).toFixed(1)}%`;
@@ -159,7 +193,14 @@ function heroIcon(heroId) {
 }
 
 function teamName(team) {
-  return teamNames.value[team].trim() || t(team === TEAM_A ? "Blue Team" : "Red Team");
+  return selectedTeam(team)?.team_name || t(team === TEAM_A ? "Blue Team" : "Red Team");
+}
+
+function selectedTeam(team) {
+  const teamId = selectedTeamIds.value[team];
+  return seasonTeams.value.find(
+    (candidate) => String(candidate.team_id) === String(teamId)
+  );
 }
 
 function sideLabel(side) {
@@ -224,7 +265,9 @@ async function loadModel() {
   error.value = "";
   result.value = null;
   model.value = null;
-  modelType.value = "stats";
+  seasonTeams.value = [];
+  selectedTeamIds.value = { [TEAM_A]: "", [TEAM_B]: "" };
+  modelType.value = "learnable";
   board.value = emptyBoard();
   history.value = [];
   bpOrder.value = 1;
@@ -234,8 +277,29 @@ async function loadModel() {
   resetSeriesTeams();
   pickerTarget.value = "draft";
   try {
-    model.value = await fetchDraftModel(leagueId.value);
-    await forecast();
+    const [draftModel, teams] = await Promise.all([
+      fetchDraftModel(leagueId.value),
+      fetchSeasonTeams(leagueId.value),
+    ]);
+    model.value = draftModel;
+    seasonTeams.value = teams;
+    modelType.value = draftModel.available_models?.some(
+      (candidate) => candidate.id === "learnable" && candidate.available
+    )
+      ? "learnable"
+      : "stats";
+    const wolves =
+      teams.find((team) => String(team.team_id) === "10001") ||
+      teams.find((team) => String(team.team_name).includes("狼队"));
+    const ag =
+      teams.find((team) => String(team.team_id) === "10027") ||
+      teams.find((team) => String(team.team_name).includes("AG超玩会"));
+    if (wolves && ag && String(wolves.team_id) !== String(ag.team_id)) {
+      selectedTeamIds.value = {
+        [TEAM_A]: String(wolves.team_id),
+        [TEAM_B]: String(ag.team_id),
+      };
+    }
   } catch (err) {
     model.value = null;
     error.value = err.message || "Could not load this season's draft model.";
@@ -245,13 +309,23 @@ async function loadModel() {
 }
 
 async function forecast() {
+  if (!teamsReady.value) {
+    result.value = null;
+    return;
+  }
   if (!model.value || !currentStep.value || simulating.value) return;
+  const blue = selectedTeam(teamsBySide.value.blue);
+  const red = selectedTeam(teamsBySide.value.red);
   simulating.value = true;
   error.value = "";
   try {
     result.value = await simulateDraft({
       league_id: leagueId.value,
       model_type: modelType.value,
+      blue_team_id: String(blue.team_id),
+      blue_team_name: blue.team_name,
+      red_team_id: String(red.team_id),
+      red_team_name: red.team_name,
       bp_order: bpOrder.value,
       ...board.value,
       blue_used_previous_battles: globalUsed.value[teamsBySide.value.blue],
@@ -267,6 +341,7 @@ async function forecast() {
 }
 
 async function chooseHero(heroId) {
+  if (!teamsReady.value) return;
   if (pickerTarget.value !== "draft") {
     const side = pickerTarget.value.replace("global-", "");
     const team = teamsBySide.value[side];
@@ -305,6 +380,7 @@ async function reset() {
 }
 
 async function startGlobalBp() {
+  if (!teamsReady.value) return;
   globalMode.value = "match";
   seriesGame.value = 1;
   resetSeriesTeams();
@@ -316,6 +392,7 @@ async function startGlobalBp() {
 }
 
 async function customizeGlobalBp() {
+  if (!teamsReady.value) return;
   globalMode.value = "custom";
   seriesGame.value = 2;
   resetSeriesTeams();
@@ -396,6 +473,7 @@ onMounted(async () => {
 
 watch(leagueId, loadModel);
 watch(modelType, forecast);
+watch(selectedTeamIds, forecast, { deep: true });
 </script>
 
 <template>
@@ -475,17 +553,23 @@ watch(modelType, forecast);
           </p>
         </div>
         <div class="global-actions">
-          <button type="button" :class="{ active: globalMode === 'single' }" @click="clearGlobalBp">Single game</button>
-          <button type="button" :class="{ active: globalMode === 'match' }" @click="startGlobalBp">Start Global BP</button>
-          <button type="button" :class="{ active: globalMode === 'custom' }" @click="customizeGlobalBp">Customize used heroes</button>
-          <label class="team-name">
-            <span>{{ t("Blue in game 1") }}</span>
-            <input v-model="teamNames[TEAM_A]" type="text" maxlength="40" :placeholder="t('Blue Team')" />
-          </label>
-          <label class="team-name">
-            <span>{{ t("Red in game 1") }}</span>
-            <input v-model="teamNames[TEAM_B]" type="text" maxlength="40" :placeholder="t('Red Team')" />
-          </label>
+          <button type="button" :class="{ active: globalMode === 'single' }" :disabled="!teamsReady" @click="clearGlobalBp">Single game</button>
+          <button type="button" :class="{ active: globalMode === 'match' }" :disabled="!teamsReady" @click="startGlobalBp">Start Global BP</button>
+          <button type="button" :class="{ active: globalMode === 'custom' }" :disabled="!teamsReady" @click="customizeGlobalBp">Customize used heroes</button>
+          <TeamCombobox
+            v-model="selectedTeamIds[TEAM_A]"
+            :label="t('Blue in game 1')"
+            :teams="seasonTeams"
+            :excluded-id="selectedTeamIds[TEAM_B]"
+            :disabled="loading || history.length > 0 || seriesGame > 1"
+          />
+          <TeamCombobox
+            v-model="selectedTeamIds[TEAM_B]"
+            :label="t('Red in game 1')"
+            :teams="seasonTeams"
+            :excluded-id="selectedTeamIds[TEAM_A]"
+            :disabled="loading || history.length > 0 || seriesGame > 1"
+          />
           <label class="series-format">
             <span>Series</span>
             <select v-model.number="bestOf" :disabled="globalMode === 'single'">
@@ -494,6 +578,9 @@ watch(modelType, forecast);
             </select>
           </label>
         </div>
+        <p v-if="!teamsReady" class="team-required">
+          Search and select two teams from this season to start the simulation and give the coach its Blue/Red context.
+        </p>
         <div v-if="globalMode !== 'single'" class="global-used">
           <div v-for="side in ['blue', 'red']" :key="side" class="used-team" :class="side">
             <span data-i18n-ignore>{{ sideUsedLabel(side) }}</span>
@@ -536,92 +623,104 @@ watch(modelType, forecast);
         </div>
       </section>
 
-      <section class="simulator-layout">
-        <div class="draft-board">
-          <section
-            v-for="group in boardGroups"
-            :key="group.key"
-            class="draft-group"
-            :class="group.tone"
-          >
-            <p data-i18n-ignore>{{ group.title }}</p>
-            <div class="draft-slots">
-              <button
-                v-for="heroId in board[group.key]"
-                :key="`${group.key}-${heroId}`"
-                type="button"
-                :title="history.at(-1)?.heroId === heroId ? 'Remove latest action' : ''"
-                :disabled="history.at(-1)?.heroId !== heroId"
-                @click="removeHero(group.key, heroId)"
+      <div class="simulator-workspace">
+        <div class="simulator-main-column">
+          <section class="simulator-layout">
+            <div class="draft-board">
+              <section
+                v-for="group in boardGroups"
+                :key="group.key"
+                class="draft-group"
+                :class="group.tone"
               >
-                <img v-if="heroIcon(heroId)" :src="heroIcon(heroId)" :alt="heroName(heroId)" />
-                <span v-else>{{ heroName(heroId).slice(0, 1) }}</span>
+                <p data-i18n-ignore>{{ group.title }}</p>
+                <div class="draft-slots">
+                  <button
+                    v-for="heroId in board[group.key]"
+                    :key="`${group.key}-${heroId}`"
+                    type="button"
+                    :title="history.at(-1)?.heroId === heroId ? 'Remove latest action' : ''"
+                    :disabled="history.at(-1)?.heroId !== heroId"
+                    @click="removeHero(group.key, heroId)"
+                  >
+                    <img v-if="heroIcon(heroId)" :src="heroIcon(heroId)" :alt="heroName(heroId)" />
+                    <span v-else>{{ heroName(heroId).slice(0, 1) }}</span>
+                  </button>
+                  <span v-for="slot in Math.max(0, 5 - board[group.key].length)" :key="slot">—</span>
+                </div>
+              </section>
+            </div>
+
+            <aside class="forecast-panel">
+              <div class="forecast-heading">
+                <div>
+                  <p class="simulator-eyebrow">Model forecast</p>
+                  <h2 data-i18n-ignore>{{ forecastLabel() }}</h2>
+                  <small v-if="selectedModel">{{ t(selectedModel.label) }}</small>
+                </div>
+                <span v-if="simulating">Updating…</span>
+              </div>
+              <div class="probability-list">
+                <div v-for="row in result?.next_action_probabilities?.slice(0, 10)" :key="row.hero_id">
+                  <img :src="heroIcon(row.hero_id)" :alt="row.hero_name" />
+                  <span class="probability-track"><i :style="{ width: percent(row.probability) }"></i></span>
+                  <em>{{ percent(row.probability) }}</em>
+                </div>
+              </div>
+              <div v-if="result?.simulation?.banned_by_end?.length" class="end-ban-list">
+                <p>Most likely to be banned before draft end</p>
+                <span v-for="row in result.simulation.banned_by_end.slice(0, 3)" :key="row.hero_id">
+                  <img :src="heroIcon(row.hero_id)" :alt="row.hero_name" />
+                  {{ percent(row.probability) }}
+                </span>
+              </div>
+            </aside>
+          </section>
+
+          <section class="hero-picker">
+            <div class="picker-heading">
+              <div>
+                <p class="simulator-eyebrow">{{ pickerTarget === 'draft' ? 'Add the next action' : 'Global BP setup' }}</p>
+                <h2 data-i18n-ignore>{{ pickerTitle }}</h2>
+              </div>
+              <input v-model="search" type="search" placeholder="Find a hero…" :disabled="!teamsReady || (pickerTarget === 'draft' && !currentStep)" />
+            </div>
+            <div v-if="globalMode !== 'single'" class="picker-targets">
+              <button type="button" :class="{ active: pickerTarget === 'draft' }" @click="pickerTarget = 'draft'">Current draft</button>
+              <button type="button" :class="{ active: pickerTarget === 'global-blue' }" @click="pickerTarget = 'global-blue'" data-i18n-ignore>{{ earlierGamesLabel(teamsBySide.blue) }}</button>
+              <button type="button" :class="{ active: pickerTarget === 'global-red' }" @click="pickerTarget = 'global-red'" data-i18n-ignore>{{ earlierGamesLabel(teamsBySide.red) }}</button>
+            </div>
+            <div class="hero-options">
+              <button
+                v-for="hero in availableHeroes"
+                :key="hero.hero_id"
+                type="button"
+                :disabled="!teamsReady || (pickerTarget === 'draft' && !currentStep) || simulating"
+                :title="`${hero.hero_name} · ${percent(probabilityByHeroId.get(Number(hero.hero_id)) || 0)}`"
+                @click="chooseHero(hero.hero_id)"
+              >
+                <img v-if="heroIcon(hero.hero_id)" :src="heroIcon(hero.hero_id)" :alt="hero.hero_name" />
+                <span v-else>{{ hero.hero_name.slice(0, 1) }}</span>
+                <small>{{ percent(probabilityByHeroId.get(Number(hero.hero_id)) || 0) }}</small>
               </button>
-              <span v-for="slot in Math.max(0, 5 - board[group.key].length)" :key="slot">—</span>
             </div>
           </section>
         </div>
 
-        <aside class="forecast-panel">
-          <div class="forecast-heading">
-            <div>
-              <p class="simulator-eyebrow">Model forecast</p>
-              <h2 data-i18n-ignore>{{ forecastLabel() }}</h2>
-              <small v-if="selectedModel">{{ t(selectedModel.label) }}</small>
-            </div>
-            <span v-if="simulating">Updating…</span>
-          </div>
-          <div class="probability-list">
-            <div v-for="row in result?.next_action_probabilities?.slice(0, 10)" :key="row.hero_id">
-              <img :src="heroIcon(row.hero_id)" :alt="row.hero_name" />
-              <span class="probability-track"><i :style="{ width: percent(row.probability) }"></i></span>
-              <em>{{ percent(row.probability) }}</em>
-            </div>
-          </div>
-          <div v-if="result?.simulation?.banned_by_end?.length" class="end-ban-list">
-            <p>Most likely to be banned before draft end</p>
-            <span v-for="row in result.simulation.banned_by_end.slice(0, 3)" :key="row.hero_id">
-              <img :src="heroIcon(row.hero_id)" :alt="row.hero_name" />
-              {{ percent(row.probability) }}
-            </span>
-          </div>
+        <aside class="coach-rail" aria-label="Draft Coach conversation">
+          <DraftCoachPanel
+            :league-id="leagueId"
+            :season-name="selectedSeason?.league_name || leagueId"
+            :draft-state="coachDraftState"
+          />
         </aside>
-      </section>
-
-      <section class="hero-picker">
-        <div class="picker-heading">
-          <div>
-            <p class="simulator-eyebrow">{{ pickerTarget === 'draft' ? 'Add the next action' : 'Global BP setup' }}</p>
-            <h2 data-i18n-ignore>{{ pickerTitle }}</h2>
-          </div>
-          <input v-model="search" type="search" placeholder="Find a hero…" :disabled="pickerTarget === 'draft' && !currentStep" />
-        </div>
-        <div v-if="globalMode !== 'single'" class="picker-targets">
-          <button type="button" :class="{ active: pickerTarget === 'draft' }" @click="pickerTarget = 'draft'">Current draft</button>
-          <button type="button" :class="{ active: pickerTarget === 'global-blue' }" @click="pickerTarget = 'global-blue'" data-i18n-ignore>{{ earlierGamesLabel(teamsBySide.blue) }}</button>
-          <button type="button" :class="{ active: pickerTarget === 'global-red' }" @click="pickerTarget = 'global-red'" data-i18n-ignore>{{ earlierGamesLabel(teamsBySide.red) }}</button>
-        </div>
-        <div class="hero-options">
-          <button
-            v-for="hero in availableHeroes"
-            :key="hero.hero_id"
-            type="button"
-            :disabled="(pickerTarget === 'draft' && !currentStep) || simulating"
-            :title="`${hero.hero_name} · ${percent(probabilityByHeroId.get(Number(hero.hero_id)) || 0)}`"
-            @click="chooseHero(hero.hero_id)"
-          >
-            <img v-if="heroIcon(hero.hero_id)" :src="heroIcon(hero.hero_id)" :alt="hero.hero_name" />
-            <span v-else>{{ hero.hero_name.slice(0, 1) }}</span>
-            <small>{{ percent(probabilityByHeroId.get(Number(hero.hero_id)) || 0) }}</small>
-          </button>
-        </div>
-      </section>
+      </div>
     </template>
   </main>
 </template>
 
 <style scoped>
-.simulator-page { width: min(1440px, calc(100% - 2rem)); margin: 0 auto; padding: 2.25rem 0 5rem; }
+.simulator-page { width: min(1560px, calc(100% - 2rem)); margin: 0 auto; padding: 2.25rem 0 5rem; }
 .simulator-hero, .simulator-status, .simulator-layout { display: flex; gap: 1.5rem; justify-content: space-between; }
 .simulator-hero { align-items: flex-end; }
 .simulator-eyebrow { margin: 0 0 .45rem; color: var(--accent-deep); font-size: .66rem; letter-spacing: .13em; text-transform: uppercase; }
@@ -641,13 +740,16 @@ watch(modelType, forecast);
 .simulator-actions button, .hero-options button, .draft-slots button { border: 1px solid var(--line); background: rgba(255,255,255,.86); color: var(--ink); font: inherit; cursor: pointer; }
 .simulator-actions button { min-height: 42px; padding: .55rem .75rem; }.simulator-actions button:disabled, .hero-options button:disabled, .draft-slots button:disabled { cursor: default; opacity: .45; }
 .global-bp-panel { display:grid; grid-template-columns:minmax(14rem, 1fr) auto; gap:1rem 1.5rem; margin-top:.75rem; padding:1rem 1.15rem; border:1px solid var(--line); background:rgba(255,255,255,.72); }.global-bp-panel h2 { margin:0; font:700 1.35rem var(--display); letter-spacing:-.04em; }.global-bp-panel > div:first-child > p:last-child { max-width:38rem; margin:.4rem 0 0; color:var(--ink-soft); font-size:.72rem; }.global-actions, .picker-targets { display:flex; flex-wrap:wrap; gap:.45rem; align-items:center; }.global-actions button, .picker-targets button, .next-battle { min-height:36px; padding:.45rem .6rem; border:1px solid var(--line); background:rgba(255,255,255,.86); color:var(--ink-soft); font:inherit; font-size:.67rem; cursor:pointer; }.global-actions button.active, .picker-targets button.active, .series-choice button.active { border-color:var(--accent-deep); background:var(--ink); color:#fff; }.series-format, .team-name { display:grid; gap:.12rem; color:var(--ink-soft); font-size:.58rem; letter-spacing:.08em; text-transform:uppercase; }.series-format select, .team-name input { min-height:30px; border:1px solid var(--line); background:rgba(255,255,255,.86); color:var(--ink); font:inherit; font-size:.67rem; }.team-name input { width:9rem; padding:0 .45rem; text-transform:none; letter-spacing:normal; }.global-used { display:grid; grid-template-columns:1fr 1fr auto; gap:.8rem; grid-column:1 / -1; padding-top:.8rem; border-top:1px solid var(--line); }.global-used > .used-team { display:flex; align-items:center; flex-wrap:wrap; gap:.35rem; }.global-used > .used-team > span { width:100%; color:var(--ink-soft); font-size:.62rem; letter-spacing:.08em; text-transform:uppercase; }.global-used > .used-team button { width:2rem; height:2rem; padding:0; border:1px solid var(--line); background:#fff; cursor:pointer; }.global-used img { width:100%; height:100%; object-fit:cover; }.global-used small { align-self:center; color:var(--ink-soft); font-size:.66rem; }.global-used > .next-battle { align-self:end; min-height:36px; width:auto; height:auto; padding:.45rem .6rem; border-color:var(--accent-deep); background:var(--accent); color:#fff; white-space:nowrap; }.series-progress { display:grid; gap:.45rem; min-width:13rem; }.series-progress > span { font-size:.67rem; }.series-choice { display:flex; gap:.35rem; }.series-choice button, .series-progress > button { min-height:30px; padding:.35rem .5rem; border:1px solid rgba(255,255,255,.6); background:rgba(255,255,255,.18); color:#fff; font:inherit; font-size:.67rem; cursor:pointer; }.series-progress > button:disabled { cursor:not-allowed; opacity:.55; }.global-used > .next-battle:disabled { cursor:not-allowed; opacity:.5; }
-.simulator-layout { align-items: stretch; margin-top: .75rem; }.draft-board { display: grid; flex: 1; grid-template-columns: repeat(2, minmax(0,1fr)); gap: .75rem; }
+.global-actions button:disabled { cursor:not-allowed; opacity:.45; }
+.team-required { grid-column:1 / -1; margin:0; padding:.65rem .75rem; border:1px solid #d9b663; background:#fff8e7; color:var(--ink-soft); font-size:.68rem; }
+.simulator-workspace { display:grid; grid-template-columns:minmax(0, 1fr) minmax(340px, 390px); gap:.85rem; align-items:start; margin-top:.75rem; }.simulator-main-column { min-width:0; }.coach-rail { position:sticky; top:1rem; min-width:0; }.simulator-layout { align-items: stretch; margin-top:0; gap:.75rem; }.draft-board { display: grid; flex: 1; min-width:0; grid-template-columns: repeat(2, minmax(0,1fr)); gap: .75rem; }
 .draft-group, .forecast-panel, .hero-picker { border: 1px solid var(--line); background: rgba(255,255,255,.76); }.draft-group { min-height: 160px; padding: 1rem; }.draft-group > p { margin: 0 0 .8rem; font-size: .67rem; letter-spacing: .1em; text-transform: uppercase; }.draft-group.blue > p { color: #286999; }.draft-group.red > p { color: #a84b4b; }
-.draft-slots { display: flex; flex-wrap: wrap; gap: .45rem; }.draft-slots button, .draft-slots span { display:grid; place-items:center; width:4rem; height:4rem; padding:0; font-size:.7rem; text-align:left; }.draft-slots button img { width:100%; height:100%; object-fit:cover; }.draft-slots span { border: 1px dashed var(--line); color: var(--ink-soft); }
-.forecast-panel { width: min(100%, 390px); padding: 1rem; }.forecast-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }.forecast-heading h2 { font-size: 1.5rem; }.forecast-heading > span, .forecast-heading small { color: var(--ink-soft); font-size: .68rem; }
+.draft-slots { display:grid; grid-template-columns:repeat(5, minmax(0, 1fr)); gap:.35rem; }.draft-slots button, .draft-slots span { display:grid; place-items:center; width:100%; max-width:4rem; aspect-ratio:1; padding:0; font-size:.7rem; text-align:left; }.draft-slots button img { width:100%; height:100%; object-fit:cover; }.draft-slots span { border: 1px dashed var(--line); color: var(--ink-soft); }
+.forecast-panel { width: min(31%, 320px); min-width:250px; padding: 1rem; }.forecast-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }.forecast-heading h2 { font-size: 1.5rem; }.forecast-heading > span, .forecast-heading small { color: var(--ink-soft); font-size: .68rem; }
 .probability-list { margin-top: 1rem; }.probability-list > div { display: grid; grid-template-columns:2rem minmax(4rem,1.8fr) 3rem; gap: .55rem; align-items: center; margin-top: .55rem; font-size: .7rem; }.probability-list img { width:2rem; height:2rem; object-fit:cover; }.probability-list em { color: var(--ink-soft); font-style: normal; text-align: right; }.probability-track { height: .42rem; overflow: hidden; background: rgba(16,42,46,.1); }.probability-track i { display:block; height:100%; background: var(--accent); }
 .end-ban-list { margin-top: 1.2rem; padding-top: .85rem; border-top: 1px solid var(--line); }.end-ban-list p { margin:0 0 .5rem; color: var(--ink-soft); font-size:.65rem; }.end-ban-list span { display:inline-flex; align-items:center; gap:.25rem; margin:.25rem .6rem 0 0; font-size:.7rem; }.end-ban-list img { width:1.6rem; height:1.6rem; object-fit:cover; }
 .hero-picker { margin-top: .75rem; padding: 1rem; }.picker-heading { display:flex; align-items:end; justify-content:space-between; gap:1rem; }.picker-heading h2 { font-size:1.4rem; }.picker-heading input { width:min(100%, 260px); }.picker-targets { margin-top:.85rem; }.hero-options { display:grid; grid-template-columns:repeat(auto-fill, minmax(3.6rem, 1fr)); gap:.45rem; margin-top:1rem; max-height:360px; overflow:auto; }.hero-options button { position:relative; display:grid; place-items:center; aspect-ratio:1; padding:0; overflow:hidden; }.hero-options button img { width:100%; height:100%; object-fit:cover; }.hero-options button small { position:absolute; right:0; bottom:0; padding:.14rem .2rem; background:rgba(16,42,46,.84); color:#fff; font-size:.56rem; }.hero-options button:hover:not(:disabled), .draft-slots button:not(:disabled):hover { border-color: var(--accent); color: var(--accent-deep); }
-@media (max-width: 860px) { .simulator-hero, .simulator-status, .simulator-layout { flex-direction:column; align-items:stretch; }.simulator-season, .forecast-panel { width:100%; }.model-choice { grid-template-columns:1fr; }.simulator-actions { justify-content:space-between; }.draft-board { grid-template-columns:1fr; }.global-bp-panel { grid-template-columns:1fr; }.global-used { grid-template-columns:1fr; }.next-battle { justify-self:start; } }
+@media (max-width: 1000px) { .simulator-workspace { grid-template-columns:1fr; }.coach-rail { position:static; }.coach-rail { grid-row:1; }.simulator-main-column { grid-row:2; } }
+@media (max-width: 860px) { .simulator-hero, .simulator-status, .simulator-layout { flex-direction:column; align-items:stretch; }.simulator-season, .forecast-panel { width:100%; }.forecast-panel { min-width:0; }.model-choice { grid-template-columns:1fr; }.simulator-actions { justify-content:space-between; }.draft-board { grid-template-columns:1fr; }.global-bp-panel { grid-template-columns:1fr; }.global-used { grid-template-columns:1fr; }.next-battle { justify-self:start; } }
 @media (max-width: 620px) { .simulator-page { width:calc(100% - 1rem); padding-top:1.25rem; }.simulator-status { gap:1rem; }.simulator-actions { flex-wrap:wrap; }.picker-heading { align-items:stretch; flex-direction:column; }.picker-heading input { width:100%; }.hero-options { grid-template-columns:repeat(auto-fill, minmax(3.25rem, 1fr)); } }
 </style>

@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class ApiResponse(BaseModel):
@@ -66,6 +66,7 @@ class AnalysisRunRequest(BaseModel):
         "statistics",
         "meta",
         "team_synergy",
+        "team_profiles",
         "draft_model",
         "all",
     ] = "all"
@@ -74,6 +75,10 @@ class AnalysisRunRequest(BaseModel):
 class DraftSimulationRequest(BaseModel):
     league_id: str = Field(min_length=1, max_length=32)
     model_type: Literal["stats", "learnable"] = "stats"
+    blue_team_id: str = Field(min_length=1, max_length=32)
+    blue_team_name: str = Field(min_length=1, max_length=64)
+    red_team_id: str = Field(min_length=1, max_length=32)
+    red_team_name: str = Field(min_length=1, max_length=64)
     bp_order: int = Field(ge=1, le=20)
     blue_picks: list[int] = Field(default_factory=list)
     red_picks: list[int] = Field(default_factory=list)
@@ -84,3 +89,9 @@ class DraftSimulationRequest(BaseModel):
     legal_hero_ids: list[int] | None = None
     rollouts: int = Field(default=100, ge=100, le=5000)
     seed: int | None = None
+
+    @model_validator(mode="after")
+    def validate_distinct_teams(self) -> "DraftSimulationRequest":
+        if self.blue_team_id == self.red_team_id:
+            raise ValueError("Blue and Red must be different teams")
+        return self

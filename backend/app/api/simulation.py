@@ -1,7 +1,10 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.orm import Session
 
+from app.database import get_db
 from app.schemas import ApiResponse, DraftSimulationRequest
 from app.services.draft_simulator import learned_feature_space, metadata, simulate
+from app.services.season_teams import validate_season_team_pair
 
 router = APIRouter(prefix="/api/simulations", tags=["simulations"])
 
@@ -27,9 +30,22 @@ def feature_space(league_id: str = Query(..., min_length=1, max_length=32)) -> A
 
 
 @router.post("/draft")
-def draft_simulation(body: DraftSimulationRequest) -> ApiResponse:
+def draft_simulation(
+    body: DraftSimulationRequest,
+    db: Session = Depends(get_db),
+) -> ApiResponse:
     state = body.model_dump(exclude={"league_id", "model_type", "rollouts", "seed"})
     try:
+        teams = validate_season_team_pair(
+            db,
+            body.league_id,
+            body.blue_team_id,
+            body.red_team_id,
+        )
+        state.update(
+            blue_team_name=teams["blue"]["team_name"],
+            red_team_name=teams["red"]["team_name"],
+        )
         return ApiResponse(
             data=simulate(
                 body.league_id,

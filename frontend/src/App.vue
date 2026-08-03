@@ -89,6 +89,7 @@ const artifacts = computed(() => {
     statistics = [],
     meta,
     team_synergy: teamSynergy,
+    team_profiles: teamProfiles = [],
     draft_model: draftModel,
   } = dataStatus.value.artifacts;
   return [
@@ -96,6 +97,7 @@ const artifacts = computed(() => {
     ...statistics,
     ...(meta ? [meta] : []),
     ...(teamSynergy ? [teamSynergy] : []),
+    ...teamProfiles,
     ...(draftModel ? [draftModel] : []),
   ];
 });

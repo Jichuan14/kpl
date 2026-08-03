@@ -25,7 +25,9 @@ hero may have several rows when it has been played in multiple positions.
 | `compute_bp_statistics.py` | Compute availability-adjusted response, synergy, counter-pick, and counter-ban statistics |
 | `compute_meta_heroes.py` | Rank opening-priority heroes from first-phase bans and Blue first picks |
 | `compute_team_synergies.py` | Rank availability-adjusted hero pairs preferred by each team |
+| `compute_team_draft_profiles.py` | Build season rosters, team tendencies/openings/combos, player pools, and recent trends |
 | `build_draft_model.py` | Train an interpretable next-action probability model and run BP rollouts |
+| `train_learnable_draft_choice_model.ipynb` | Train the team-aware learnable choice model with acting-team and opponent-team embeddings |
 
 The Vue management page runs the complete pipeline automatically after a
 league download, or lets each stage run separately. Its outputs are isolated
@@ -41,12 +43,12 @@ The commands below remain useful for manual runs and custom paths.
 
 ### BP QA
 
-Defaults to **2026 挑战者杯**. Pass flags for any other season:
+Defaults to **2026 KPL 夏季赛** (`20260003`). Pass flags for any other season:
 
 ```bash
 python3 analysis/qa_bp.py
-python3 analysis/qa_bp.py --year 2026 --name 挑战者杯
-python3 analysis/qa_bp.py --league-id 20260002
+python3 analysis/qa_bp.py --year 2026 --name 夏季赛
+python3 analysis/qa_bp.py --league-id 20260003
 python3 analysis/qa_bp.py --year 2025 --name 挑战者杯 --json-out analysis/outputs/qa_2025_challenger.json
 ```
 
@@ -60,9 +62,9 @@ plus `match_camp` aligned to match `camp1`/`camp2`.
 ```bash
 # prefer backend venv (has httpx)
 source backend/.venv/bin/activate
-python3 analysis/sync_battle_players.py --year 2026 --name 挑战者杯
-python3 analysis/sync_battle_players.py --league-id 20260002 --battle-limit 5
-python3 analysis/sync_battle_players.py --year 2026 --name 挑战者杯 --only-missing
+python3 analysis/sync_battle_players.py --year 2026 --name 夏季赛
+python3 analysis/sync_battle_players.py --league-id 20260003 --battle-limit 5
+python3 analysis/sync_battle_players.py --year 2026 --name 夏季赛 --only-missing
 ```
 
 ### Export analysis data
@@ -75,7 +77,7 @@ JSONL line and preserves questionable rows with `quality_flags`.
 python3 analysis/export_match_data.py --match-id 2026042501
 
 # Entire season
-python3 analysis/export_match_data.py --year 2026 --name 挑战者杯
+python3 analysis/export_match_data.py --year 2026 --name 夏季赛
 ```
 
 ### Build BP decision states
@@ -87,8 +89,8 @@ outcomes. It preserves source quality flags.
 ```bash
 python3 analysis/build_bp_decisions.py
 python3 analysis/build_bp_decisions.py \
-  --input analysis/exports/20260002/matches.jsonl \
-  --output analysis/exports/20260002/bp_decisions.jsonl
+  --input analysis/exports/20260003/matches.jsonl \
+  --output analysis/exports/20260003/bp_decisions.jsonl
 ```
 
 ### Compute statistical BP relationships
@@ -117,7 +119,7 @@ Blue's first pick. It also reports those components separately and adjusts the
 Blue first-pick denominator for hero legality.
 
 ```bash
-python3 analysis/compute_meta_heroes.py --league-id 20260002
+python3 analysis/compute_meta_heroes.py --league-id 20260003
 python3 analysis/compute_meta_heroes.py --league-id 20260001 --min-battles 20
 ```
 
@@ -155,6 +157,25 @@ The state requires `bp_order`, the next action number. It may also provide
 `legal_hero_ids` list. Omitting the legal list uses every trained hero that is
 not already on the board.
 
+### Train the team-aware learnable model
+
+The learnable model trains on the target season and its four immediately
+preceding exports. Along with hero and visible-board features, it learns a
+16-dimensional acting-team embedding and opponent-team embedding from the team
+IDs already present in `bp_decisions.jsonl`. Unknown teams fall back to the
+shared league/draft representation at inference time.
+
+Run `train_learnable_draft_choice_model.ipynb` from the repository root. It
+writes the schema-v2 artifact to:
+
+```text
+analysis/outputs/20260003/learnable_draft_choice_model.json
+```
+
+The backend uses these learned team embeddings directly for the `learnable`
+model. It does not apply `team_action_tendencies.jsonl` afterward; that artifact
+continues to calibrate only the statistical model.
+
 ### Compute team-specific hero synergies
 
 For each team, measures how often it completes an unordered hero pair when one
@@ -170,4 +191,25 @@ Output:
 
 ```text
 analysis/outputs/{league_id}/team_synergy_stats.jsonl
+```
+
+### Build Phase 2 team draft profiles
+
+This step reads the season's match and pre-action decision exports once and
+writes the team-aware artifacts used by the coach. It does not run during a
+chat request.
+
+```bash
+python3 analysis/compute_team_draft_profiles.py --league-id 20260003
+```
+
+Outputs:
+
+```text
+season_teams.jsonl
+team_action_tendencies.jsonl
+team_opening_sequences.jsonl
+team_combo_performance.jsonl
+player_hero_pools.jsonl
+team_recent_trends.jsonl
 ```

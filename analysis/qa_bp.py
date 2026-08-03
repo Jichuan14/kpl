@@ -3,7 +3,7 @@
 Usage examples (from repo root):
 
   python3 analysis/qa_bp.py --year 2026 --name 挑战者杯
-  python3 analysis/qa_bp.py --league-id 20260002
+  python3 analysis/qa_bp.py --league-id 20260003
   python3 analysis/qa_bp.py --year 2025 --name 挑战者杯
 """
 
@@ -15,7 +15,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-from common import DB_PATH, connect, resolve_league
+from common import CURRENT_LEAGUE_ID, DB_PATH, connect, resolve_league
 
 # Typical KPL global-BP game: 10 bans + 10 picks.
 EXPECTED_BP_ACTIONS = 20
@@ -537,7 +537,7 @@ def report_to_dict(report: QaReport) -> dict[str, Any]:
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="QA BP data for one KPL league/season")
     parser.add_argument("--db", type=Path, default=DB_PATH, help="Path to kpl_bp.db")
-    parser.add_argument("--league-id", default=None, help="Exact league_id, e.g. 20260002")
+    parser.add_argument("--league-id", default=None, help="Exact league_id, e.g. 20260003")
     parser.add_argument("--year", type=int, default=None, help="League year filter")
     parser.add_argument(
         "--name",
@@ -565,9 +565,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if not args.league_id and args.year is None and not args.name_contains:
-        # Sensible default for the current analysis target; override via flags.
-        args.year = 2026
-        args.name_contains = "挑战者杯"
+        args.league_id = CURRENT_LEAGUE_ID
 
     with connect(args.db) as conn:
         league = resolve_league(
