@@ -93,7 +93,7 @@ Examples (run from the repository root):
 
     python3 analysis/export_match_data.py --match-id 2026042501
     python3 analysis/export_match_data.py --year 2026 --name 挑战者杯
-    python3 analysis/export_match_data.py --league-id 20260002 --match-limit 5
+    python3 analysis/export_match_data.py --league-id 20260003 --match-limit 5
 """
 
 from __future__ import annotations
@@ -104,7 +104,13 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from common import DB_PATH, REPO_ROOT, connect, resolve_league
+from common import (
+    CURRENT_LEAGUE_ID,
+    DB_PATH,
+    REPO_ROOT,
+    connect,
+    resolve_league,
+)
 
 DEFAULT_EXPORT_DIR = REPO_ROOT / "analysis" / "exports"
 
@@ -403,8 +409,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
     if not args.league_id and args.year is None and not args.name_contains:
-        args.year = 2026
-        args.name_contains = "挑战者杯"
+        args.league_id = CURRENT_LEAGUE_ID
 
     with connect(args.db) as conn:
         league = resolve_league(

@@ -7,6 +7,9 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DB_PATH = REPO_ROOT / "backend" / "data" / "kpl_bp.db"
+# Manual-script convenience only. The backend analysis pipeline always passes
+# an explicit league_id so season output remains isolated.
+CURRENT_LEAGUE_ID = "20260003"
 
 
 def connect(db_path: Path = DB_PATH) -> sqlite3.Connection:

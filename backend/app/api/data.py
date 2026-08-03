@@ -23,6 +23,14 @@ STAT_ARTIFACTS = (
     ("counter_pick", "counter_pick_stats.jsonl"),
     ("counter_ban", "counter_ban_stats.jsonl"),
 )
+TEAM_PROFILE_ARTIFACTS = (
+    ("season_teams", "season_teams.jsonl", "Season teams"),
+    ("team_tendencies", "team_action_tendencies.jsonl", "Team action tendencies"),
+    ("team_openings", "team_opening_sequences.jsonl", "Team opening sequences"),
+    ("team_combos", "team_combo_performance.jsonl", "Team combination performance"),
+    ("player_pools", "player_hero_pools.jsonl", "Player hero pools"),
+    ("recent_trends", "team_recent_trends.jsonl", "Recent team trends"),
+)
 
 
 def count_rows(
@@ -248,6 +256,31 @@ def data_status(
         and team_synergy_path.is_file()
         and team_synergy_path.stat().st_mtime >= decision_mtime
     )
+    team_profiles = [
+        artifact(league_output_dir / filename, key, label)
+        for key, filename, label in TEAM_PROFILE_ARTIFACTS
+    ]
+    team_profile_source_mtime = max(
+        (
+            path.stat().st_mtime
+            for path in (match_export_path, decisions_path)
+            if path.is_file()
+        ),
+        default=None,
+    )
+    for item, (_, filename, _) in zip(
+        team_profiles,
+        TEAM_PROFILE_ARTIFACTS,
+        strict=True,
+    ):
+        path = league_output_dir / filename
+        item["ready"] = bool(
+            decisions["ready"]
+            and team_profile_source_mtime is not None
+            and path.is_file()
+            and path.stat().st_mtime >= team_profile_source_mtime
+        )
+    team_profiles_ready = all(item["ready"] for item in team_profiles)
     draft_model = artifact(
         league_output_dir / "draft_model.json",
         "draft_model",
@@ -308,6 +341,7 @@ def data_status(
         and statistics_ready
         and meta["ready"]
         and team_synergy["ready"]
+        and team_profiles_ready
         and draft_model["ready"]
     )
     pipeline = [
@@ -359,6 +393,15 @@ def data_status(
             "detail": f'{team_synergy["records"]:,} team-specific pairs',
         },
         {
+            "key": "team_profiles",
+            "label": "Phase 2 team profiles",
+            "ready": team_profiles_ready,
+            "detail": (
+                f'{sum(item["records"] for item in team_profiles):,} '
+                "team-aware rows"
+            ),
+        },
+        {
             "key": "draft_model",
             "label": "Draft probability model",
             "ready": draft_model["ready"],
@@ -389,6 +432,7 @@ def data_status(
                 "statistics": statistics,
                 "meta": meta,
                 "team_synergy": team_synergy,
+                "team_profiles": team_profiles,
                 "draft_model": draft_model,
             },
             "frontend_assets": frontend_assets,

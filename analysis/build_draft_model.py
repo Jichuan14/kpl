@@ -36,9 +36,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
-from common import REPO_ROOT, connect
+from common import CURRENT_LEAGUE_ID, REPO_ROOT, connect
 
-DEFAULT_OUTPUT = REPO_ROOT / "analysis" / "outputs" / "20260003" / "draft_model.json"
+DEFAULT_OUTPUT = (
+    REPO_ROOT
+    / "analysis"
+    / "outputs"
+    / CURRENT_LEAGUE_ID
+    / "draft_model.json"
+)
 DEFAULT_OUTPUT_ROOT = REPO_ROOT / "analysis" / "outputs"
 DEFAULT_INPUTS = sorted((REPO_ROOT / "analysis" / "exports").glob("*/bp_decisions.jsonl"))
 # A season's model includes its own draft decisions plus this many immediately

@@ -7,7 +7,7 @@ before that pipeline existed; running it after a unified sync repeats API calls.
 Usage (from repo root):
 
   python3 analysis/sync_battle_players.py --year 2026 --name 挑战者杯
-  python3 analysis/sync_battle_players.py --league-id 20260002 --battle-limit 5
+  python3 analysis/sync_battle_players.py --league-id 20260003 --battle-limit 5
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from common import DB_PATH, connect, resolve_league
+from common import CURRENT_LEAGUE_ID, DB_PATH, connect, resolve_league
 
 COMP_BASE_URL = "https://prod.comp.smoba.qq.com"
 DEFAULT_DELAY = 0.2
@@ -436,8 +436,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if not args.league_id and args.year is None and not args.name_contains:
-        args.year = 2026
-        args.name_contains = "挑战者杯"
+        args.league_id = CURRENT_LEAGUE_ID
 
     with connect(args.db) as conn:
         league = resolve_league(

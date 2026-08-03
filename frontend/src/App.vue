@@ -33,8 +33,12 @@ const notice = ref("");
 const apiConnected = ref(false);
 const rightsContactEmail = "jichuan1625@gmail.com";
 const firstVisitKey = "draft-atlas-notice-seen";
+const welcomePromptKey = "draft-atlas-welcome-prompt-seen";
 const showProjectNotice = ref(
   window.localStorage.getItem(firstVisitKey) !== "true"
+);
+const showWelcomePrompt = ref(
+  window.localStorage.getItem(welcomePromptKey) !== "true"
 );
 let syncTimer = null;
 let processingTimer = null;
@@ -46,10 +50,23 @@ const isMethodology = computed(() => routePath.value.startsWith("/methodology"))
 const isTeams = computed(() => routePath.value.startsWith("/teams"));
 const isSimulator = computed(() => routePath.value.startsWith("/simulator"));
 const isFeatureSpace = computed(() => routePath.value.startsWith("/feature-space"));
+const isLandingPage = computed(
+  () => !isManagement.value && !isMethodology.value && !isTeams.value && !isSimulator.value && !isFeatureSpace.value
+);
 
 function dismissProjectNotice() {
   window.localStorage.setItem(firstVisitKey, "true");
   showProjectNotice.value = false;
+}
+
+function dismissWelcomePrompt() {
+  window.localStorage.setItem(welcomePromptKey, "true");
+  showWelcomePrompt.value = false;
+}
+
+function openWelcomeDestination(path) {
+  dismissWelcomePrompt();
+  navigate(path);
 }
 
 const selectedLeague = computed(() =>
@@ -89,6 +106,7 @@ const artifacts = computed(() => {
     statistics = [],
     meta,
     team_synergy: teamSynergy,
+    team_profiles: teamProfiles = [],
     draft_model: draftModel,
   } = dataStatus.value.artifacts;
   return [
@@ -96,6 +114,7 @@ const artifacts = computed(() => {
     ...statistics,
     ...(meta ? [meta] : []),
     ...(teamSynergy ? [teamSynergy] : []),
+    ...teamProfiles,
     ...(draftModel ? [draftModel] : []),
   ];
 });
@@ -717,6 +736,23 @@ watch(selectedYear, () => {
     </div>
   </footer>
 
+  <Transition name="welcome-prompt">
+    <aside
+      v-if="showWelcomePrompt && !showProjectNotice && !startupLoading && isLandingPage"
+      class="welcome-prompt"
+      aria-labelledby="welcome-prompt-title"
+    >
+      <button class="welcome-close" type="button" aria-label="Dismiss welcome prompt" @click="dismissWelcomePrompt">×</button>
+      <p class="eyebrow">Start here</p>
+      <h2 id="welcome-prompt-title">Turn a BP board into a next-action forecast.</h2>
+      <p>Try a live draft simulation, or see how the model turns teams and hero choices into probabilities.</p>
+      <div class="welcome-actions">
+        <button type="button" class="welcome-primary" @click="openWelcomeDestination('/simulator')">Try the BP simulator <span>→</span></button>
+        <button type="button" class="welcome-secondary" @click="openWelcomeDestination('/methodology')">See how it works</button>
+      </div>
+    </aside>
+  </Transition>
+
   <Transition name="project-notice">
     <section
       v-if="showProjectNotice && !startupLoading"
@@ -946,6 +982,27 @@ watch(selectedYear, () => {
   font-weight: 600;
 }
 
+.welcome-prompt {
+  position: fixed;
+  z-index: 70;
+  right: clamp(1rem, 3vw, 3rem);
+  bottom: clamp(1rem, 3vw, 2.5rem);
+  width: min(360px, calc(100% - 2rem));
+  padding: 1.1rem;
+  border: 1px solid rgba(15, 138, 107, 0.3);
+  border-radius: 0.8rem;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 1.2rem 3rem rgba(16, 42, 46, 0.18);
+  backdrop-filter: blur(14px);
+}
+
+.welcome-prompt .eyebrow { margin: 0; color: var(--accent-deep); }
+.welcome-prompt h2 { max-width: 280px; margin: .45rem 0 .55rem; font: 700 1.3rem/1.06 var(--display); letter-spacing: -.035em; }
+.welcome-prompt > p:not(.eyebrow) { margin: 0; color: var(--ink-soft); font-size: .7rem; line-height: 1.55; }
+.welcome-close { position: absolute; top: .5rem; right: .55rem; width: 1.8rem; height: 1.8rem; border: 0; border-radius: 50%; background: transparent; color: var(--ink-soft); font: 400 1.2rem/1 var(--display); cursor: pointer; }.welcome-close:hover { background: rgba(16,42,46,.06); color: var(--ink); }
+.welcome-actions { display:grid; grid-template-columns:1fr 1fr; gap:.45rem; margin-top:1rem; }.welcome-actions button { min-height:38px; padding:.5rem .55rem; border-radius:.3rem; font:600 .62rem var(--display); cursor:pointer; }.welcome-primary { border:1px solid var(--accent-deep); background:var(--accent-deep); color:#fff; }.welcome-primary span { margin-left:.25rem; color:#8fe0c8; }.welcome-secondary { border:1px solid var(--line); background:rgba(255,255,255,.8); color:var(--ink); }.welcome-actions button:hover { transform:translateY(-1px); box-shadow:0 .4rem .8rem rgba(16,42,46,.1); }
+.welcome-prompt-enter-active, .welcome-prompt-leave-active { transition: opacity 180ms ease, transform 180ms ease; }.welcome-prompt-enter-from, .welcome-prompt-leave-to { opacity:0; transform:translateY(.5rem); }
+
 .project-notice {
   position: fixed;
   z-index: 90;
@@ -981,6 +1038,10 @@ watch(selectedYear, () => {
 }
 .project-notice-enter-active, .project-notice-leave-active { transition: opacity 180ms ease; }
 .project-notice-enter-from, .project-notice-leave-to { opacity: 0; }
+
+@media (max-width: 520px) {
+  .welcome-prompt { right: .7rem; bottom: .7rem; width: calc(100% - 1.4rem); }
+}
 
 .page {
   width: min(1240px, calc(100% - 2rem));

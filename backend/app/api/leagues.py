@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -6,6 +6,7 @@ from app.database import get_db
 from app.models import League
 from app.schemas import ApiResponse, LeagueOut
 from app.services.sync import SyncService
+from app.services.season_teams import list_season_teams
 
 router = APIRouter(prefix="/api/leagues", tags=["leagues"])
 
@@ -36,3 +37,17 @@ def latest_league(db: Session = Depends(get_db)) -> ApiResponse:
     if not row:
         return ApiResponse(success=False, message="No leagues found", data=None)
     return ApiResponse(data=LeagueOut.model_validate(row).model_dump())
+
+
+@router.get("/{league_id}/teams")
+def season_teams(
+    league_id: str,
+    db: Session = Depends(get_db),
+) -> ApiResponse:
+    """List valid selectable teams for exactly one competition season."""
+    if not db.scalar(select(League.id).where(League.league_id == league_id)):
+        raise HTTPException(status_code=404, detail="League not found")
+    rows = list_season_teams(db, league_id)
+    if not rows:
+        raise HTTPException(status_code=404, detail="No teams found for this season")
+    return ApiResponse(data=rows)
