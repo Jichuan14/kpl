@@ -1,16 +1,9 @@
 import { ref } from "vue";
 
-const minimumDisplayMs = 700;
-const startedAt = performance.now();
-let resolved = false;
-
-export const startupLoading = ref(true);
+// Page content owns its own loading state. A global veil delays navigation and
+// hides useful layout while optional requests (such as history) are in flight.
+export const startupLoading = ref(false);
 
 export function finishStartupLoading() {
-  if (resolved) return;
-  resolved = true;
-  const remaining = Math.max(0, minimumDisplayMs - (performance.now() - startedAt));
-  window.setTimeout(() => {
-    startupLoading.value = false;
-  }, remaining);
+  startupLoading.value = false;
 }
