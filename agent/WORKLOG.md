@@ -472,3 +472,52 @@ Next:
 
 - Add a chronological match-level holdout before tuning the team embedding size
   or using the training metrics to compare production quality.
+
+## 2026-08-02 — Complete How It Works redesign
+
+Changed:
+
+- Replaced the old long-form methodology article with a visual field guide
+  organized around the current system: data pipeline, training rows, one
+  prediction, team embeddings, simulator, AI coach, and model limits.
+- Added live selected-season metadata for training actions, hero vocabulary,
+  draft slots, and learnable-model availability.
+- Added visual system, recency-weight, legal-gate, team-swap, simulator-loop,
+  agent-routing, responsibility, and model-card components without external
+  assets.
+- Rewrote the Chinese translations for the complete new page while retaining a
+  full English experience.
+
+Verification:
+
+- Frontend production build completed successfully.
+- Browser QA passed at 1280px desktop and 390px mobile widths with no horizontal
+  overflow or console warnings.
+- Verified anchor navigation, Chinese and English language switching, live model
+  metadata, and the dense prediction and agent diagrams at both breakpoints.
+
+Next:
+
+- Revisit methodology metrics after a chronological model holdout is available.
+
+## 2026-08-02 — Native Chinese methodology copy
+
+Changed:
+
+- Rewrote the redesigned methodology page from literal translation into concise
+  Chinese product copy using consistent KPL terms such as `BP 局面`, `换边`,
+  `手次`, `全局 BP`, and `合法英雄`.
+- Reframed the hero headline as `读懂数据，推演下一步。` and shortened section
+  titles, explanations, agent responsibilities, and model-limit language.
+- Split the prediction heading into intentional lines so Chinese phrases never
+  break between individual characters at desktop widths.
+
+Verification:
+
+- The production frontend build completed successfully.
+- Browser QA passed at 1280px and 390px with no overflow, console warnings, or
+  awkward heading breaks.
+
+Next:
+
+- Apply the same native-copy audit to the simulator and coach UI if requested.
