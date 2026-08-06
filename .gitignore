@@ -6,6 +6,8 @@ __pycache__/
 venv/
 .env
 .env.production
+# Deployment credentials are provisioned on the server and must never be committed.
+deploy/.htpasswd
 
 # Data / local DB
 backend/data/*.db
