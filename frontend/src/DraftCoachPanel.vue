@@ -232,8 +232,11 @@ async function submitQuestion(suggestedQuestion = null) {
       history,
     });
   } catch (err) {
-    activeEntry.error =
-      err.message || "The Draft Coach could not answer this question.";
+    activeEntry.error = err.retryAfter
+      ? language.value === "zh-CN"
+        ? `BP 教练正忙，请在 ${err.retryAfter} 秒后重试。`
+        : `The Draft Coach is busy. Try again in ${err.retryAfter} second${err.retryAfter === 1 ? "" : "s"}.`
+      : err.message || "The Draft Coach could not answer this question.";
   } finally {
     activeEntry.loading = false;
     loading.value = false;

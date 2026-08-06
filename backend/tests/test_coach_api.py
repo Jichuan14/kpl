@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 
 from app.agent.service import CoachLoopLimitError, KimiConfigurationError
 from app.main import app
+from app.services.coach_rate_limit import CoachRateLimiter
 
 
 class CoachApiTest(unittest.TestCase):
@@ -110,6 +111,68 @@ class CoachApiTest(unittest.TestCase):
         detail = response.json()["detail"]
         self.assertEqual(detail["code"], "coach_incomplete")
         self.assertNotIn("internal loop detail", response.text)
+
+    def test_rate_limit_returns_retry_after_before_provider_call(self) -> None:
+        limiter = CoachRateLimiter(
+            per_ip_per_minute=1,
+            per_ip_per_day=10,
+            server_per_minute=10,
+            server_per_day=100,
+            max_active_per_ip=1,
+            max_active_server=2,
+        )
+        service = Mock()
+        service.ask.return_value = {
+            "request_id": "request-from-service",
+            "model": "kimi-k2.6",
+            "answer": "Answer.",
+            "tool_calls": [],
+            "usage": {},
+        }
+        with patch("app.api.coach.rate_limiter", limiter), patch(
+            "app.api.coach.KimiCoachService", return_value=service
+        ):
+            first = self.client.post(
+                "/api/coach", json={"message": "One", "league_id": "20260002"}
+            )
+            response = self.client.post(
+                "/api/coach", json={"message": "Two", "league_id": "20260002"}
+            )
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(response.status_code, 429)
+        self.assertEqual(response.json()["detail"]["code"], "coach_rate_limited")
+        self.assertGreaterEqual(int(response.headers["Retry-After"]), 1)
+        self.assertEqual(service.ask.call_count, 1)
+
+    def test_usage_endpoint_exposes_no_client_identifiers(self) -> None:
+        response = self.client.get("/api/coach/usage")
+
+        self.assertEqual(response.status_code, 200)
+        usage = response.json()["data"]
+        self.assertIn("server", usage)
+        self.assertIn("per_ip", usage)
+        self.assertNotIn("ips", usage)
+
+    def test_management_can_update_runtime_limits(self) -> None:
+        limiter = CoachRateLimiter(
+            per_ip_per_minute=5, per_ip_per_day=50, server_per_minute=30,
+            server_per_day=500, max_active_per_ip=1, max_active_server=4,
+        )
+        with patch("app.api.coach.rate_limiter", limiter):
+            response = self.client.put("/api/coach/limits", json={
+                "ip_requests_per_minute": 3,
+                "ip_requests_per_day": 25,
+                "server_requests_per_minute": 12,
+                "server_requests_per_day": 200,
+                "ip_max_active_requests": 1,
+                "server_max_active_requests": 2,
+            })
+
+        self.assertEqual(response.status_code, 200)
+        usage = response.json()["data"]
+        self.assertEqual(usage["per_ip"]["per_minute_limit"], 3)
+        self.assertEqual(usage["server"]["per_24_hours_limit"], 200)
 
 
 if __name__ == "__main__":
