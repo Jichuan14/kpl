@@ -30,3 +30,6 @@ analysis/outputs/*/draft_model.json
 node_modules/
 dist/
 .npm
+
+# Locally generated deployment archives; upload these directly to servers.
+releases/
