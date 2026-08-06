@@ -24,7 +24,13 @@ async function request(path, options = {}) {
     } catch {
       // Keep the plain response body.
     }
-    throw new Error(message || `HTTP ${res.status}`);
+    const error = new Error(message || `HTTP ${res.status}`);
+    error.status = res.status;
+    const retryAfter = Number(res.headers.get("Retry-After"));
+    if (Number.isFinite(retryAfter) && retryAfter > 0) {
+      error.retryAfter = retryAfter;
+    }
+    throw error;
   }
   const body = await res.json();
   if (body && body.success === false) {
@@ -124,6 +130,17 @@ export function askDraftCoach(payload) {
   return request("/api/coach", {
     method: "POST",
     body: JSON.stringify(payload),
+  });
+}
+
+export function fetchCoachUsage() {
+  return request("/api/coach/usage");
+}
+
+export function updateCoachLimits(limits) {
+  return request("/api/coach/limits", {
+    method: "PUT",
+    body: JSON.stringify(limits),
   });
 }
 

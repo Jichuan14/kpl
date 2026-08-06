@@ -6,7 +6,7 @@ import logging
 from typing import NoReturn
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from openai import (
     APIConnectionError,
@@ -23,12 +23,42 @@ from app.agent.service import (
     KimiConfigurationError,
 )
 from app.database import get_db
-from app.schemas import ApiResponse
+from app.config import get_settings
+from app.schemas import ApiResponse, CoachLimitsUpdate
+from app.services.coach_rate_limit import CoachRateLimiter
 from app.services.season_teams import validate_season_team_pair
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/coach", tags=["coach"])
+
+
+def _new_rate_limiter() -> CoachRateLimiter:
+    settings = get_settings()
+    return CoachRateLimiter(
+        per_ip_per_minute=settings.coach_ip_requests_per_minute,
+        per_ip_per_day=settings.coach_ip_requests_per_day,
+        server_per_minute=settings.coach_server_requests_per_minute,
+        server_per_day=settings.coach_server_requests_per_day,
+        max_active_per_ip=settings.coach_ip_max_active_requests,
+        max_active_server=settings.coach_server_max_active_requests,
+    )
+
+
+rate_limiter = _new_rate_limiter()
+
+
+def _client_key(request: Request) -> str:
+    """Use proxy-supplied IPs only when deployment explicitly opts in."""
+    settings = get_settings()
+    if settings.coach_trust_proxy_headers:
+        cloudflare_ip = request.headers.get("CF-Connecting-IP")
+        if cloudflare_ip:
+            return cloudflare_ip.strip()
+        forwarded_for = request.headers.get("X-Forwarded-For")
+        if forwarded_for:
+            return forwarded_for.split(",", 1)[0].strip()
+    return request.client.host if request.client else "unknown"
 
 
 def _http_error(
@@ -51,10 +81,27 @@ def _http_error(
 @router.post("")
 def ask_coach(
     body: CoachInput,
+    request: Request,
     db: Session = Depends(get_db),
 ) -> ApiResponse:
     """Answer one question with Kimi and approved local evidence tools."""
     request_id = uuid4().hex
+    client_key = _client_key(request)
+    decision = rate_limiter.acquire(client_key)
+    if not decision.allowed:
+        logger.warning(
+            "coach_api_rate_limited",
+            extra={"request_id": request_id, "limit": decision.code},
+        )
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "code": "coach_rate_limited",
+                "message": "The Draft Coach is busy. Try again shortly.",
+                "request_id": request_id,
+            },
+            headers={"Retry-After": str(decision.retry_after_seconds)},
+        )
     try:
         if body.draft_state is not None:
             teams = validate_season_team_pair(
@@ -148,6 +195,8 @@ def ask_coach(
             message="The Draft Coach encountered an internal error.",
             request_id=request_id,
         )
+    finally:
+        rate_limiter.release(client_key)
 
     evidence: list[dict[str, object]] = []
     warnings: list[str] = []
@@ -173,3 +222,23 @@ def ask_coach(
             "usage": result["usage"],
         },
     )
+
+
+@router.get("/usage")
+def coach_usage() -> ApiResponse:
+    """Return privacy-safe, process-local Draft Coach capacity metrics."""
+    return ApiResponse(message="coach usage retrieved", data=rate_limiter.usage())
+
+
+@router.put("/limits")
+def update_coach_limits(body: CoachLimitsUpdate) -> ApiResponse:
+    """Update process-local limits from the private management interface."""
+    rate_limiter.update_limits(
+        per_ip_per_minute=body.ip_requests_per_minute,
+        per_ip_per_day=body.ip_requests_per_day,
+        server_per_minute=body.server_requests_per_minute,
+        server_per_day=body.server_requests_per_day,
+        max_active_per_ip=body.ip_max_active_requests,
+        max_active_server=body.server_max_active_requests,
+    )
+    return ApiResponse(message="coach limits updated", data=rate_limiter.usage())
