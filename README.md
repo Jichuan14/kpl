@@ -1,30 +1,50 @@
-# KPL Hero BP Analysis
+# Draft Atlas
 
-Backend for ingesting KPL official match/BP data into SQL and serving hero ban/pick stats for a future frontend.
+Draft Atlas is a local-first exploration tool for **King Pro League (KPL)**
+ban/pick data. It downloads official match data into SQLite, turns completed
+seasons into analysis artifacts, and presents the results through an interactive
+Vue application.
 
-## Stack (this repo)
+It is designed for studying drafts, not for making unsupported claims: every
+relationship is computed from observed, legal draft opportunities and carries
+its sample size, baseline, and confidence information.
 
-| Piece | Choice | Why |
-|---|---|---|
-| API | **FastAPI** (Python) | Easy REST + great for later pandas analysis |
-| DB | **SQLite** locally → **Postgres** when hosting | Relational fit for matches/BP; simple hosting |
-| ORM | SQLAlchemy 2 | Clean models + raw SQL when needed |
-| HTTP client | httpx | Calls official KPL open APIs |
+## What it includes
 
-### Compared to what you know / the reference project
+- A season-aware Draft Atlas with hero relationships and meta signals
+- An interactive BP simulator with statistical and learnable draft models
+- Team Synergy Lab for team-specific hero pair tendencies
+- Hero feature-space explorer produced by the learnable model
+- An evidence-backed Kimi Draft Coach (optional; the key stays on the backend)
+- A repeatable data pipeline: sync → export → model/analysis → publish
 
-| | Your past | Reference `kpl-agent` | This project |
-|---|---|---|---|
-| Runtime | Node.js | Java 17 / Spring Boot | Python / FastAPI |
-| Database | MongoDB | MySQL | SQLite → Postgres |
-| Cache | — | Redis | process-local versioned artifact cache |
-| Frontend | — | Vue 3 | Vue 3 + Vite |
+## Architecture
 
-Mongo is fine for flexible docs; BP analysis is mostly **joins + rates by hero/league**, which SQL handles more naturally.
+```text
+KPL public APIs
+      │
+      ▼
+FastAPI service ──► SQLite ──► analysis scripts ──► published JSON assets
+      │                                                        │
+      └──────────────────── REST API ◄─────────────────────────┘
+                                                               │
+                                                               ▼
+                                                        Vue + Vite UI
+```
+
+The SQLite database is the source of truth. Analysis outputs are scoped to a
+league ID under `analysis/`; browser-ready assets are generated from those
+outputs rather than treated as source data.
 
 ## Quick start
 
-### Backend
+### Prerequisites
+
+- Python 3.12 or newer
+- Node.js 20 or newer
+- npm
+
+### 1. Start the API
 
 ```bash
 cd backend
@@ -32,64 +52,15 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
-
 uvicorn app.main:app --reload --port 8000
 ```
 
-Open docs: http://localhost:8000/docs
+The API is available at [http://localhost:8000/docs](http://localhost:8000/docs).
+It creates `backend/data/kpl_bp.db` on first start.
 
-### Configure and test Kimi
+### 2. Start the web app
 
-Add the real API key only to the ignored `backend/.env` file:
-
-```env
-MOONSHOT_API_KEY=your-real-key
-```
-
-The endpoint must match where the key was created:
-
-- `platform.kimi.ai` key: `KIMI_BASE_URL=https://api.moonshot.ai/v1`
-- `platform.kimi.com` key: `KIMI_BASE_URL=https://api.moonshot.cn/v1`
-
-Do not add it to `.env.example`, frontend code, or a committed file. From the
-`backend` directory, run the inexpensive live connectivity test:
-
-```bash
-./.venv/bin/python -m app.agent.smoke_test
-```
-
-The test hides the key, caps the response at 64 tokens, and exits nonzero for a
-missing or rejected key, provider error, or incompatible tool loop.
-
-Validate the Phase 1 and team-aware Phase 2 question catalogs without making a paid API call:
-
-```bash
-./.venv/bin/python -m app.agent.eval_phase1
-./.venv/bin/python -m app.agent.eval_phase2
-```
-
-The opt-in `--live` form runs the bounded end-to-end Kimi routing evaluation
-and writes its redacted report to `agent/evals/phase_1_live_report.json`.
-
-With the backend running, test the full HTTP endpoint:
-
-```bash
-curl -X POST http://localhost:8000/api/coach \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "message":"What are the top five meta heroes this season? Include evidence.",
-    "league_id":"20260003"
-  }'
-```
-
-Questions about an active draft may also include `draft_state` with `bp_order`,
-the four current pick/ban lists, the two previous-battle-used lists, and the
-selected `model_type`. The response separates the answer, structured evidence,
-warnings, token usage, model, and request ID.
-
-### Frontend
-
-In a second terminal:
+In another terminal:
 
 ```bash
 cd frontend
@@ -97,23 +68,17 @@ npm install
 npm run dev
 ```
 
-Open:
+Open [http://localhost:5173](http://localhost:5173). During development, Vite
+proxies `/api` calls to the API on port 8000.
 
-- `http://localhost:5173/` — public multi-season Draft Atlas visualization
-- `http://localhost:5173/simulator` — live BP simulator with the Kimi Draft Coach
-- `http://localhost:5173/teams` — team-specific hero synergy analysis
-- `http://localhost:5173/methodology` — calculation definitions and examples
-- `http://localhost:5173/management` — local download and analysis management
+### 3. Load a season and build its artifacts
 
-Vite proxies `/api` to the backend on `:8000`.
+Use the **Management** screen to refresh the league catalog, select a season,
+download its finished matches, run the analysis pipeline, and publish frontend
+assets. The UI is the recommended path because it reports which artifacts are
+ready for the chosen season.
 
-The Draft Coach automatically sends the selected season, validated Blue/Red
-teams, and current simulator
-board to the backend. Its response includes evidence, warnings, model and token
-usage, and a request ID. The Kimi key remains in `backend/.env` and is never sent
-to the frontend.
-
-### Smoke sync (selected league, first 3 finished matches)
+For a small API smoke sync instead:
 
 ```bash
 curl -X POST http://localhost:8000/api/sync/league-bp \
@@ -121,71 +86,132 @@ curl -X POST http://localhost:8000/api/sync/league-bp \
   -d '{"league_id":"20260003","match_limit":3}'
 ```
 
-Each battle detail is downloaded once and used to store battle metadata, BP
-actions, team/player mappings, and every encountered hero. Normal syncs are
-incremental: they refresh the match list but deep-download only finished matches
-without complete local battle data, then rebuild the season analysis and public assets
-when new data was added. The management page
-at `http://localhost:5173` lets you select the year and season before starting
-the download. A completed download automatically exports match and decision
-JSONL, computes relationship statistics, and ranks opening meta heroes. The
-same analysis stages can also be run separately from the management page.
+`league_id` must be a league already present locally; fetch the current catalog
+first with `POST /api/sync/leagues`. Leave `match_limit` out to process all
+available finished matches. Normal syncs are incremental and avoid re-fetching
+complete battles.
 
-Season artifacts are isolated under:
+## Application areas
+
+| Route | Purpose |
+| --- | --- |
+| `/` | Multi-season Draft Atlas relationship explorer |
+| `/simulator` | Live draft board, recommendations, and Draft Coach |
+| `/teams` | Team-specific synergy patterns and draft tendencies |
+| `/feature-space` | Learned hero representation for the selected season |
+| `/methodology` | Definitions, caveats, and calculation explanations |
+| `/management` | Local data sync, analysis, and asset publishing |
+
+## Data and analysis pipeline
+
+One sync stores league, match, battle, BP action, hero, team, and player data.
+The analysis pipeline then produces a selected season's exports and derived
+artifacts:
 
 ```text
 analysis/exports/{league_id}/
+  matches.jsonl
+  bp_decisions.jsonl
+
 analysis/outputs/{league_id}/
+  *_stats.jsonl
+  *_draft_model.json
+  team_*.jsonl
+
+analysis/published/data/
+  browser-ready JSON assets
 ```
 
-Then:
+The derived statistics include ban responses, pick synergies, counter-picks,
+counter-bans, opening-priority meta heroes, and team-specific combinations.
+Candidate rates use legal opportunities as their denominator, with smoothing
+and confidence intervals so sparse observations remain visible as sparse.
+
+For manual runs, script descriptions and commands live in
+[analysis/README.md](analysis/README.md). The pipeline endpoints are:
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `POST` | `/api/sync/leagues` | Refresh the locally stored league catalog |
+| `POST` | `/api/sync/league-bp` | Incrementally sync matches and BP actions |
+| `POST` | `/api/pipeline/run` | Run one analysis step or the full pipeline |
+| `POST` | `/api/pipeline/publish` | Write browser-ready assets for a season |
+| `GET` | `/api/data/status` | Inspect local source and artifact readiness |
+
+The interactive API reference at `/docs` is the authoritative request schema.
+
+## Optional: enable Draft Coach
+
+Draft Coach is disabled unless `MOONSHOT_API_KEY` is configured in the ignored
+`backend/.env` file. Copy the provided environment template, then add your key:
+
+```env
+MOONSHOT_API_KEY=your-key
+KIMI_BASE_URL=https://api.moonshot.ai/v1
+KIMI_MODEL=kimi-k2.6
+```
+
+Use `https://api.moonshot.cn/v1` for a key issued by `platform.kimi.com`.
+Never place the key in frontend code or a committed environment file.
+
+Check the integration from `backend/`:
 
 ```bash
-curl 'http://localhost:8000/api/bp/heroes?sort=presence&limit=20'
+./.venv/bin/python -m app.agent.smoke_test
 ```
 
-## Main endpoints
+The coach endpoint is `POST /api/coach`. It returns an answer together with
+structured evidence, warnings, token usage, model, and request ID. It can also
+accept a current draft state from the simulator.
 
-| Method | Path | Purpose |
-|---|---|---|
-| GET | `/health` | Health check |
-| GET | `/api/leagues` | Leagues in DB |
-| POST | `/api/sync/leagues` | Pull league list from KPL |
-| POST | `/api/sync/league-bp` | Sync matches + BP for a league |
-| GET | `/api/bp/heroes?sort=presence` | Hero ban/pick/win aggregates |
-| GET | `/api/bp/battles/{battle_id}` | Raw BP sequence for one game |
-| POST | `/api/bp/recompute` | Rebuild aggregate table from BP rows |
-| POST | `/api/coach` | Ask the evidence-backed Kimi Draft Coach |
+## Development checks
 
-`POST /api/sync/league-bp` body:
+Run the backend test suite from the repository root. `pytest` is intentionally
+not a runtime dependency, so install it once in the backend environment:
 
-```json
-{
-  "league_id": null,
-  "match_limit": 3,
-  "recompute_stats": true,
-  "incremental": true
-}
+```bash
+./backend/.venv/bin/pip install pytest
+./backend/.venv/bin/python -m pytest backend/tests
 ```
 
-Omit `league_id` to use the latest league. Omit `match_limit` to consider all
-finished matches. `incremental` defaults to `true`; set it to `false` only for
-a deliberate full repair/backfill of a season.
+Build the frontend before release:
 
-## Data model (BP-focused)
+```bash
+cd frontend
+npm run build
+```
+
+The agent's non-billed evaluation catalogs can be checked with:
+
+```bash
+cd backend
+./.venv/bin/python -m app.agent.eval_phase1
+./.venv/bin/python -m app.agent.eval_phase2
+```
+
+## Project layout
 
 ```text
-leagues
-matches
-battles          (includes win_camp)
-battle_bps       (action_type: 0=ban, 1=pick)
-hero_bp_stats    (precomputed rates for frontend)
+backend/       FastAPI app, database models, sync service, and coach tools
+frontend/      Vue 3 + Vite interface
+analysis/      Reproducible exports, statistics, and draft-model scripts
+deploy/        Single-host Docker/ECS deployment material
+agent/         Product decisions, roadmap, and evaluation notes
 ```
 
-Win rate for a hero = picks where `pick.camp == battle.win_camp` / pick count.
+## Deployment
 
-## Hosting
+`docker-compose.production.yml` runs the frontend and API on one host. It
+persists the SQLite database and generated artifacts on that host's disk, and
+the production API intentionally uses a single Uvicorn worker.
 
-This project uses one SQLite database stored at `backend/data/kpl_bp.db`.
-Keep the API to one process and retain that file alongside the analysis and
-published-asset directories. See `deploy/README.md` for the ECS deployment.
+This is a single-host SQLite deployment: do not share the database over network
+storage or run multiple API instances against it. See
+[deploy/README.md](deploy/README.md) for the ECS setup, access control,
+backups, and update procedure.
+
+## Notes on data use
+
+KPL source availability and completeness can vary by season. Treat the app's
+outputs as exploratory, season-scoped evidence, and inspect sample sizes and
+quality indicators before drawing conclusions.
