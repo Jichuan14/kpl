@@ -27,6 +27,13 @@ class Settings(BaseSettings):
     kimi_max_tool_rounds: int = 3
     kimi_max_tool_calls: int = 8
     kimi_max_output_tokens: int = 600
+    coach_ip_requests_per_minute: int = 5
+    coach_ip_requests_per_day: int = 50
+    coach_server_requests_per_minute: int = 30
+    coach_server_requests_per_day: int = 500
+    coach_ip_max_active_requests: int = 1
+    coach_server_max_active_requests: int = 4
+    coach_trust_proxy_headers: bool = False
 
     @field_validator("database_url")
     @classmethod
@@ -53,6 +60,12 @@ class Settings(BaseSettings):
         "kimi_max_tool_rounds",
         "kimi_max_tool_calls",
         "kimi_max_output_tokens",
+        "coach_ip_requests_per_minute",
+        "coach_ip_requests_per_day",
+        "coach_server_requests_per_minute",
+        "coach_server_requests_per_day",
+        "coach_ip_max_active_requests",
+        "coach_server_max_active_requests",
     )
     @classmethod
     def positive_kimi_limits(cls, value: int) -> int:

@@ -9,6 +9,17 @@ class ApiResponse(BaseModel):
     data: object | None = None
 
 
+class CoachLimitsUpdate(BaseModel):
+    """Runtime limits for the process-local Draft Coach limiter."""
+
+    ip_requests_per_minute: int = Field(ge=1, le=10_000)
+    ip_requests_per_day: int = Field(ge=1, le=1_000_000)
+    server_requests_per_minute: int = Field(ge=1, le=100_000)
+    server_requests_per_day: int = Field(ge=1, le=10_000_000)
+    ip_max_active_requests: int = Field(ge=1, le=1_000)
+    server_max_active_requests: int = Field(ge=1, le=10_000)
+
+
 class LeagueOut(BaseModel):
     league_id: str
     league_name: str

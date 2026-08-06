@@ -7,6 +7,8 @@ const VisualizationPage = defineAsyncComponent(() => import("./VisualizationPage
 const HeroFeatureSpacePage = defineAsyncComponent(() => import("./HeroFeatureSpacePage.vue"));
 import {
   fetchDataStatus,
+  fetchCoachUsage,
+  updateCoachLimits,
   fetchLeagues,
   publishFrontendAssets,
   runAnalysisStep,
@@ -21,6 +23,9 @@ const leagues = ref([]);
 const leagueId = selectedLeagueId;
 const selectedYear = ref("");
 const dataStatus = ref(null);
+const coachUsage = ref(null);
+const coachLimits = ref(null);
+const savingCoachLimits = ref(false);
 const loading = ref(false);
 const syncing = ref(false);
 const syncingCatalog = ref(false);
@@ -43,6 +48,7 @@ const showWelcomePrompt = ref(
 let syncTimer = null;
 let processingTimer = null;
 let startupFallbackTimer = null;
+let coachUsageTimer = null;
 const routePath = ref(window.location.pathname);
 
 const isManagement = computed(() => routePath.value.startsWith("/management"));
@@ -148,6 +154,50 @@ async function loadStatus() {
   } finally {
     loading.value = false;
   }
+}
+
+async function loadCoachUsage() {
+  try {
+    coachUsage.value = await fetchCoachUsage();
+    if (!savingCoachLimits.value) {
+      coachLimits.value = {
+        ip_requests_per_minute: coachUsage.value.per_ip.per_minute_limit,
+        ip_requests_per_day: coachUsage.value.per_ip.per_24_hours_limit,
+        server_requests_per_minute: coachUsage.value.server.per_minute_limit,
+        server_requests_per_day: coachUsage.value.server.per_24_hours_limit,
+        ip_max_active_requests: coachUsage.value.per_ip.max_active_requests,
+        server_max_active_requests: coachUsage.value.server.max_active_requests,
+      };
+    }
+  } catch {
+    // The monitoring card remains unavailable when an older API is deployed.
+    coachUsage.value = null;
+  }
+}
+
+async function saveCoachLimits() {
+  if (!coachLimits.value || savingCoachLimits.value) return;
+  savingCoachLimits.value = true;
+  try {
+    coachUsage.value = await updateCoachLimits(coachLimits.value);
+    notice.value = "AI Coach limits updated for this server process.";
+  } catch (err) {
+    error.value = err.message || "Could not update AI Coach limits.";
+  } finally {
+    savingCoachLimits.value = false;
+  }
+}
+
+function startCoachUsageMonitor() {
+  if (coachUsageTimer) return;
+  loadCoachUsage();
+  coachUsageTimer = window.setInterval(loadCoachUsage, 15_000);
+}
+
+function stopCoachUsageMonitor() {
+  if (!coachUsageTimer) return;
+  window.clearInterval(coachUsageTimer);
+  coachUsageTimer = null;
 }
 
 async function refreshLeagueCatalog() {
@@ -345,7 +395,7 @@ function dateTime(value) {
 
 async function loadManagement() {
   try {
-    await loadLeagues();
+    await Promise.all([loadLeagues(), loadCoachUsage()]);
     await loadStatus();
   } catch (err) {
     error.value = err.message || "Could not connect to the local API.";
@@ -356,26 +406,40 @@ async function loadManagement() {
 
 function handlePopState() {
   routePath.value = window.location.pathname;
-  if (isManagement.value && !leagues.value.length) loadManagement();
+  if (isManagement.value) {
+    if (!leagues.value.length) loadManagement();
+    startCoachUsageMonitor();
+  } else {
+    stopCoachUsageMonitor();
+  }
 }
 
 function navigate(path) {
   if (window.location.pathname === path) return;
   window.history.pushState({}, "", path);
   routePath.value = path;
-  if (isManagement.value && !leagues.value.length) loadManagement();
+  if (isManagement.value) {
+    if (!leagues.value.length) loadManagement();
+    startCoachUsageMonitor();
+  } else {
+    stopCoachUsageMonitor();
+  }
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 onMounted(() => {
   window.addEventListener("popstate", handlePopState);
-  if (isManagement.value) loadManagement();
+  if (isManagement.value) {
+    loadManagement();
+    startCoachUsageMonitor();
+  }
   startupFallbackTimer = window.setTimeout(finishStartupLoading, 12000);
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener("popstate", handlePopState);
   if (startupFallbackTimer) window.clearTimeout(startupFallbackTimer);
+  stopCoachUsageMonitor();
 });
 
 watch(leagueId, () => {
@@ -576,7 +640,41 @@ watch(selectedYear, () => {
     <p v-if="error" class="banner error">{{ error }}</p>
     <p v-else-if="notice" class="banner notice">{{ notice }}</p>
 
+    <section v-if="coachUsage" class="panel coach-monitor-panel">
+        <div class="panel-title">
+          <div>
+            <p class="kicker">AI Coach monitoring</p>
+            <h2>Usage & rate limits</h2>
+          </div>
+          <button class="button ghost compact" type="button" @click="loadCoachUsage">Refresh</button>
+        </div>
+        <p class="panel-intro">
+          Live process-level counters. No visitor IP addresses or questions are stored here.
+        </p>
+        <div class="monitor-grid">
+          <div><span>Server requests · last minute</span><strong>{{ number(coachUsage.server.last_minute) }} / {{ number(coachUsage.server.per_minute_limit) }}</strong></div>
+          <div><span>Server requests · last 24 hours</span><strong>{{ number(coachUsage.server.last_24_hours) }} / {{ number(coachUsage.server.per_24_hours_limit) }}</strong></div>
+          <div><span>Active AI requests</span><strong>{{ number(coachUsage.active_requests) }} / {{ number(coachUsage.server.max_active_requests) }}</strong></div>
+          <div><span>Blocked requests since start</span><strong>{{ number(coachUsage.blocked_since_start) }}</strong></div>
+        </div>
+        <p class="monitor-note" data-i18n-ignore>
+          {{ language === "zh-CN"
+            ? `单个 IP：每分钟 ${number(coachUsage.per_ip.per_minute_limit)} 次 · 24 小时 ${number(coachUsage.per_ip.per_24_hours_limit)} 次 · 同时 ${number(coachUsage.per_ip.max_active_requests)} 个请求。服务器进程重启后，计数器会重置。`
+            : `Per IP: ${number(coachUsage.per_ip.per_minute_limit)}/minute · ${number(coachUsage.per_ip.per_24_hours_limit)}/24 hours · ${number(coachUsage.per_ip.max_active_requests)} active request. Counters reset when this server process restarts.` }}
+        </p>
+        <form class="coach-limit-form" @submit.prevent="saveCoachLimits">
+          <label><span>Per-IP requests / minute</span><input v-model.number="coachLimits.ip_requests_per_minute" type="number" min="1" required></label>
+          <label><span>Per-IP requests / 24 hours</span><input v-model.number="coachLimits.ip_requests_per_day" type="number" min="1" required></label>
+          <label><span>Server requests / minute</span><input v-model.number="coachLimits.server_requests_per_minute" type="number" min="1" required></label>
+          <label><span>Server requests / 24 hours</span><input v-model.number="coachLimits.server_requests_per_day" type="number" min="1" required></label>
+          <label><span>Per-IP active requests</span><input v-model.number="coachLimits.ip_max_active_requests" type="number" min="1" required></label>
+          <label><span>Server active requests</span><input v-model.number="coachLimits.server_max_active_requests" type="number" min="1" required></label>
+          <div class="coach-limit-submit"><small>Changes apply immediately and reset after a server restart.</small><button class="button primary" type="submit" :disabled="savingCoachLimits">{{ savingCoachLimits ? "Saving…" : "Save AI Coach limits" }}</button></div>
+        </form>
+    </section>
+
     <template v-if="dataStatus">
+
       <section class="section-heading">
         <div>
           <p class="kicker">Downloaded into SQLite</p>
@@ -1248,6 +1346,38 @@ select {
 .button.sample {
   border-color: rgba(15, 138, 107, 0.35);
   color: var(--accent-deep);
+}
+
+.button.compact { min-height: 34px; padding: .4rem .65rem; font-size: .68rem; }
+
+.coach-monitor-panel { margin-top: 1.15rem; margin-bottom: 1.15rem; padding: 1.15rem; }
+.monitor-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: hidden; border: 1px solid var(--line); background: rgba(255,255,255,.48); }
+.monitor-grid > div { display: grid; gap: .32rem; min-height: 88px; padding: .85rem; border-right: 1px solid var(--line); }
+.monitor-grid > div:last-child { border-right: 0; }
+.monitor-grid span { color: var(--ink-soft); font-size: .62rem; line-height: 1.35; }
+.monitor-grid strong { color: var(--accent-deep); font: 700 1.22rem var(--display); letter-spacing: -.03em; }
+.monitor-note { margin: .75rem 0 0; color: var(--ink-soft); font-size: .67rem; line-height: 1.55; }
+.coach-limit-form { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:.75rem; margin-top:1rem; padding-top:1rem; border-top:1px solid var(--line); }
+.coach-limit-form label { display:grid; gap:.35rem; min-width:0; color:var(--ink-soft); font-size:.61rem; }
+.coach-limit-form input { min-width:0; min-height:38px; padding:.45rem .55rem; border:1px solid var(--line); border-radius:.2rem; outline:0; background:#fff; color:var(--ink); font:inherit; }
+.coach-limit-form input:focus { border-color:var(--accent-deep); box-shadow:0 0 0 2px rgba(15,138,107,.1); }
+.coach-limit-submit { grid-column:1/-1; display:flex; align-items:center; justify-content:space-between; gap:.75rem; padding-top:.15rem; }
+.coach-limit-submit small { max-width:46rem; color:var(--ink-soft); font-size:.61rem; line-height:1.45; }
+
+@media (max-width: 760px) {
+  .monitor-grid { grid-template-columns: repeat(2, 1fr); }
+  .monitor-grid > div:nth-child(2) { border-right: 0; }
+  .monitor-grid > div:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
+  .coach-limit-form { grid-template-columns:repeat(2, 1fr); }
+}
+
+@media (max-width: 520px) {
+  .coach-monitor-panel { padding: .85rem; }
+  .monitor-grid, .coach-limit-form { grid-template-columns:1fr; }
+  .monitor-grid > div { min-height:auto; border-right:0; border-bottom:1px solid var(--line); }
+  .monitor-grid > div:last-child { border-bottom:0; }
+  .coach-limit-submit { align-items:stretch; flex-direction:column; }
+  .coach-limit-submit .button { width:100%; }
 }
 
 .button:disabled {
