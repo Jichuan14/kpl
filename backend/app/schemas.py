@@ -68,6 +68,7 @@ class AnalysisRunRequest(BaseModel):
         "team_synergy",
         "team_profiles",
         "draft_model",
+        "learnable_draft_model",
         "all",
     ] = "all"
 

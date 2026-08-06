@@ -14,6 +14,7 @@ PipelineStep = Literal[
     "team_synergy",
     "team_profiles",
     "draft_model",
+    "learnable_draft_model",
     "all",
 ]
 
@@ -48,6 +49,7 @@ class AnalysisPipeline:
                 "team_synergy",
                 "team_profiles",
                 "draft_model",
+                "learnable_draft_model",
             ]
             if step == "all"
             else [step]
@@ -166,5 +168,12 @@ class AnalysisPipeline:
                 python,
                 str(ANALYSIS_DIR / "build_draft_model.py"),
                 "--per-season",
+            ]
+        if step == "learnable_draft_model":
+            return [
+                python,
+                str(ANALYSIS_DIR / "train_learnable_draft_choice_model.py"),
+                "--league-id",
+                self.league_id,
             ]
         raise ValueError(f"Unknown pipeline step: {step}")

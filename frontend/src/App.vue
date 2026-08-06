@@ -108,6 +108,7 @@ const artifacts = computed(() => {
     team_synergy: teamSynergy,
     team_profiles: teamProfiles = [],
     draft_model: draftModel,
+    learnable_draft_model: learnableDraftModel,
   } = dataStatus.value.artifacts;
   return [
     ...exports,
@@ -116,6 +117,7 @@ const artifacts = computed(() => {
     ...(teamSynergy ? [teamSynergy] : []),
     ...teamProfiles,
     ...(draftModel ? [draftModel] : []),
+    ...(learnableDraftModel ? [learnableDraftModel] : []),
   ];
 });
 
@@ -203,6 +205,52 @@ async function runDownload({ matchLimit = null, mode = "all" } = {}) {
     syncTimer = null;
     syncing.value = false;
     syncMode.value = "";
+  }
+}
+
+async function runFullUpdate() {
+  if (!leagueId.value || syncing.value || processingStep.value) return;
+  syncing.value = true;
+  processingStep.value = "full_update";
+  processingElapsed.value = 0;
+  error.value = "";
+  processingTimer = window.setInterval(() => {
+    processingElapsed.value += 1;
+  }, 1000);
+
+  try {
+    notice.value = "Downloading finished matches and BP data…";
+    const download = await syncLeagueBp({
+      leagueId: leagueId.value,
+      matchLimit: null,
+      runAnalysis: false,
+    });
+    syncing.value = false;
+
+    notice.value = "Download complete · rebuilding analysis and both draft models…";
+    const analysis = await runAnalysisStep({
+      leagueId: leagueId.value,
+      step: "all",
+    });
+    const duration = (analysis.steps || []).reduce(
+      (sum, item) => sum + Number(item.duration_seconds || 0),
+      0
+    );
+
+    notice.value = "Analysis complete · publishing browser-ready assets…";
+    const published = await publishFrontendAssets(leagueId.value);
+    notice.value =
+      `Full update complete · ${download.finished_matches_processed || 0} matches checked · ` +
+      `${duration.toFixed(1)}s analysis · ${(published.files || []).length} public files published`;
+    await loadStatus();
+  } catch (err) {
+    notice.value = "";
+    error.value = err.message || "Full update failed.";
+  } finally {
+    if (processingTimer) window.clearInterval(processingTimer);
+    processingTimer = null;
+    syncing.value = false;
+    processingStep.value = "";
   }
 }
 
@@ -508,6 +556,18 @@ watch(selectedYear, () => {
             syncing && syncMode === "all"
               ? `Downloading… ${syncElapsed}s`
               : "Download full league"
+          }}
+        </button>
+        <button
+          class="button primary"
+          type="button"
+          :disabled="syncing || Boolean(processingStep) || !leagueId"
+          @click="runFullUpdate"
+        >
+          {{
+            processingStep === "full_update"
+              ? `Updating everything… ${processingElapsed}s`
+              : "Full update: data, models & site"
           }}
         </button>
       </div>
