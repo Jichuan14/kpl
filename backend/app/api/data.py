@@ -301,6 +301,26 @@ def data_status(
         except (OSError, ValueError, json.JSONDecodeError):
             draft_model["records"] = 0
 
+    learnable_draft_model = artifact(
+        league_output_dir / "learnable_draft_choice_model.json",
+        "learnable_draft_model",
+        "Team-aware learnable draft model",
+    )
+    learnable_draft_model_path = league_output_dir / "learnable_draft_choice_model.json"
+    learnable_draft_model["ready"] = bool(
+        decision_mtime is not None
+        and learnable_draft_model_path.is_file()
+        and learnable_draft_model_path.stat().st_mtime >= decision_mtime
+    )
+    if learnable_draft_model["exists"]:
+        try:
+            with learnable_draft_model_path.open(encoding="utf-8") as source:
+                learnable_draft_model["records"] = int(
+                    json.load(source).get("training_decisions") or 0
+                )
+        except (OSError, ValueError, json.JSONDecodeError):
+            learnable_draft_model["records"] = 0
+
     # The public site reads only these generated JSON files.  Keep this scan
     # separate from the analysis artifacts so the management page can show the
     # precise point at which a completed analysis has (or has not) been made
@@ -343,6 +363,7 @@ def data_status(
         and team_synergy["ready"]
         and team_profiles_ready
         and draft_model["ready"]
+        and learnable_draft_model["ready"]
     )
     pipeline = [
         {
@@ -407,6 +428,12 @@ def data_status(
             "ready": draft_model["ready"],
             "detail": f'{draft_model["records"]:,} training decisions',
         },
+        {
+            "key": "learnable_draft_model",
+            "label": "Team-aware learnable draft model",
+            "ready": learnable_draft_model["ready"],
+            "detail": f'{learnable_draft_model["records"]:,} training decisions',
+        },
     ]
 
     return ApiResponse(
@@ -434,6 +461,7 @@ def data_status(
                 "team_synergy": team_synergy,
                 "team_profiles": team_profiles,
                 "draft_model": draft_model,
+                "learnable_draft_model": learnable_draft_model,
             },
             "frontend_assets": frontend_assets,
             "analysis_ready": analysis_ready,
