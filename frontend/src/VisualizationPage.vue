@@ -32,6 +32,7 @@ const search = ref("");
 const debouncedSearch = ref("");
 let patternController = null;
 let searchTimer = null;
+let relationScrollY = null;
 
 const relationOptions = [
   { value: "counter_pick", label: "Counter picks", short: "Counter picks" },
@@ -178,24 +179,6 @@ const maximumMetric = computed(() =>
   Math.max(...shownRows.value.map((row) => Math.max(0, metricValue(row))), 0.001)
 );
 
-const totalSelections = computed(() =>
-  shownRows.value.reduce((sum, row) => sum + row.selections, 0)
-);
-
-const medianLift = computed(() => {
-  const values = shownRows.value
-    .map((row) => row.smoothed_lift)
-    .filter((value) => value != null)
-    .sort((a, b) => a - b);
-  if (!values.length) return null;
-  const middle = Math.floor(values.length / 2);
-  return values.length % 2
-    ? values[middle]
-    : (values[middle - 1] + values[middle]) / 2;
-});
-
-const strongestPattern = computed(() => shownRows.value[0] || null);
-
 function metricValue(row) {
   const value = row?.[metric.value];
   return value == null ? Number.NEGATIVE_INFINITY : Number(value);
@@ -217,6 +200,12 @@ function percent(value) {
 
 function number(value) {
   return Number(value || 0).toLocaleString(language.value);
+}
+
+function selectRelation(nextRelation) {
+  if (relation.value === nextRelation) return;
+  relationScrollY = window.scrollY;
+  relation.value = nextRelation;
 }
 
 function initial(name) {
@@ -277,7 +266,14 @@ async function loadPatterns() {
     payload.value = null;
     error.value = err.message || "Could not load this season's patterns.";
   } finally {
-    if (patternController === controller) loading.value = false;
+    if (patternController === controller) {
+      loading.value = false;
+      if (relationScrollY != null) {
+        const scrollY = relationScrollY;
+        relationScrollY = null;
+        window.requestAnimationFrame(() => window.scrollTo({ top: scrollY, behavior: "auto" }));
+      }
+    }
   }
 }
 
@@ -540,7 +536,7 @@ onBeforeUnmount(() => {
         :key="option.value"
         type="button"
         :class="{ active: relation === option.value }"
-        @click="relation = option.value"
+        @click="selectRelation(option.value)"
       >
         <span>{{ option.short }}</span>
         <small>
@@ -603,29 +599,6 @@ onBeforeUnmount(() => {
           <span>Find a hero</span>
           <input v-model="search" type="search" placeholder="Search hero name…" />
         </label>
-      </section>
-
-      <section class="visual-summary">
-        <article>
-          <span>Matching patterns</span>
-          <strong>{{ number(filteredRows.length) }}</strong>
-          <small>after current filters</small>
-        </article>
-        <article>
-          <span>Typical lift</span>
-          <strong>{{ medianLift == null ? "—" : `${medianLift.toFixed(2)}×` }}</strong>
-          <small>versus normal selection rate</small>
-        </article>
-        <article>
-          <span>Shown selections</span>
-          <strong>{{ number(totalSelections) }}</strong>
-          <small>observed choices across results</small>
-        </article>
-        <article class="summary-highlight">
-          <span>Strongest shown</span>
-          <strong>{{ strongestPattern ? metricText(strongestPattern) : "—" }}</strong>
-          <small>{{ strongestPattern?.relationship || "No matching pattern" }}</small>
-        </article>
       </section>
 
       <section class="insight-layout">
@@ -1281,53 +1254,6 @@ onBeforeUnmount(() => {
   grid-column: span 2;
 }
 
-.visual-summary {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 0.7rem;
-  margin-top: 0.7rem;
-}
-
-.visual-summary article {
-  min-width: 0;
-  padding: 1rem 1.1rem;
-  border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.75);
-}
-
-.visual-summary .summary-highlight {
-  border-color: rgba(15, 138, 107, 0.3);
-  background: rgba(15, 138, 107, 0.08);
-}
-
-.visual-summary span,
-.visual-summary small {
-  display: block;
-  color: var(--ink-soft);
-}
-
-.visual-summary span {
-  font-size: 0.65rem;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-}
-
-.visual-summary strong {
-  display: block;
-  margin: 0.45rem 0 0.2rem;
-  overflow: hidden;
-  font: 700 2rem/1 var(--display);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.visual-summary small {
-  overflow: hidden;
-  font-size: 0.7rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .insight-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.8fr) minmax(280px, 0.65fr);
@@ -1554,10 +1480,6 @@ th {
     grid-template-columns: repeat(3, 1fr);
   }
 
-  .visual-summary {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
   .insight-layout {
     grid-template-columns: 1fr;
   }
@@ -1620,10 +1542,6 @@ th {
 
   .filter-panel .search-control {
     grid-column: span 2;
-  }
-
-  .visual-summary {
-    grid-template-columns: 1fr;
   }
 
   .pattern-bar {
