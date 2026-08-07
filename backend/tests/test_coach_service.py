@@ -57,18 +57,36 @@ def response(message: FakeMessage, input_tokens=10, output_tokens=5):
 
 
 class FakeCompletions:
-    def __init__(self, responses):
+    def __init__(self, responses, scope_responses=None):
         self.responses = list(responses)
+        self.scope_responses = list(scope_responses or [])
         self.calls = []
+        self.scope_calls = []
 
     def create(self, **kwargs):
+        if "KPL Draft Coach scope gate" in kwargs["messages"][0]["content"]:
+            self.scope_calls.append(deepcopy(kwargs))
+            if self.scope_responses:
+                return self.scope_responses.pop(0)
+            return response(
+                FakeMessage(
+                    content=(
+                        '{"decision":"allow","intent":"draft_prediction",'
+                        '"reason_code":"supported_kpl_question"}'
+                    )
+                ),
+                input_tokens=0,
+                output_tokens=0,
+            )
         self.calls.append(deepcopy(kwargs))
         return self.responses.pop(0)
 
 
 class FakeClient:
-    def __init__(self, responses):
-        self.chat = SimpleNamespace(completions=FakeCompletions(responses))
+    def __init__(self, responses, scope_responses=None):
+        self.chat = SimpleNamespace(
+            completions=FakeCompletions(responses, scope_responses)
+        )
 
 
 def settings(**overrides) -> Settings:
@@ -209,7 +227,7 @@ class KimiCoachServiceTest(unittest.TestCase):
         self.assertEqual(second_messages[-1]["role"], "tool")
         self.assertIn("Hero A", second_messages[-1]["content"])
 
-    def test_sends_bounded_session_history_before_current_question(self) -> None:
+    def test_relays_only_server_filtered_history_as_untrusted_context(self) -> None:
         client = FakeClient([response(FakeMessage(content="It refers to Wolves."))])
         service = KimiCoachService(client=client, settings=settings())
 
@@ -229,14 +247,11 @@ class KimiCoachServiceTest(unittest.TestCase):
         provider_messages = client.chat.completions.calls[0]["messages"]
         self.assertEqual(
             [message["role"] for message in provider_messages],
-            ["system", "user", "assistant", "user"],
+            ["system", "user", "user"],
         )
+        self.assertIn("untrusted_conversation_context", provider_messages[1]["content"])
         self.assertIn("What does Wolves pick most?", provider_messages[1]["content"])
-        self.assertEqual(
-            provider_messages[2]["content"],
-            "Wolves most often picks Hero A.",
-        )
-        self.assertIn("What about from Blue?", provider_messages[3]["content"])
+        self.assertIn("What about from Blue?", provider_messages[2]["content"])
 
     def test_website_context_overrides_model_draft_arguments(self) -> None:
         call = tool_call(
