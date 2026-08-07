@@ -1606,7 +1606,13 @@ th {
   }
 
   .filter-panel {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .filter-panel label,
+  .filter-panel select,
+  .filter-panel input {
+    min-width: 0;
   }
 
   .filter-panel .search-control {

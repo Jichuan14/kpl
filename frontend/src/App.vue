@@ -1828,4 +1828,161 @@ select {
     grid-template-columns: 1fr;
   }
 }
+
+@media (max-width: 640px) {
+  .site-navigation {
+    gap: .65rem;
+    padding: .75rem 0;
+  }
+
+  .site-brand {
+    font-size: 1.05rem;
+  }
+
+  .site-brand img {
+    width: 1.9rem;
+    height: 1.9rem;
+  }
+
+  .navigation-links {
+    gap: .5rem;
+  }
+
+  .primary-tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: .3rem;
+    padding: .3rem;
+  }
+
+  .primary-tabs a {
+    min-height: 62px;
+    padding: .5rem .55rem;
+  }
+
+  .primary-tabs a strong {
+    font-size: .82rem;
+  }
+
+  .utility-links {
+    gap: .55rem;
+  }
+
+  .utility-links a {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .language-switcher {
+    margin-left: auto;
+  }
+
+  .language-switcher span {
+    display: none;
+  }
+
+  .language-switcher select {
+    min-height: 44px;
+    padding: 0 .5rem;
+  }
+
+  .page {
+    padding: 1.1rem 0 3rem;
+  }
+
+  .masthead {
+    gap: .8rem;
+    margin-bottom: 1.2rem;
+  }
+
+  .masthead h1 {
+    font-size: 2.5rem;
+  }
+
+  .lede {
+    margin-top: .65rem;
+    font-size: .82rem;
+  }
+
+  .api-state {
+    font-size: .7rem;
+  }
+
+  .control-panel {
+    padding: .8rem;
+  }
+
+  .selectors {
+    display: grid;
+    grid-template-columns: 6.5rem minmax(0, 1fr);
+  }
+
+  .year-picker {
+    width: auto;
+  }
+
+  .control-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .section-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: .3rem;
+    margin-top: 1.8rem;
+  }
+
+  .metric-grid {
+    gap: .55rem;
+  }
+
+  .metric-card {
+    padding: .85rem;
+  }
+
+  .panel-title {
+    gap: .65rem;
+  }
+
+  .pipeline-panel,
+  .publish-panel,
+  .freshness-panel,
+  .artifacts-panel {
+    padding: .9rem;
+  }
+
+  .pipeline li {
+    grid-template-columns: 25px minmax(0, 1fr);
+    gap: .55rem;
+  }
+
+  .pipeline li .status-chip {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .welcome-prompt {
+    padding: .9rem;
+  }
+
+  .welcome-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .site-footnote {
+    font-size: .65rem;
+  }
+}
+
+@media (max-width: 360px) {
+  .selectors {
+    grid-template-columns: 1fr;
+  }
+
+  .primary-tabs a span {
+    font-size: .53rem;
+  }
+}
 </style>
