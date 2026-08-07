@@ -915,7 +915,31 @@ th {
   }
 
   .teams-filters {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .teams-filters > * {
+    min-width: 0;
+  }
+
+  .teams-filters select,
+  .teams-filters input {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .teams-workspace,
+  .team-directory,
+  .team-detail {
+    min-width: 0;
+  }
+
+  .team-directory {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  }
+
+  .team-table-wrap {
+    max-width: 100%;
   }
 
   .team-summary {
