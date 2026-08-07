@@ -106,8 +106,9 @@ TOOLS: dict[str, RegisteredTool] = {
     "get_player_hero_pool": RegisteredTool(
         name="get_player_hero_pool",
         description=(
-            "Retrieve recorded player hero pools for one team and season, optionally "
-            "filtered to one player or hero."
+            "Retrieve one named player's recorded season hero pool, optionally "
+            "filtered to a team or hero. If the player name matches multiple teams, "
+            "use the returned candidate teams to ask for clarification."
         ),
         arguments_model=GetPlayerHeroPoolArguments,
         handler=get_player_hero_pool,

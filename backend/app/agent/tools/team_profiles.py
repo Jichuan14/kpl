@@ -61,8 +61,12 @@ class GetTeamComboPerformanceArguments(OpponentReferenceArguments):
         return self
 
 
-class GetPlayerHeroPoolArguments(TeamReferenceArguments):
-    player_name: str | None = Field(default=None, max_length=64)
+class GetPlayerHeroPoolArguments(LeagueArguments):
+    """Look up a player's recorded pool, optionally within one team."""
+
+    player_name: str = Field(min_length=1, max_length=64)
+    team_id: str | None = Field(default=None, max_length=32)
+    team_name: str | None = Field(default=None, max_length=64)
     hero_id: int | None = Field(default=None, gt=0)
     hero_name: str | None = Field(default=None, max_length=100)
     sort_by: Literal["picks", "share", "win_rate"] = "picks"
@@ -334,19 +338,51 @@ def get_team_combo_performance(
 
 
 def get_player_hero_pool(arguments: GetPlayerHeroPoolArguments) -> dict[str, Any]:
-    rows, snapshot = _rows_for_team(
-        arguments.league_id,
-        "player_hero_pools.jsonl",
-        arguments.team_id,
-        arguments.team_name,
-    )
-    if arguments.player_name:
-        expected = normalize_name(arguments.player_name)
+    snapshot = artifact_cache.load(arguments.league_id, "player_hero_pools.jsonl")
+    expected = normalize_name(arguments.player_name)
+    rows = [
+        row
+        for row in snapshot.rows
+        if normalize_name(str(row.get("player_name") or "")) == expected
+    ]
+    if arguments.team_id is not None or arguments.team_name:
         rows = [
             row
             for row in rows
-            if normalize_name(str(row.get("player_name") or "")) == expected
+            if (
+                arguments.team_id is not None
+                and str(row.get("team_id") or "") == arguments.team_id
+            )
+            or (
+                arguments.team_name
+                and normalize_name(str(row.get("team_name") or ""))
+                == normalize_name(arguments.team_name)
+            )
         ]
+    if not rows:
+        raise LookupError("No player hero-pool data matches this query")
+
+    teams = sorted(
+        {
+            (str(row.get("team_id") or ""), str(row.get("team_name") or ""))
+            for row in rows
+        },
+        key=lambda team: (normalize_name(team[1]), team[0]),
+    )
+    if len(teams) > 1:
+        return {
+            "league_id": arguments.league_id,
+            "player_name": arguments.player_name,
+            "ambiguous": True,
+            "candidate_teams": [
+                {"team_id": team_id, "team_name": team_name}
+                for team_id, team_name in teams
+            ],
+            "rows": [],
+            "result_count": 0,
+            **_artifact_meta(snapshot),
+            "warning": "This player name matches multiple teams; ask which team to use.",
+        }
     if arguments.hero_id is not None or arguments.hero_name:
         rows = [
             row
@@ -366,6 +402,7 @@ def get_player_hero_pool(arguments: GetPlayerHeroPoolArguments) -> dict[str, Any
         "league_id": arguments.league_id,
         "team_id": selected[0]["team_id"],
         "team_name": selected[0]["team_name"],
+        "player_name": selected[0]["player_name"],
         "rows": selected,
         "result_count": len(selected),
         **_artifact_meta(snapshot),

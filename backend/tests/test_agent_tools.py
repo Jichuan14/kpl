@@ -65,6 +65,9 @@ class AgentToolRegistryTest(unittest.TestCase):
         team_schema = functions["get_team_synergies"]["parameters"]
         self.assertIn("team_name", team_schema["required"])
         self.assertNotIn("anyOf", team_schema)
+        player_schema = functions["get_player_hero_pool"]["parameters"]
+        self.assertIn("player_name", player_schema["required"])
+        self.assertNotIn("team_name", player_schema["required"])
 
     def test_dispatch_validates_and_calls_fast_prediction(self) -> None:
         expected = {

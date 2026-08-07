@@ -168,7 +168,6 @@ class Phase2TeamToolsTest(unittest.TestCase):
         player = get_player_hero_pool(
             GetPlayerHeroPoolArguments(
                 league_id=self.league_id,
-                team_id="wolves",
                 player_name="wolves.player",
             )
         )
@@ -183,7 +182,55 @@ class Phase2TeamToolsTest(unittest.TestCase):
         self.assertEqual(opening["rows"][0]["occurrence_count"], 3)
         self.assertEqual(combo["rows"][0]["pair_battle_count"], 4)
         self.assertEqual(player["rows"][0]["pick_count"], 6)
+        self.assertEqual(player["team_id"], "wolves")
         self.assertEqual(recent["recent_match_window"], 5)
+
+    def test_player_pool_requires_only_player_and_handles_team_ambiguity(self) -> None:
+        self.write(
+            "player_hero_pools.jsonl",
+            [
+                self.base(
+                    player_name="Shared Player",
+                    hero_id=101,
+                    hero_name="Hero A",
+                    pick_count=6,
+                    pick_share=0.3,
+                    descriptive_battle_win_rate=0.5,
+                ),
+                self.base(
+                    team_id="ag",
+                    team_name="AG",
+                    player_name="Shared Player",
+                    hero_id=102,
+                    hero_name="Hero B",
+                    pick_count=4,
+                    pick_share=0.2,
+                    descriptive_battle_win_rate=0.5,
+                ),
+            ],
+        )
+
+        ambiguous = get_player_hero_pool(
+            GetPlayerHeroPoolArguments(
+                league_id=self.league_id,
+                player_name="shared player",
+            )
+        )
+        filtered = get_player_hero_pool(
+            GetPlayerHeroPoolArguments(
+                league_id=self.league_id,
+                player_name="shared player",
+                team_name="AG",
+            )
+        )
+
+        self.assertTrue(ambiguous["ambiguous"])
+        self.assertEqual(
+            [team["team_name"] for team in ambiguous["candidate_teams"]],
+            ["AG", "Wolves"],
+        )
+        self.assertEqual(filtered["team_name"], "AG")
+        self.assertEqual([row["hero_id"] for row in filtered["rows"]], [102])
 
 
 if __name__ == "__main__":

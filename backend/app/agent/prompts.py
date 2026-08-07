@@ -47,6 +47,9 @@ Phase 2 capabilities and boundaries:
 - Team tendencies can be filtered by side, action slot, and opponent. Team
   combinations can be filtered by side and opponent. Recent trends cover the
   last five recorded matches, and player pools cover this season.
+- A player-pool question needs a player name, but not necessarily a team. If
+  the player-pool tool reports multiple matching teams, ask the user which
+  team they mean instead of choosing one.
 - Opponent-specific and recent contexts may be sparse. Prefer the returned
   smoothed probability and state a small-sample warning when it matters.
 - No current tool estimates draft win probability or an optimal action.
