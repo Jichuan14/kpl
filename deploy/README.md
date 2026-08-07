@@ -35,8 +35,11 @@ instances against the same database file or put the database on NFS/OSS.
    curl --fail http://127.0.0.1/health
    ```
 
-Nginx serves the frontend on port 80, proxies API requests internally, and
-protects management and data-changing endpoints with HTTP Basic authentication.
+Caddy accepts public traffic on ports 80 and 443, automatically obtains and
+renews HTTPS certificates for `kpllab.xyz` and `www.kpllab.xyz`, and proxies
+requests to the internal Nginx frontend. Nginx proxies API requests internally
+and protects management and data-changing endpoints with HTTP Basic
+authentication.
 
 ## Updating and backing up
 

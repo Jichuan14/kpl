@@ -891,6 +891,19 @@ watch(selectedYear, () => {
     <div>
       <strong>赛事 BP 数据学习工具 · 基于公开赛事信息的个人数据分析实践</strong>
       <span>本站为非官方个人学习与研究项目，仅展示基于赛事信息生成的统计与分析结果，不提供赛事内容、视频、图片或原始数据下载。本站与腾讯、王者荣耀及 KPL 联赛不存在隶属、合作、赞助或认可关系。如权利人认为本站内容涉及其合法权益，请通过 {{ rightsContactEmail }} 联系，我会及时核查和处理。</span>
+      <a
+        class="icp-filing-link"
+        href="https://beian.miit.gov.cn/"
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="沪ICP备2026038369号，在工业和信息化部备案系统中查看"
+      >
+        <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+          <path d="M7 3.5h7l3 3V20.5H7z" />
+          <path d="M14 3.5v4h4M9.5 12h5M9.5 15.5h5" />
+        </svg>
+        <span>沪ICP备2026038369号</span>
+      </a>
     </div>
   </footer>
 
@@ -1138,6 +1151,30 @@ watch(selectedYear, () => {
 .site-footnote strong {
   color: var(--ink);
   font-weight: 600;
+}
+
+.icp-filing-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  color: inherit;
+  text-decoration: none;
+}
+
+.icp-filing-link:hover,
+.icp-filing-link:focus-visible {
+  color: var(--ink);
+  text-decoration: underline;
+}
+
+.icp-filing-link svg {
+  width: 0.95rem;
+  height: 0.95rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
 }
 
 .welcome-prompt {

@@ -1,0 +1,6 @@
+# Caddy obtains and renews publicly trusted certificates automatically after
+# both hostnames resolve to this server and TCP ports 80 and 443 are reachable.
+kpllab.xyz, www.kpllab.xyz {
+	encode zstd gzip
+	reverse_proxy web:80
+}
