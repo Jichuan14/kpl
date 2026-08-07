@@ -917,6 +917,31 @@ watch(selectedYear, () => {
         </svg>
         <span>沪ICP备2026038369号</span>
       </a>
+      <a
+        class="github-link"
+        href="https://github.com/Jichuan14/kpl"
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="View this project's source code on GitHub"
+      >
+        <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+          <path d="M12 2.5a9.5 9.5 0 0 0-3 18.51c.48.09.65-.21.65-.46v-1.68c-2.65.58-3.21-1.13-3.21-1.13-.43-1.1-1.06-1.4-1.06-1.4-.87-.6.07-.59.07-.59.96.07 1.47.99 1.47.99.86 1.46 2.24 1.04 2.79.79.08-.62.34-1.04.61-1.28-2.12-.24-4.35-1.06-4.35-4.72 0-1.04.37-1.89.98-2.56-.1-.24-.43-1.21.09-2.52 0 0 .8-.26 2.61.98A9.1 9.1 0 0 1 12 7.1c.81 0 1.63.11 2.39.32 1.82-1.24 2.61-.98 2.61-.98.52 1.31.19 2.28.1 2.52.61.67.97 1.52.97 2.56 0 3.67-2.24 4.48-4.37 4.71.35.3.65.88.65 1.77v2.63c0 .26.17.56.66.46A9.5 9.5 0 0 0 12 2.5Z" />
+        </svg>
+        <span>GitHub · Jichuan14/kpl</span>
+      </a>
+      <a
+        class="personal-site-link"
+        href="https://jichuan14.github.io/"
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="Visit Jichuan's personal website"
+      >
+        <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+          <circle cx="12" cy="12" r="8.5" />
+          <path d="M3.5 12h17M12 3.5c2.15 2.33 3.2 5.16 3.2 8.5S14.15 18.17 12 20.5C9.85 18.17 8.8 15.34 8.8 12S9.85 5.83 12 3.5Z" />
+        </svg>
+        <span>jichuan14.github.io</span>
+      </a>
     </div>
   </footer>
 
@@ -1184,8 +1209,36 @@ watch(selectedYear, () => {
   text-decoration: none;
 }
 
+.github-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  color: inherit;
+  text-decoration: none;
+}
+
+.personal-site-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  color: inherit;
+  text-decoration: none;
+}
+
 .icp-filing-link:hover,
 .icp-filing-link:focus-visible {
+  color: var(--ink);
+  text-decoration: underline;
+}
+
+.github-link:hover,
+.github-link:focus-visible {
+  color: var(--ink);
+  text-decoration: underline;
+}
+
+.personal-site-link:hover,
+.personal-site-link:focus-visible {
   color: var(--ink);
   text-decoration: underline;
 }
@@ -1198,6 +1251,20 @@ watch(selectedYear, () => {
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-width: 1.7;
+}
+
+.github-link svg {
+  width: 0.95rem;
+  height: 0.95rem;
+  fill: currentColor;
+}
+
+.personal-site-link svg {
+  width: 0.95rem;
+  height: 0.95rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
 }
 
 .welcome-prompt {
