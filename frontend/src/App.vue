@@ -480,7 +480,8 @@ watch(selectedYear, () => {
 
   <nav class="site-navigation">
     <a class="site-brand" href="/" @click.prevent="navigate('/')">
-      Draft <span>Atlas</span>
+      <img src="/assets/brand/draft-atlas-icon.png" alt="" aria-hidden="true" />
+      <span class="site-brand-name">Draft <b>Atlas</b></span>
     </a>
     <div class="navigation-links">
       <div class="primary-tabs" aria-label="Analysis views">
@@ -1031,12 +1032,20 @@ watch(selectedYear, () => {
 }
 
 .site-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
   font: 800 1.12rem var(--display);
   letter-spacing: -0.02em;
 }
 
-.site-brand span {
-  margin-left: 0.18rem;
+.site-brand img {
+  width: 2.1rem;
+  height: 2.1rem;
+  object-fit: contain;
+}
+
+.site-brand b {
   color: var(--accent);
 }
 
