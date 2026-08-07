@@ -20,6 +20,7 @@ const metric = ref("selection_count");
 const support = ref(3);
 const resultCount = ref("20");
 const search = ref("");
+const teamDirectoryOpen = ref(false);
 
 const metricOptions = [
   { value: "selection_count", label: "Most used together" },
@@ -123,6 +124,7 @@ function barWidth(row) {
 
 function selectTeam(nextTeamId) {
   teamId.value = nextTeamId;
+  teamDirectoryOpen.value = false;
 }
 
 async function loadSeasons() {
@@ -198,21 +200,37 @@ watch(leagueId, loadTeamSynergies);
     <template v-if="payload && selectedTeam && !loading">
       <section class="teams-workspace">
         <aside class="team-directory">
-          <p class="teams-eyebrow">Browse by team</p>
-          <h2>{{ teams.length }} teams</h2>
-          <button
-            v-for="team in teams"
-            :key="team.team_id"
-            type="button"
-            class="team-directory-item"
-            :class="{ active: team.team_id === teamId }"
-            @click="selectTeam(team.team_id)"
-          >
-            <strong>{{ team.team_name }}</strong>
-            <small>
-              {{ team.battle_count }} battles · {{ team.pair_count }} pairs
-            </small>
-          </button>
+          <div class="team-directory-heading">
+            <div>
+              <p class="teams-eyebrow">Browse by team</p>
+              <h2>{{ teams.length }} teams</h2>
+            </div>
+            <button
+              class="team-directory-toggle"
+              type="button"
+              :aria-expanded="teamDirectoryOpen"
+              aria-controls="team-directory-list"
+              @click="teamDirectoryOpen = !teamDirectoryOpen"
+            >
+              {{ teamDirectoryOpen ? "Hide teams" : selectedTeam?.team_name || "Choose team" }}
+              <span aria-hidden="true">⌄</span>
+            </button>
+          </div>
+          <div id="team-directory-list" class="team-directory-list" :class="{ open: teamDirectoryOpen }">
+            <button
+              v-for="team in teams"
+              :key="team.team_id"
+              type="button"
+              class="team-directory-item"
+              :class="{ active: team.team_id === teamId }"
+              @click="selectTeam(team.team_id)"
+            >
+              <strong>{{ team.team_name }}</strong>
+              <small>
+                {{ team.battle_count }} battles · {{ team.pair_count }} pairs
+              </small>
+            </button>
+          </div>
         </aside>
 
         <div class="team-detail">
@@ -543,6 +561,9 @@ input {
   margin: 0 0 0.85rem;
   font: 700 1.4rem/1 var(--display);
 }
+
+.team-directory-heading, .team-directory-list { display: contents; }
+.team-directory-toggle { display: none; }
 
 .team-directory-item {
   display: grid;
@@ -937,6 +958,16 @@ th {
   .team-directory {
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   }
+
+  .team-directory { display:block; padding:.8rem; }
+  .team-directory-heading { display:flex; align-items:center; justify-content:space-between; gap:.75rem; }
+  .team-directory h2 { margin-bottom:0; }
+  .team-directory-toggle { display:inline-flex; min-width:0; min-height:44px; align-items:center; gap:.5rem; padding:.45rem .6rem; border:1px solid var(--line); border-radius:.3rem; background:#fff; color:var(--ink); font:600 .68rem var(--mono); }
+  .team-directory-toggle span { font-size:1rem; transition:transform 160ms ease; }
+  .team-directory-toggle[aria-expanded="true"] span { transform:rotate(180deg); }
+  .team-directory-list { display:none; }
+  .team-directory-list.open { display:grid; grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:.4rem; margin-top:.75rem; }
+  .team-directory-item { margin:0; }
 
   .team-table-wrap {
     max-width: 100%;

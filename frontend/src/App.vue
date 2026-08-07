@@ -45,6 +45,7 @@ const showProjectNotice = ref(
 const showWelcomePrompt = ref(
   window.localStorage.getItem(welcomePromptKey) !== "true"
 );
+const mobileNavigationOpen = ref(false);
 let syncTimer = null;
 let processingTimer = null;
 let startupFallbackTimer = null;
@@ -415,6 +416,7 @@ function handlePopState() {
 }
 
 function navigate(path) {
+  mobileNavigationOpen.value = false;
   if (window.location.pathname === path) return;
   window.history.pushState({}, "", path);
   routePath.value = path;
@@ -483,7 +485,17 @@ watch(selectedYear, () => {
       <img src="/assets/brand/draft-atlas-icon.png" alt="" aria-hidden="true" />
       <span class="site-brand-name">Draft <b>Atlas</b></span>
     </a>
-    <div class="navigation-links">
+    <button
+      class="navigation-toggle"
+      type="button"
+      :aria-expanded="mobileNavigationOpen"
+      aria-controls="site-navigation-links"
+      @click="mobileNavigationOpen = !mobileNavigationOpen"
+    >
+      <span>{{ mobileNavigationOpen ? "Close" : "Menu" }}</span>
+      <i aria-hidden="true"></i>
+    </button>
+    <div id="site-navigation-links" class="navigation-links" :class="{ 'mobile-open': mobileNavigationOpen }">
       <div class="primary-tabs" aria-label="Analysis views">
         <a
           href="/"
@@ -1054,6 +1066,8 @@ watch(selectedYear, () => {
   align-items: center;
   gap: 1rem;
 }
+
+.navigation-toggle { display: none; }
 
 .primary-tabs {
   display: flex;
@@ -1831,11 +1845,17 @@ select {
 
 @media (max-width: 640px) {
   .site-navigation {
+    position: relative;
     gap: .65rem;
     padding: .75rem 0;
   }
 
+  .navigation-toggle { display:inline-flex; position:absolute; top:.75rem; right:0; min-height:44px; align-items:center; gap:.45rem; padding:.45rem .65rem; border:1px solid var(--line); border-radius:.35rem; background:rgba(255,255,255,.72); color:var(--ink); font:700 .65rem var(--mono); letter-spacing:.08em; text-transform:uppercase; }
+  .navigation-toggle i, .navigation-toggle i::before { display:block; width:1rem; height:2px; border-radius:999px; background:currentColor; content:""; }
+  .navigation-toggle i::before { transform:translateY(-5px); box-shadow:0 10px 0 currentColor; }
+
   .site-brand {
+    min-height: 44px;
     font-size: 1.05rem;
   }
 
@@ -1845,8 +1865,11 @@ select {
   }
 
   .navigation-links {
+    display: none;
     gap: .5rem;
   }
+
+  .navigation-links.mobile-open { display: flex; }
 
   .primary-tabs {
     display: grid;

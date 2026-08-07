@@ -921,6 +921,7 @@ onBeforeUnmount(() => {
   display: grid;
   width: 42px;
   height: 42px;
+  aspect-ratio: 1;
   place-items: center;
   overflow: hidden;
   border-radius: 50%;
@@ -932,6 +933,7 @@ onBeforeUnmount(() => {
 .meta-avatar img {
   width: 100%;
   height: 100%;
+  border-radius: inherit;
   object-fit: cover;
 }
 
@@ -1067,6 +1069,7 @@ onBeforeUnmount(() => {
 .current-meta-icons img {
   width: 100%;
   height: 100%;
+  border-radius: inherit;
   object-fit: cover;
 }
 

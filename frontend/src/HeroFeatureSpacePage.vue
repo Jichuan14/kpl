@@ -30,6 +30,8 @@ const showAllHeroes = ref(false);
 const zoom = ref(1);
 const pan = ref({ x: 0, y: 0 });
 const dragState = ref(null);
+const activePointers = new Map();
+let pinchState = null;
 let requestController = null;
 
 const laneLabels = {
@@ -195,13 +197,36 @@ function pointerPosition(event) {
 
 function startPan(event) {
   const position = pointerPosition(event);
+  activePointers.set(event.pointerId, position);
+  if (activePointers.size === 2) {
+    const [first, second] = [...activePointers.values()];
+    pinchState = {
+      distance: Math.hypot(second.x - first.x, second.y - first.y),
+      zoom: zoom.value,
+    };
+    dragState.value = null;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    return;
+  }
   dragState.value = { pointerId: event.pointerId, ...position };
   event.currentTarget.setPointerCapture(event.pointerId);
 }
 
 function panMap(event) {
-  if (!dragState.value || dragState.value.pointerId !== event.pointerId) return;
   const position = pointerPosition(event);
+  if (activePointers.has(event.pointerId)) activePointers.set(event.pointerId, position);
+  if (pinchState && activePointers.size >= 2) {
+    const [first, second] = [...activePointers.values()];
+    const distance = Math.hypot(second.x - first.x, second.y - first.y);
+    const nextZoom = Math.min(
+      MAX_ZOOM,
+      Math.max(1, pinchState.zoom * (distance / pinchState.distance))
+    );
+    zoom.value = Number(nextZoom.toFixed(2));
+    pan.value = clampPan(pan.value);
+    return;
+  }
+  if (!dragState.value || dragState.value.pointerId !== event.pointerId) return;
   pan.value = clampPan({
     x: pan.value.x + position.x - dragState.value.x,
     y: pan.value.y + position.y - dragState.value.y,
@@ -210,9 +235,12 @@ function panMap(event) {
 }
 
 function endPan(event) {
-  if (!dragState.value || dragState.value.pointerId !== event.pointerId) return;
-  dragState.value = null;
-  event.currentTarget.releasePointerCapture(event.pointerId);
+  activePointers.delete(event.pointerId);
+  if (activePointers.size < 2) pinchState = null;
+  if (dragState.value?.pointerId === event.pointerId) dragState.value = null;
+  if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+    event.currentTarget.releasePointerCapture(event.pointerId);
+  }
 }
 
 function laneLabel(lane) {
@@ -437,5 +465,5 @@ onBeforeUnmount(() => requestController?.abort());
 .hero-response-section { margin-top:1rem; padding:1rem 1.1rem 1.15rem; border:1px solid var(--line); background:rgba(255,255,255,.76); }.hero-response-header { display:flex; align-items:end; justify-content:space-between; gap:1rem; }.hero-response-header h2 { margin:0; font-family:var(--display); font-size:1.8rem; letter-spacing:-.035em; }.hero-response-header > div > p:last-child { max-width:38rem; margin:.35rem 0 0; color:var(--ink-soft); font-size:.72rem; line-height:1.45; }.hero-response-picker { display:grid; min-width:220px; gap:.35rem; }.hero-response-picker > span { color:var(--ink-soft); font-size:.62rem; letter-spacing:.1em; text-transform:uppercase; }.hero-response-picker > div { display:grid; grid-template-columns:2.45rem minmax(0, 1fr); align-items:center; border:1px solid var(--line); background:rgba(255,255,255,.88); }.hero-response-picker img { width:2.45rem; height:2.45rem; object-fit:cover; }.hero-response-picker select { min-width:0; min-height:39px; padding:0 .55rem; border:0; outline:0; background:transparent; color:var(--ink); font:inherit; font-size:.75rem; }.hero-response-grid { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:.65rem; margin-top:1rem; }.hero-response-card { min-height:124px; padding:.7rem; border:1px solid var(--line); background:rgba(255,255,255,.62); }.hero-response-card h3 { margin:0; color:var(--ink-soft); font-size:.64rem; letter-spacing:.09em; text-transform:uppercase; }.response-icon-list { display:flex; align-items:flex-start; gap:.5rem; margin-top:.75rem; }.response-icon-list button { display:grid; gap:.18rem; width:3.35rem; padding:0; border:0; background:transparent; color:var(--ink); cursor:pointer; }.response-icon-list button:hover img, .response-icon-list button:focus-visible img { outline:2px solid var(--accent-deep); outline-offset:2px; }.response-icon-list img { width:3.35rem; height:3.35rem; object-fit:cover; box-shadow:0 0 0 1px var(--line); }.response-icon-list small { color:var(--ink-soft); font-size:.63rem; text-align:center; }.response-empty { margin:.95rem 0 0; color:var(--ink-soft); font-size:.68rem; }
 @media (max-width:820px) { .feature-space-hero { align-items:stretch; flex-direction:column; }.season-picker { width:100%; }.space-layout { grid-template-columns:1fr; }.hero-detail { min-height:0; } }
 @media (max-width:700px) { .hero-response-header { align-items:stretch; flex-direction:column; }.hero-response-picker { min-width:0; }.hero-response-grid { grid-template-columns:1fr; }.hero-response-card { min-height:0; } }
-@media (max-width:620px) { .feature-space-page { width:calc(100% - 1rem); padding-top:1.25rem; }.space-plot-wrap { padding:.15rem; }.legend { gap:.4rem .7rem; } }
+@media (max-width:620px) { .feature-space-page { width:calc(100% - 1rem); padding-top:1.25rem; }.space-plot-wrap { padding:.15rem; }.space-plot { touch-action:none; }.legend { gap:.4rem .7rem; } }
 </style>
