@@ -67,22 +67,6 @@ const maximumMetric = computed(() =>
   Math.max(...shownRows.value.map((row) => Math.max(0, metricValue(row))), 0.001)
 );
 
-const totalPairUses = computed(() =>
-  filteredRows.value.reduce((sum, row) => sum + row.selection_count, 0)
-);
-
-const averageWinRate = computed(() => {
-  const selections = filteredRows.value.reduce(
-    (sum, row) => sum + row.selection_count,
-    0
-  );
-  const wins = filteredRows.value.reduce(
-    (sum, row) => sum + row.battle_win_count_when_paired,
-    0
-  );
-  return selections ? wins / selections : null;
-});
-
 function metricValue(row) {
   const value = row?.[metric.value];
   return value == null ? Number.NEGATIVE_INFINITY : Number(value);
@@ -290,31 +274,6 @@ watch(leagueId, loadTeamSynergies);
                 placeholder="Search hero name…"
               />
             </label>
-          </section>
-
-          <section class="team-summary">
-            <article>
-              <span>Matching pairs</span>
-              <strong>{{ number(filteredRows.length) }}</strong>
-              <small>after current filters</small>
-            </article>
-            <article>
-              <span>Total pair uses</span>
-              <strong>{{ number(totalPairUses) }}</strong>
-              <small>across matching combinations</small>
-            </article>
-            <article>
-              <span>Weighted win rate</span>
-              <strong>{{ percent(averageWinRate) }}</strong>
-              <small>when these pairs were completed</small>
-            </article>
-            <article class="team-highlight">
-              <span>Top shown pair</span>
-              <strong>{{ shownRows[0]?.pair_name || "—" }}</strong>
-              <small>
-                {{ shownRows[0] ? metricText(shownRows[0]) : "No result" }}
-              </small>
-            </article>
           </section>
 
           <section class="teams-layout">
@@ -650,53 +609,6 @@ input {
   gap: 0.35rem;
 }
 
-.team-summary {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 0.7rem;
-  margin-top: 0.7rem;
-}
-
-.team-summary article {
-  min-width: 0;
-  padding: 1rem;
-  border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.78);
-}
-
-.team-summary .team-highlight {
-  background: rgba(196, 92, 38, 0.07);
-  border-color: rgba(196, 92, 38, 0.25);
-}
-
-.team-summary span,
-.team-summary small {
-  display: block;
-  color: var(--ink-soft);
-}
-
-.team-summary span {
-  font-size: 0.64rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.team-summary strong {
-  display: block;
-  margin: 0.4rem 0 0.2rem;
-  overflow: hidden;
-  font: 700 1.75rem/1 var(--display);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.team-summary small {
-  overflow: hidden;
-  font-size: 0.67rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .teams-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.8fr) minmax(280px, 0.65fr);
@@ -914,9 +826,6 @@ th {
     grid-template-columns: 1fr;
   }
 
-  .team-summary {
-    grid-template-columns: repeat(2, 1fr);
-  }
 }
 
 @media (max-width: 720px) {
@@ -971,10 +880,6 @@ th {
 
   .team-table-wrap {
     max-width: 100%;
-  }
-
-  .team-summary {
-    grid-template-columns: 1fr;
   }
 
   .team-banner-stats {
