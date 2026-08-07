@@ -35,7 +35,7 @@ class AgentToolRegistryTest(unittest.TestCase):
     def test_definitions_expose_only_registered_tools(self) -> None:
         definitions = available_tool_definitions()
 
-        self.assertEqual(len(definitions), 12)
+        self.assertEqual(len(definitions), 13)
         functions = {
             definition["function"]["name"]: definition["function"]
             for definition in definitions
@@ -43,6 +43,7 @@ class AgentToolRegistryTest(unittest.TestCase):
         self.assertEqual(
             set(functions),
             {
+                "get_team_roster",
                 "predict_next_draft_action",
                 "simulate_future_draft",
                 "get_hero_relationships",

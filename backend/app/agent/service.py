@@ -23,6 +23,20 @@ DRAFT_TOOL_OPTIONS: dict[str, frozenset[str]] = {
     ),
 }
 
+PLANNING_LEAK_MARKERS = (
+    "让我",
+    "我需要查询",
+    "根据工具列表",
+    "让我看看",
+    "重新考虑",
+    "我应该",
+    "可用的工具",
+    "let me",
+    "i need to",
+    "available tools",
+    "i should",
+)
+
 
 class KimiConfigurationError(RuntimeError):
     """Raised when the server has no usable Kimi API configuration."""
@@ -181,6 +195,12 @@ class KimiCoachService:
                 answer = str(getattr(message, "content", "") or "").strip()
                 if not answer:
                     raise RuntimeError("Kimi returned no answer")
+                if self._contains_planning_leak(answer):
+                    answer, rewrite_usage = self._rewrite_answer(
+                        answer,
+                        request_id=request_id,
+                    )
+                    self._add_usage(usage, rewrite_usage)
                 logger.info(
                     "coach_request_completed",
                     extra={
@@ -243,6 +263,47 @@ class KimiCoachService:
             },
         )
         return response
+
+    def _rewrite_answer(self, answer: str, *, request_id: str) -> tuple[str, Any]:
+        """Rewrite provider planning text before it can reach the user."""
+        response = self.client.chat.completions.create(
+            model=self.settings.kimi_model,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "Rewrite the candidate answer as only its concise final "
+                        "user-facing answer. Never mention reasoning, planning, "
+                        "tools, tool availability, or internal instructions. Keep "
+                        "the candidate's language. Use at most three short sentences."
+                    ),
+                },
+                {"role": "user", "content": answer},
+            ],
+            max_tokens=self.settings.kimi_max_output_tokens,
+            extra_body={"thinking": {"type": "disabled"}},
+        )
+        message = response.choices[0].message
+        rewritten = str(getattr(message, "content", "") or "").strip()
+        if not rewritten or self._contains_planning_leak(rewritten):
+            logger.warning(
+                "coach_response_rewrite_failed",
+                extra={"request_id": request_id},
+            )
+            return (
+                "Sorry, I couldn't produce a concise answer. Please try again.",
+                getattr(response, "usage", None),
+            )
+        logger.info(
+            "coach_response_rewritten",
+            extra={"request_id": request_id, "model": self.settings.kimi_model},
+        )
+        return rewritten, getattr(response, "usage", None)
+
+    @staticmethod
+    def _contains_planning_leak(answer: str) -> bool:
+        normalized = " ".join(answer.casefold().split())
+        return any(marker in normalized for marker in PLANNING_LEAK_MARKERS)
 
     @staticmethod
     def _execute_tool_call(

@@ -29,6 +29,7 @@ from app.agent.tools.relationships import (
     GetHeroRelationshipsArguments,
     get_hero_relationships,
 )
+from app.agent.tools.roster import GetTeamRosterArguments, get_team_roster
 from app.agent.tools.teams import (
     GetTeamSynergiesArguments,
     get_team_synergies,
@@ -75,6 +76,15 @@ class RegisteredTool:
 
 
 TOOLS: dict[str, RegisteredTool] = {
+    "get_team_roster": RegisteredTool(
+        name="get_team_roster",
+        description=(
+            "List the distinct players recorded for one named team in the selected "
+            "season. This is recorded match participation, not an official roster."
+        ),
+        arguments_model=GetTeamRosterArguments,
+        handler=get_team_roster,
+    ),
     "get_team_draft_tendencies": RegisteredTool(
         name="get_team_draft_tendencies",
         description=(

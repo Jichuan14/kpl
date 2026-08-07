@@ -141,6 +141,31 @@ class KimiCoachServiceTest(unittest.TestCase):
             },
         )
 
+    def test_rewrites_provider_planning_text_before_returning_it(self) -> None:
+        client = FakeClient(
+            [
+                response(
+                    FakeMessage(
+                        content="让我先查看可用工具。根据工具列表，我无法回答。"
+                    )
+                ),
+                response(FakeMessage(content="抱歉，我目前无法查询这项数据。")),
+            ]
+        )
+        service = KimiCoachService(client=client, settings=settings())
+
+        result = service.ask(
+            CoachInput(message="谁在狼队？", league_id="20260002"),
+            request_id="request-rewrite",
+        )
+
+        self.assertEqual(result["answer"], "抱歉，我目前无法查询这项数据。")
+        self.assertEqual(result["usage"]["total_tokens"], 30)
+        self.assertEqual(len(client.chat.completions.calls), 2)
+        rewrite_call = client.chat.completions.calls[1]
+        self.assertNotIn("tools", rewrite_call)
+        self.assertIn("Never mention reasoning", rewrite_call["messages"][0]["content"])
+
     def test_executes_tool_and_returns_followup_answer(self) -> None:
         call = tool_call(
             "predict_next_draft_action",
