@@ -212,9 +212,16 @@ TOOLS: dict[str, RegisteredTool] = {
 }
 
 
-def available_tool_definitions() -> list[dict[str, Any]]:
-    """Return stable model-facing definitions for every approved tool."""
-    return [tool.model_definition() for tool in TOOLS.values()]
+def available_tool_definitions(
+    allowed_names: frozenset[str] | None = None,
+) -> list[dict[str, Any]]:
+    """Return stable model-facing definitions for approved, permitted tools."""
+    names = allowed_names if allowed_names is not None else frozenset(TOOLS)
+    return [
+        tool.model_definition()
+        for name, tool in TOOLS.items()
+        if name in names
+    ]
 
 
 def invoke_tool(

@@ -185,6 +185,12 @@ function useSuggestion(value) {
   submitQuestion(value);
 }
 
+function handleComposerKeydown(event) {
+  if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
+  event.preventDefault();
+  submitQuestion();
+}
+
 async function scrollThreadToBottom() {
   await nextTick();
   if (thread.value) thread.value.scrollTop = thread.value.scrollHeight;
@@ -369,8 +375,7 @@ watch(
         maxlength="4000"
         placeholder="Ask a KPL draft question…"
         :disabled="loading"
-        @keydown.ctrl.enter.prevent="submitQuestion()"
-        @keydown.meta.enter.prevent="submitQuestion()"
+        @keydown="handleComposerKeydown"
       ></textarea>
       <button type="submit" :disabled="loading || !question.trim() || !leagueId" aria-label="Ask Draft Coach">
         <span>{{ loading ? "…" : "↑" }}</span>
