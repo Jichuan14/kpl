@@ -32,8 +32,25 @@ parser = argparse.ArgumentParser(
 )
 parser.add_argument("--league-id", required=True, help="Target season/league ID")
 parser.add_argument("--previous-seasons", type=int, default=4)
-parser.add_argument("--epochs", type=int, default=20)
+parser.add_argument("--epochs", type=int, default=30)
 parser.add_argument("--seed", type=int, default=7)
+parser.add_argument("--features", type=Path)
+parser.add_argument("--learning-rate", type=float, default=0.005)
+parser.add_argument("--weight-decay", type=float, default=1e-4)
+parser.add_argument(
+    "--recency-decay",
+    type=float,
+    default=0.65,
+    help="Multiplier applied for each earlier season (default: 0.65).",
+)
+parser.add_argument(
+    "--holdout-current-season-matches",
+    type=int,
+    default=0,
+    help="Keep the latest N target-season matches out of training and report their metrics.",
+)
+parser.add_argument("--model-output", type=Path)
+parser.add_argument("--feature-space-output", type=Path)
 args = parser.parse_args()
 
 REPO_ROOT = find_repo_root(Path.cwd().resolve())
@@ -42,7 +59,9 @@ ANALYSIS_DIR = REPO_ROOT / 'analysis'
 
 EXPORTS_DIR = ANALYSIS_DIR / 'exports'
 
-FEATURES_PATH = ANALYSIS_DIR / 'hero_specialty_vectors_thermometer.json'
+FEATURES_PATH = (args.features or ANALYSIS_DIR / 'hero_draft_feature_vectors.json').resolve()
+
+FEATURE_ARTIFACT_NAME = FEATURES_PATH.name
 
 FEATURE_SOURCE_PATH = ANALYSIS_DIR / 'hero_features.json'
 
@@ -50,7 +69,7 @@ CURRENT_SEASON = args.league_id
 
 PREVIOUS_SEASONS = args.previous_seasons
 
-RECENCY_DECAY = 0.45
+RECENCY_DECAY = args.recency_decay
 
 WINNING_PICK_WEIGHT = 1.5
 
@@ -60,15 +79,25 @@ EPOCHS = args.epochs
 
 BATCH_SIZE = 512
 
-LEARNING_RATE = 0.02
+LEARNING_RATE = args.learning_rate
 
-WEIGHT_DECAY = 1e-4
+WEIGHT_DECAY = args.weight_decay
 
 SEED = args.seed
 
-MODEL_PATH = ANALYSIS_DIR / 'outputs' / CURRENT_SEASON / 'learnable_draft_choice_model.json'
+if not 0 < RECENCY_DECAY <= 1:
+    raise ValueError('--recency-decay must be greater than 0 and no greater than 1.')
+if args.holdout_current_season_matches < 0:
+    raise ValueError('--holdout-current-season-matches cannot be negative.')
 
-FEATURE_SPACE_PATH = ANALYSIS_DIR / 'outputs' / CURRENT_SEASON / 'learned_hero_feature_space.json'
+MODEL_PATH = (args.model_output or ANALYSIS_DIR / 'outputs' / CURRENT_SEASON / 'learnable_draft_choice_model.json').resolve()
+
+FEATURE_SPACE_PATH = (args.feature_space_output or ANALYSIS_DIR / 'outputs' / CURRENT_SEASON / 'learned_hero_feature_space.json').resolve()
+
+
+def display_path(path: Path) -> Path:
+
+    return path.relative_to(REPO_ROOT) if path.is_relative_to(REPO_ROOT) else path
 
 
 
@@ -165,7 +194,7 @@ def read_usable_decisions(season: str, path: Path) -> list[dict]:
 
 
 
-decisions = [
+all_decisions = [
 
     row
 
@@ -174,6 +203,28 @@ decisions = [
     for row in read_usable_decisions(season, available_paths[season])
 
 ]
+
+holdout_match_ids: set[str] = set()
+if args.holdout_current_season_matches:
+    matches_path = EXPORTS_DIR / CURRENT_SEASON / 'matches.jsonl'
+    if not matches_path.is_file():
+        raise FileNotFoundError(f'Cannot create chronological holdout; missing {matches_path}.')
+    match_times = {}
+    with matches_path.open(encoding='utf-8') as source:
+        for line in source:
+            if line.strip():
+                match = json.loads(line)
+                match_times[str(match['match_id'])] = str(match.get('start_time') or '')
+    current_match_ids = sorted(
+        {str(row['match_id']) for row in all_decisions if row['league_id'] == CURRENT_SEASON},
+        key=lambda match_id: (match_times.get(match_id, ''), match_id),
+    )
+    if len(current_match_ids) <= args.holdout_current_season_matches:
+        raise ValueError('The holdout must leave at least one target-season match for training.')
+    holdout_match_ids = set(current_match_ids[-args.holdout_current_season_matches:])
+
+decisions = [row for row in all_decisions if str(row['match_id']) not in holdout_match_ids]
+holdout_decisions = [row for row in all_decisions if str(row['match_id']) in holdout_match_ids]
 
 
 
@@ -184,6 +235,10 @@ for season in training_seasons:
     print(f'  {season}: {season_weights[season]:.4f}')
 
 print('Usable BP decisions:', len(decisions))
+
+if holdout_match_ids:
+    print('Chronological holdout matches:', len(holdout_match_ids))
+    print('Chronological holdout decisions:', len(holdout_decisions))
 
 print('Decisions by season:', dict(sorted(Counter(row['league_id'] for row in decisions).items())))
 
@@ -208,7 +263,7 @@ feature_by_id = {
 
 
 
-hero_ids = sorted({int(hero_id) for row in decisions for hero_id in row['legal_hero_ids'] if int(hero_id) > 0})
+hero_ids = sorted({int(hero_id) for row in all_decisions for hero_id in row['legal_hero_ids'] if int(hero_id) > 0})
 
 hero_to_index = {hero_id: index for index, hero_id in enumerate(hero_ids)}
 
@@ -218,7 +273,7 @@ team_ids = sorted({
 
     str(team_id)
 
-    for row in decisions
+    for row in all_decisions
 
     for team_id in (row['acting_team_id'], row['opponent_team_id'])
 
@@ -282,7 +337,7 @@ context_keys = sorted({
 
     (str(row['action']), str(row['side']), int(row['team_action_type_number']))
 
-    for row in decisions
+    for row in all_decisions
 
 })
 
@@ -356,7 +411,7 @@ assert source_presence.shape == (N, len(ROLE_FIELDS), HERO_COUNT)
 
 print('Hero vocabulary:', HERO_COUNT)
 
-print('Heroes with specialty profiles:', int(hero_features[:, -1].sum()))
+print('Heroes with feature profiles:', int(hero_features[:, -1].sum()))
 
 print('Context types:', len(context_keys), context_keys)
 
@@ -573,7 +628,58 @@ def evaluate(indices: np.ndarray) -> dict[str, float]:
     }
 
 
+def evaluate_observed_rows(rows: list[dict]) -> dict[str, float]:
+    """Score rows kept entirely outside training, with one vote per BP action."""
+    total_loss = 0.0
+    top1 = 0
+    top5 = 0
+    scored = 0
+    candidate_representations = hero_features @ parameters['feature_projection'] + parameters['hero_residual']
 
+    for row in rows:
+        selected = hero_to_index.get(int(row['selected_hero_id']))
+        context_key = (str(row['action']), str(row['side']), int(row['team_action_type_number']))
+        acting_team = team_to_index.get(str(row['acting_team_id']))
+        opponent_team = team_to_index.get(str(row['opponent_team_id']))
+        if selected is None or context_key not in context_to_index or acting_team is None or opponent_team is None:
+            continue
+
+        static_state = make_static_state(row)
+        source_state = np.zeros((len(ROLE_FIELDS), HERO_COUNT), dtype=np.float32)
+        for role_index, field in enumerate(ROLE_FIELDS):
+            for hero_id in row.get(field, []):
+                hero_index = hero_to_index.get(int(hero_id))
+                if hero_index is not None:
+                    source_state[role_index, hero_index] = 1.0
+        query = (
+            parameters['context_embedding'][context_to_index[context_key]]
+            + static_state @ parameters['state_projection']
+            + np.einsum('rh,rhd->d', source_state, parameters['source_embedding'])
+            + parameters['acting_team_embedding'][acting_team]
+            + parameters['opponent_team_embedding'][opponent_team]
+        )
+        logits = candidate_representations @ query + parameters['hero_bias']
+        legal = np.zeros(HERO_COUNT, dtype=bool)
+        for hero_id in row['legal_hero_ids']:
+            hero_index = hero_to_index.get(int(hero_id))
+            if hero_index is not None:
+                legal[hero_index] = True
+        logits = np.where(legal, logits, -1e9)
+        probabilities = probabilities_from_logits(logits[None, :])[0]
+        ranking = np.argsort(-logits)
+        total_loss -= float(np.log(max(probabilities[selected], 1e-12)))
+        top1 += int(ranking[0] == selected)
+        top5 += int(selected in ranking[:5])
+        scored += 1
+
+    if not scored:
+        raise ValueError('No holdout decisions could be scored.')
+    return {
+        'negative_log_likelihood': total_loss / scored,
+        'top_1_accuracy': top1 / scored,
+        'top_5_accuracy': top5 / scored,
+        'decisions_scored': scored,
+    }
 
 
 all_indices = np.arange(N)
@@ -617,8 +723,14 @@ for epoch in range(1, EPOCHS + 1):
 
 
 final_metrics = evaluate(all_indices)
-
-final_metrics
+holdout_metrics = evaluate_observed_rows(holdout_decisions) if holdout_decisions else None
+if holdout_metrics:
+    print(
+        'holdout NLL '
+        f"{holdout_metrics['negative_log_likelihood']:.4f} | "
+        f"top-1 {holdout_metrics['top_1_accuracy']:.3%} | "
+        f"top-5 {holdout_metrics['top_5_accuracy']:.3%}"
+    )
 model_artifact = {
 
     'schema_version': 2,
@@ -633,6 +745,10 @@ model_artifact = {
 
     'feature_names': list(feature_names),
 
+    'feature_artifact': FEATURE_ARTIFACT_NAME,
+
+    'feature_count': feature_width,
+
     'role_fields': list(ROLE_FIELDS),
 
     'hero_ids': hero_ids,
@@ -644,6 +760,12 @@ model_artifact = {
     'context_keys': [list(key) for key in context_keys],
 
     'training_decisions': int(N),
+
+    'chronological_holdout': {
+        'matches': args.holdout_current_season_matches,
+        'match_ids': sorted(holdout_match_ids),
+        'metrics': holdout_metrics,
+    } if holdout_match_ids else None,
 
     'effective_training_decisions': float(sample_weights.sum()),
 
@@ -677,7 +799,7 @@ MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 MODEL_PATH.write_text(json.dumps(model_artifact, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
 
-print(f'Wrote {MODEL_PATH.relative_to(REPO_ROOT)}')
+print(f'Wrote {display_path(MODEL_PATH)}')
 
 print(f'Artifact size: {MODEL_PATH.stat().st_size / 1024:.1f} KiB')
 candidate_representations = hero_features @ parameters['feature_projection'] + parameters['hero_residual']
@@ -730,11 +852,18 @@ np.fill_diagonal(distance_matrix, np.inf)
 
 feature_space_rows = []
 
+
 for index, hero_id in enumerate(hero_ids):
 
     source = source_by_id.get(hero_id, {})
 
     nearest_indices = np.argsort(distance_matrix[index])[:5]
+
+    gameplay_mechanic_keys = [
+        feature_name
+        for feature_name, value in zip(base_feature_names, hero_features[index, :-1])
+        if value > 0 and feature_name.startswith(('mechanic__', 'condition__'))
+    ]
 
     feature_space_rows.append({
 
@@ -751,6 +880,10 @@ for index, hero_id in enumerate(hero_ids):
         'damage_types': source.get('damage_types', []),
 
         'feature_known': bool(hero_features[index, -1]),
+
+        # Keep canonical feature keys here. Display translation belongs in the
+        # frontend and must never alter the numeric model input.
+        'gameplay_mechanic_keys': gameplay_mechanic_keys,
 
         'pick_count': int(pick_counts[hero_id]),
 
@@ -786,7 +919,7 @@ feature_space_artifact = {
 
 FEATURE_SPACE_PATH.write_text(json.dumps(feature_space_artifact, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
 
-print(f'Wrote {len(feature_space_rows)} hero coordinates to {FEATURE_SPACE_PATH.relative_to(REPO_ROOT)}')
+print(f'Wrote {len(feature_space_rows)} hero coordinates to {display_path(FEATURE_SPACE_PATH)}')
 
 print('PCA explained variance:', ', '.join(f'{value:.1%}' for value in explained_variance_ratio))
 def score_observed_state(row: dict, limit: int = 10) -> list[dict]:

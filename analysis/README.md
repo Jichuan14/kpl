@@ -26,6 +26,7 @@ hero may have several rows when it has been played in multiple positions.
 | `compute_meta_heroes.py` | Rank opening-priority heroes from first-phase bans and Blue first picks |
 | `compute_team_synergies.py` | Rank availability-adjusted hero pairs preferred by each team |
 | `compute_team_draft_profiles.py` | Build season rosters, team tendencies/openings/combos, player pools, and recent trends |
+| `build_hero_tactical_roles.py` | Build the commentary-only hero class and tactical-role artifact from Tencent sources |
 | `build_draft_model.py` | Train an interpretable next-action probability model and run BP rollouts |
 | `train_learnable_draft_choice_model.ipynb` | Train the team-aware learnable choice model with acting-team and opponent-team embeddings |
 
@@ -160,13 +161,39 @@ not already on the board.
 ### Train the team-aware learnable model
 
 The learnable model trains on the target season and its four immediately
-preceding exports. Along with hero and visible-board features, it learns a
-16-dimensional acting-team embedding and opponent-team embedding from the team
-IDs already present in `bp_decisions.jsonl`. Unknown teams fall back to the
-shared league/draft representation at inference time.
+preceding exports. Its input combines the original lane/damage/control profile
+with Tencent-catalogue-derived ability mechanics and conditions, such as hard
+control, cleanse, projectile blocking, ally repositioning, skill refresh, and
+channeling. It also learns 16-dimensional acting-team and opponent-team
+embeddings from IDs already present in `bp_decisions.jsonl`. Unknown teams fall
+back to the shared league/draft representation at inference time.
 
-Run `train_learnable_draft_choice_model.ipynb` from the repository root. It
-writes the schema-v2 artifact to:
+Regenerate the combined feature vectors, then train from the repository root:
+
+```bash
+python3 analysis/build_hero_draft_feature_vectors.py
+python3 analysis/train_learnable_draft_choice_model.py --league-id 20260003
+```
+
+Earlier seasons are included with geometric recency weights: the target season
+has weight `1.0`, then each older season is multiplied by `--recency-decay`
+(default `0.65`). Test a value against the latest held-out matches without
+writing over the production artifacts:
+
+```bash
+python3 analysis/train_learnable_draft_choice_model.py \
+  --league-id 20260003 \
+  --recency-decay 0.65 \
+  --holdout-current-season-matches 6 \
+  --model-output /tmp/kpl-recency-test-model.json \
+  --feature-space-output /tmp/kpl-recency-test-space.json
+```
+
+Holdout metrics use one equal-weighted vote per future pick or ban, rather than
+the winning-pick training weight.
+
+The normal `learnable_draft_model` pipeline step runs the vector build first.
+Training writes the schema-v2 artifact to:
 
 ```text
 analysis/outputs/20260003/learnable_draft_choice_model.json
@@ -175,6 +202,33 @@ analysis/outputs/20260003/learnable_draft_choice_model.json
 The backend uses these learned team embeddings directly for the `learnable`
 model. It does not apply `team_action_tendencies.jsonl` afterward; that artifact
 continues to calibrate only the statistical model.
+
+### Build hero tactical roles for commentary
+
+This sidecar describes what a hero does in a lineup rather than treating every
+control or damage tag as interchangeable. It records Tencent's official hero
+classes and tank classification, numeric attribute bars, structured official
+hero relationships, and conservative tactical labels such as `frontline`,
+`primary_engage`, `peel_disengage`, `ally_reposition`, and `long_range_poke`.
+The generated JSON retains only controlled labels and short matched evidence,
+not full webpage prose.
+
+```bash
+source backend/.venv/bin/activate
+python3 analysis/build_hero_tactical_roles.py
+```
+
+Output:
+
+```text
+analysis/hero_tactical_roles.json
+```
+
+This artifact is for the commentary evidence layer only. It is deliberately
+separate from `hero_draft_feature_vectors.json`, so rebuilding it neither
+changes the English ML feature space nor requires model retraining. The build
+fails validation when official class/page coverage is incomplete or when a
+tactical role is invalid.
 
 ### Compute team-specific hero synergies
 

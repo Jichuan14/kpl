@@ -107,3 +107,11 @@ class DraftSimulationRequest(BaseModel):
         if self.blue_team_id == self.red_team_id:
             raise ValueError("Blue and Red must be different teams")
         return self
+
+
+class DraftSelectionCommentaryRequest(DraftSimulationRequest):
+    """The board immediately before a selected pick or ban."""
+
+    action: Literal["pick", "ban"]
+    side: Literal["blue", "red"]
+    selected_hero_id: int = Field(gt=0)

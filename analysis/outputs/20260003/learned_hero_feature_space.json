@@ -1,0 +1,4336 @@
+{
+  "schema_version": 1,
+  "target_season": "20260003",
+  "model_type": "team_aware_recency_weighted_hybrid_bilinear_choice",
+  "projection": "pca",
+  "source_space": "learned_candidate_representation",
+  "explained_variance_ratio": [
+    0.2733801305294037,
+    0.11248349398374557
+  ],
+  "rows": [
+    {
+      "hero_id": 105,
+      "hero_name": "廉颇",
+      "x": -0.26414215564727783,
+      "y": 0.3995729684829712,
+      "primary_lane": "clash",
+      "damage_types": [
+        "physical"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__buff_attack_speed",
+        "mechanic__control_knockup",
+        "mechanic__control_pull",
+        "mechanic__control_slow",
+        "mechanic__damage_amplification",
+        "mechanic__damage_physical",
+        "mechanic__defense_control_immunity",
+        "mechanic__defense_shield",
+        "mechanic__mobility_dash",
+        "mechanic__utility_cooldown_reduction",
+        "mechanic__utility_skill_refresh",
+        "condition__distance_scaling",
+        "condition__proximity"
+      ],
+      "pick_count": 79,
+      "ban_count": 26,
+      "bp_action_count": 105,
+      "weighted_bp_action_count": 45.00265624999997,
+      "nearest_hero_ids": [
+        114,
+        544,
+        108,
+        187,
+        189
+      ]
+    },
+    {
+      "hero_id": 106,
+      "hero_name": "小乔",
+      "x": 0.8024672865867615,
+      "y": -0.015479768626391888,
+      "primary_lane": "mid",
+      "damage_types": [
+        "magic"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_knockup",
+        "mechanic__damage_magic",
+        "mechanic__mobility_speed_boost",
+        "mechanic__utility_summon",
+        "condition__directional",
+        "condition__proximity"
+      ],
+      "pick_count": 391,
+      "ban_count": 207,
+      "bp_action_count": 598,
+      "weighted_bp_action_count": 379.85144062500046,
+      "nearest_hero_ids": [
+        136,
+        312,
+        142,
+        179,
+        148
+      ]
+    },
+    {
+      "hero_id": 107,
+      "hero_name": "赵云",
+      "x": 0.38413673639297485,
+      "y": -0.5694818496704102,
+      "primary_lane": "jungle",
+      "damage_types": [
+        "physical"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_knockup",
+        "mechanic__control_slow",
+        "mechanic__damage_amplification",
+        "mechanic__damage_magic",
+        "mechanic__damage_physical",
+        "mechanic__defense_damage_reduction",
+        "mechanic__defense_shield",
+        "mechanic__mobility_dash",
+        "mechanic__sustain_heal",
+        "mechanic__utility_basic_attack_enhancement",
+        "mechanic__utility_cooldown_reduction",
+        "condition__distance_scaling",
+        "condition__proximity"
+      ],
+      "pick_count": 109,
+      "ban_count": 75,
+      "bp_action_count": 184,
+      "weighted_bp_action_count": 200.2,
+      "nearest_hero_ids": [
+        511,
+        180,
+        163,
+        538,
+        178
+      ]
+    },
+    {
+      "hero_id": 108,
+      "hero_name": "墨子",
+      "x": -0.11431638151407242,
+      "y": 0.4355240762233734,
+      "primary_lane": "mid",
+      "damage_types": [
+        "magic"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__buff_attack_power",
+        "mechanic__control_knockback",
+        "mechanic__control_stun",
+        "mechanic__damage_magic",
+        "mechanic__defense_shield",
+        "mechanic__mobility_dash",
+        "mechanic__utility_basic_attack_enhancement",
+        "mechanic__utility_zone",
+        "condition__directional",
+        "condition__proximity"
+      ],
+      "pick_count": 92,
+      "ban_count": 141,
+      "bp_action_count": 233,
+      "weighted_bp_action_count": 99.89537187500001,
+      "nearest_hero_ids": [
+        544,
+        105,
+        113,
+        501,
+        118
+      ]
+    },
+    {
+      "hero_id": 109,
+      "hero_name": "妲己",
+      "x": -0.6782746315002441,
+      "y": 0.1133384108543396,
+      "primary_lane": "mid",
+      "damage_types": [
+        "magic"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_stun",
+        "mechanic__damage_magic",
+        "mechanic__debuff_magic_defense",
+        "condition__directional",
+        "condition__proximity"
+      ],
+      "pick_count": 2,
+      "ban_count": 0,
+      "bp_action_count": 2,
+      "weighted_bp_action_count": 0.44626562500000005,
+      "nearest_hero_ids": [
+        115,
+        513,
+        154,
+        150,
+        141
+      ]
+    },
+    {
+      "hero_id": 110,
+      "hero_name": "嬴政",
+      "x": 0.23183470964431763,
+      "y": -0.3219713568687439,
+      "primary_lane": "mid",
+      "damage_types": [
+        "magic",
+        "physical"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_slow",
+        "mechanic__damage_amplification",
+        "mechanic__damage_magic",
+        "mechanic__defense_shield",
+        "mechanic__mobility_speed_boost",
+        "mechanic__utility_structure_interaction",
+        "mechanic__utility_summon",
+        "condition__proximity",
+        "condition__recast"
+      ],
+      "pick_count": 229,
+      "ban_count": 164,
+      "bp_action_count": 393,
+      "weighted_bp_action_count": 174.86769687500026,
+      "nearest_hero_ids": [
+        142,
+        127,
+        179,
+        558,
+        182
+      ]
+    },
+    {
+      "hero_id": 111,
+      "hero_name": "孙尚香",
+      "x": -0.02513948269188404,
+      "y": 0.23039206862449646,
+      "primary_lane": "farm",
+      "damage_types": [
+        "physical"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_slow",
+        "mechanic__damage_amplification",
+        "mechanic__damage_physical",
+        "mechanic__debuff_armor",
+        "mechanic__mobility_speed_boost",
+        "mechanic__utility_cooldown_reduction",
+        "mechanic__utility_mark",
+        "mechanic__utility_range_extension",
+        "condition__channel_or_charge",
+        "condition__directional",
+        "condition__proximity",
+        "condition__requires_mark"
+      ],
+      "pick_count": 269,
+      "ban_count": 62,
+      "bp_action_count": 331,
+      "weighted_bp_action_count": 117.06029375000033,
+      "nearest_hero_ids": [
+        173,
+        199,
+        155,
+        584,
+        550
+      ]
+    },
+    {
+      "hero_id": 112,
+      "hero_name": "鲁班七号",
+      "x": -0.17853526771068573,
+      "y": -0.022448578849434853,
+      "primary_lane": "farm",
+      "damage_types": [
+        "physical"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_knockback",
+        "mechanic__control_slow",
+        "mechanic__damage_amplification",
+        "mechanic__damage_magic",
+        "mechanic__damage_physical",
+        "mechanic__utility_basic_attack_enhancement",
+        "mechanic__utility_summon",
+        "mechanic__utility_vision",
+        "mechanic__utility_zone",
+        "condition__directional",
+        "condition__proximity"
+      ],
+      "pick_count": 129,
+      "ban_count": 53,
+      "bp_action_count": 182,
+      "weighted_bp_action_count": 60.97645625000003,
+      "nearest_hero_ids": [
+        584,
+        173,
+        174,
+        133,
+        176
+      ]
+    },
+    {
+      "hero_id": 113,
+      "hero_name": "庄周",
+      "x": -0.16068518161773682,
+      "y": 0.469884991645813,
+      "primary_lane": "roam",
+      "damage_types": [
+        "magic"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_slow",
+        "mechanic__damage_amplification",
+        "mechanic__damage_magic",
+        "mechanic__defense_cleanse",
+        "mechanic__defense_control_immunity",
+        "mechanic__defense_shield",
+        "mechanic__mobility_speed_boost",
+        "mechanic__sustain_heal",
+        "mechanic__utility_zone",
+        "condition__ally_targeted",
+        "condition__directional",
+        "condition__proximity"
+      ],
+      "pick_count": 40,
+      "ban_count": 39,
+      "bp_action_count": 79,
+      "weighted_bp_action_count": 38.92555937499998,
+      "nearest_hero_ids": [
+        108,
+        187,
+        118,
+        544,
+        169
+      ]
+    },
+    {
+      "hero_id": 114,
+      "hero_name": "刘禅",
+      "x": -0.7526047229766846,
+      "y": 0.11227409541606903,
+      "primary_lane": "roam",
+      "damage_types": [
+        "physical"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_knockup",
+        "mechanic__control_slow",
+        "mechanic__control_stun",
+        "mechanic__damage_physical",
+        "mechanic__defense_shield",
+        "mechanic__mobility_dash",
+        "mechanic__sustain_heal",
+        "mechanic__utility_basic_attack_enhancement",
+        "mechanic__utility_structure_interaction",
+        "condition__directional",
+        "condition__proximity"
+      ],
+      "pick_count": 2,
+      "ban_count": 0,
+      "bp_action_count": 2,
+      "weighted_bp_action_count": 1.17850625,
+      "nearest_hero_ids": [
+        529,
+        115,
+        109,
+        154,
+        540
+      ]
+    },
+    {
+      "hero_id": 115,
+      "hero_name": "高渐离",
+      "x": -0.7603186368942261,
+      "y": 0.08213023096323013,
+      "primary_lane": "mid",
+      "damage_types": [
+        "magic"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_slow",
+        "mechanic__damage_amplification",
+        "mechanic__damage_magic",
+        "mechanic__mobility_dash",
+        "mechanic__mobility_speed_boost",
+        "mechanic__sustain_heal",
+        "mechanic__utility_basic_attack_enhancement",
+        "condition__directional",
+        "condition__proximity"
+      ],
+      "pick_count": 2,
+      "ban_count": 0,
+      "bp_action_count": 2,
+      "weighted_bp_action_count": 0.44626562500000005,
+      "nearest_hero_ids": [
+        109,
+        529,
+        513,
+        129,
+        524
+      ]
+    },
+    {
+      "hero_id": 116,
+      "hero_name": "阿轲",
+      "x": -1.311387062072754,
+      "y": 0.3129117786884308,
+      "primary_lane": "jungle",
+      "damage_types": [
+        "physical"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__buff_attack_speed",
+        "mechanic__control_slow",
+        "mechanic__damage_amplification",
+        "mechanic__damage_physical",
+        "mechanic__mobility_dash",
+        "mechanic__mobility_speed_boost",
+        "mechanic__sustain_heal",
+        "mechanic__utility_cooldown_reduction",
+        "mechanic__utility_mark",
+        "mechanic__utility_skill_refresh",
+        "mechanic__utility_stealth",
+        "condition__back_attack",
+        "condition__directional",
+        "condition__front_attack_penalty",
+        "condition__on_kill_or_assist",
+        "condition__proximity",
+        "condition__requires_mark"
+      ],
+      "pick_count": 0,
+      "ban_count": 1,
+      "bp_action_count": 1,
+      "weighted_bp_action_count": 0.274625,
+      "nearest_hero_ids": [
+        129,
+        117,
+        154,
+        195,
+        513
+      ]
+    },
+    {
+      "hero_id": 117,
+      "hero_name": "钟无艳",
+      "x": -0.9490272998809814,
+      "y": 0.22878476977348328,
+      "primary_lane": "clash",
+      "damage_types": [
+        "physical"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_petrify",
+        "mechanic__control_slow",
+        "mechanic__damage_amplification",
+        "mechanic__damage_physical",
+        "mechanic__defense_shield",
+        "mechanic__mobility_dash",
+        "mechanic__mobility_speed_boost",
+        "mechanic__utility_basic_attack_enhancement",
+        "condition__proximity"
+      ],
+      "pick_count": 0,
+      "ban_count": 1,
+      "bp_action_count": 1,
+      "weighted_bp_action_count": 0.274625,
+      "nearest_hero_ids": [
+        129,
+        513,
+        154,
+        116,
+        195
+      ]
+    },
+    {
+      "hero_id": 118,
+      "hero_name": "孙膑",
+      "x": -0.4295826554298401,
+      "y": 0.40524807572364807,
+      "primary_lane": "roam",
+      "damage_types": [
+        "magic"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_silence",
+        "mechanic__control_slow",
+        "mechanic__damage_magic",
+        "mechanic__mobility_speed_boost",
+        "mechanic__support_damage_rewind",
+        "mechanic__utility_cooldown_reduction",
+        "condition__ally_targeted",
+        "condition__channel_or_charge",
+        "condition__proximity"
+      ],
+      "pick_count": 26,
+      "ban_count": 12,
+      "bp_action_count": 38,
+      "weighted_bp_action_count": 21.19814375,
+      "nearest_hero_ids": [
+        534,
+        184,
+        188,
+        501,
+        191
+      ]
+    },
+    {
+      "hero_id": 119,
+      "hero_name": "扁鹊",
+      "x": -0.6334263682365417,
+      "y": -0.030114533379673958,
+      "primary_lane": "mid",
+      "damage_types": [
+        "magic"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_knockup",
+        "mechanic__control_slow",
+        "mechanic__damage_amplification",
+        "mechanic__damage_execute",
+        "mechanic__damage_magic",
+        "mechanic__defense_revive",
+        "mechanic__support_ally_heal",
+        "mechanic__sustain_heal",
+        "mechanic__utility_mark",
+        "condition__ally_targeted",
+        "condition__low_health_condition",
+        "condition__proximity",
+        "condition__requires_mark"
+      ],
+      "pick_count": 2,
+      "ban_count": 5,
+      "bp_action_count": 7,
+      "weighted_bp_action_count": 2.56563125,
+      "nearest_hero_ids": [
+        195,
+        513,
+        524,
+        144,
+        174
+      ]
+    },
+    {
+      "hero_id": 120,
+      "hero_name": "白起",
+      "x": 0.4607600271701813,
+      "y": -0.25756245851516724,
+      "primary_lane": "clash",
+      "damage_types": [
+        "physical"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_pull",
+        "mechanic__control_slow",
+        "mechanic__control_taunt",
+        "mechanic__damage_amplification",
+        "mechanic__damage_magic",
+        "mechanic__damage_physical",
+        "mechanic__mobility_speed_boost",
+        "mechanic__sustain_heal",
+        "mechanic__utility_summon",
+        "condition__channel_or_charge",
+        "condition__proximity"
+      ],
+      "pick_count": 97,
+      "ban_count": 138,
+      "bp_action_count": 235,
+      "weighted_bp_action_count": 167.95074062499998,
+      "nearest_hero_ids": [
+        527,
+        140,
+        134,
+        503,
+        558
+      ]
+    },
+    {
+      "hero_id": 121,
+      "hero_name": "芈月",
+      "x": 0.2020595818758011,
+      "y": -0.4083145558834076,
+      "primary_lane": "unknown",
+      "damage_types": [],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_slow",
+        "mechanic__damage_amplification",
+        "mechanic__damage_magic",
+        "mechanic__defense_cleanse",
+        "mechanic__defense_untargetable",
+        "mechanic__mobility_speed_boost",
+        "mechanic__sustain_heal",
+        "mechanic__utility_summon",
+        "condition__proximity"
+      ],
+      "pick_count": 46,
+      "ban_count": 74,
+      "bp_action_count": 120,
+      "weighted_bp_action_count": 96.90137499999997,
+      "nearest_hero_ids": [
+        537,
+        110,
+        142,
+        123,
+        180
+      ]
+    },
+    {
+      "hero_id": 123,
+      "hero_name": "吕布",
+      "x": -0.15301139652729034,
+      "y": -0.4688580334186554,
+      "primary_lane": "clash",
+      "damage_types": [
+        "physical",
+        "true"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__buff_defense",
+        "mechanic__control_knockup",
+        "mechanic__control_slow",
+        "mechanic__damage_physical",
+        "mechanic__damage_true",
+        "mechanic__defense_shield",
+        "mechanic__sustain_heal",
+        "condition__proximity"
+      ],
+      "pick_count": 54,
+      "ban_count": 60,
+      "bp_action_count": 114,
+      "weighted_bp_action_count": 63.49769999999997,
+      "nearest_hero_ids": [
+        514,
+        507,
+        170,
+        584,
+        121
+      ]
+    },
+    {
+      "hero_id": 125,
+      "hero_name": "元歌",
+      "x": -0.3677489459514618,
+      "y": -0.076478973031044,
+      "primary_lane": "unknown",
+      "damage_types": [],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_knockup",
+        "mechanic__control_slow",
+        "mechanic__control_stun",
+        "mechanic__damage_amplification",
+        "mechanic__damage_physical",
+        "mechanic__defense_cleanse",
+        "mechanic__defense_shield",
+        "mechanic__sustain_heal",
+        "mechanic__utility_clone_or_mimic",
+        "mechanic__utility_summon",
+        "mechanic__utility_vision",
+        "condition__delayed_effect",
+        "condition__proximity"
+      ],
+      "pick_count": 16,
+      "ban_count": 11,
+      "bp_action_count": 27,
+      "weighted_bp_action_count": 9.434343750000002,
+      "nearest_hero_ids": [
+        510,
+        529,
+        134,
+        564,
+        501
+      ]
+    },
+    {
+      "hero_id": 126,
+      "hero_name": "夏侯惇",
+      "x": 0.5915546417236328,
+      "y": -0.2536102533340454,
+      "primary_lane": "clash",
+      "damage_types": [
+        "physical",
+        "true"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_knockup",
+        "mechanic__control_pull",
+        "mechanic__control_stun",
+        "mechanic__damage_amplification",
+        "mechanic__damage_magic",
+        "mechanic__damage_physical",
+        "mechanic__damage_true",
+        "mechanic__defense_shield",
+        "mechanic__sustain_heal",
+        "mechanic__utility_basic_attack_enhancement",
+        "mechanic__utility_cooldown_reduction",
+        "condition__directional",
+        "condition__low_health_condition",
+        "condition__proximity"
+      ],
+      "pick_count": 290,
+      "ban_count": 164,
+      "bp_action_count": 454,
+      "weighted_bp_action_count": 271.52636562500027,
+      "nearest_hero_ids": [
+        511,
+        502,
+        193,
+        581,
+        517
+      ]
+    },
+    {
+      "hero_id": 127,
+      "hero_name": "甄姬",
+      "x": 0.17757949233055115,
+      "y": -0.23391854763031006,
+      "primary_lane": "mid",
+      "damage_types": [
+        "magic"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_freeze",
+        "mechanic__control_knockback",
+        "mechanic__control_knockup",
+        "mechanic__control_slow",
+        "mechanic__damage_magic",
+        "mechanic__defense_invulnerable",
+        "mechanic__utility_mark",
+        "mechanic__utility_summon",
+        "mechanic__utility_zone",
+        "condition__channel_or_charge",
+        "condition__delayed_effect",
+        "condition__directional",
+        "condition__proximity",
+        "condition__requires_mark",
+        "condition__water_or_river"
+      ],
+      "pick_count": 168,
+      "ban_count": 187,
+      "bp_action_count": 355,
+      "weighted_bp_action_count": 111.03463125000009,
+      "nearest_hero_ids": [
+        182,
+        179,
+        563,
+        110,
+        523
+      ]
+    },
+    {
+      "hero_id": 128,
+      "hero_name": "曹操",
+      "x": 0.6500566601753235,
+      "y": -0.17915236949920654,
+      "primary_lane": "clash",
+      "damage_types": [
+        "physical"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__buff_attack_speed",
+        "mechanic__control_knockup",
+        "mechanic__damage_amplification",
+        "mechanic__damage_physical",
+        "mechanic__defense_cleanse",
+        "mechanic__sustain_heal",
+        "mechanic__utility_basic_attack_enhancement",
+        "mechanic__utility_cooldown_reduction",
+        "condition__proximity"
+      ],
+      "pick_count": 441,
+      "ban_count": 268,
+      "bp_action_count": 709,
+      "weighted_bp_action_count": 350.930471875001,
+      "nearest_hero_ids": [
+        558,
+        537,
+        503,
+        536,
+        140
+      ]
+    },
+    {
+      "hero_id": 129,
+      "hero_name": "典韦",
+      "x": -0.9323084950447083,
+      "y": -0.03089195489883423,
+      "primary_lane": "jungle",
+      "damage_types": [
+        "physical",
+        "true"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__buff_attack_power",
+        "mechanic__buff_attack_speed",
+        "mechanic__damage_physical",
+        "mechanic__damage_true",
+        "mechanic__mobility_dash",
+        "mechanic__mobility_speed_boost",
+        "mechanic__sustain_heal",
+        "mechanic__sustain_lifesteal",
+        "mechanic__utility_basic_attack_enhancement",
+        "condition__proximity"
+      ],
+      "pick_count": 1,
+      "ban_count": 0,
+      "bp_action_count": 1,
+      "weighted_bp_action_count": 0.17850625000000003,
+      "nearest_hero_ids": [
+        513,
+        154,
+        117,
+        524,
+        195
+      ]
+    },
+    {
+      "hero_id": 130,
+      "hero_name": "宫本武藏",
+      "x": 0.2997492849826813,
+      "y": -0.5360369086265564,
+      "primary_lane": "unknown",
+      "damage_types": [],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_knockup",
+        "mechanic__control_slow",
+        "mechanic__damage_amplification",
+        "mechanic__damage_physical",
+        "mechanic__defense_control_immunity",
+        "mechanic__defense_damage_reduction",
+        "mechanic__defense_projectile_block",
+        "mechanic__defense_shield",
+        "mechanic__mobility_dash",
+        "mechanic__utility_basic_attack_enhancement",
+        "mechanic__utility_cooldown_reduction",
+        "condition__delayed_effect",
+        "condition__proximity"
+      ],
+      "pick_count": 52,
+      "ban_count": 133,
+      "bp_action_count": 185,
+      "weighted_bp_action_count": 80.26172812499998,
+      "nearest_hero_ids": [
+        542,
+        531,
+        538,
+        163,
+        523
+      ]
+    },
+    {
+      "hero_id": 131,
+      "hero_name": "李白",
+      "x": -1.1361569166183472,
+      "y": -0.19935984909534454,
+      "primary_lane": "jungle",
+      "damage_types": [
+        "physical"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__buff_attack_power",
+        "mechanic__control_stun",
+        "mechanic__damage_physical",
+        "mechanic__defense_cleanse",
+        "mechanic__mobility_dash",
+        "condition__directional",
+        "condition__proximity"
+      ],
+      "pick_count": 1,
+      "ban_count": 0,
+      "bp_action_count": 1,
+      "weighted_bp_action_count": 0.63375,
+      "nearest_hero_ids": [
+        154,
+        129,
+        195,
+        513,
+        170
+      ]
+    },
+    {
+      "hero_id": 132,
+      "hero_name": "马可波罗",
+      "x": -0.9106773138046265,
+      "y": -0.3594594895839691,
+      "primary_lane": "farm",
+      "damage_types": [
+        "physical",
+        "true"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__buff_attack_speed",
+        "mechanic__damage_physical",
+        "mechanic__damage_true",
+        "mechanic__mobility_speed_boost",
+        "mechanic__mobility_teleport",
+        "mechanic__sustain_mana_restore",
+        "condition__directional",
+        "condition__proximity"
+      ],
+      "pick_count": 11,
+      "ban_count": 2,
+      "bp_action_count": 13,
+      "weighted_bp_action_count": 4.475321875000001,
+      "nearest_hero_ids": [
+        129,
+        508,
+        513,
+        154,
+        524
+      ]
+    },
+    {
+      "hero_id": 133,
+      "hero_name": "狄仁杰",
+      "x": 0.16982018947601318,
+      "y": 0.1716417372226715,
+      "primary_lane": "farm",
+      "damage_types": [
+        "physical",
+        "magic"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__buff_attack_speed",
+        "mechanic__control_stun",
+        "mechanic__damage_magic",
+        "mechanic__damage_physical",
+        "mechanic__debuff_magic_defense",
+        "mechanic__defense_cleanse",
+        "mechanic__defense_invulnerable",
+        "mechanic__mobility_speed_boost",
+        "mechanic__utility_vision",
+        "condition__ally_targeted"
+      ],
+      "pick_count": 235,
+      "ban_count": 152,
+      "bp_action_count": 387,
+      "weighted_bp_action_count": 178.77568125000025,
+      "nearest_hero_ids": [
+        112,
+        173,
+        519,
+        172,
+        140
+      ]
+    },
+    {
+      "hero_id": 134,
+      "hero_name": "达摩",
+      "x": 0.0028457154985517263,
+      "y": -0.4316593408584595,
+      "primary_lane": "clash",
+      "damage_types": [
+        "physical"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__buff_defense",
+        "mechanic__control_knockback",
+        "mechanic__control_knockup",
+        "mechanic__control_slow",
+        "mechanic__control_stun",
+        "mechanic__damage_amplification",
+        "mechanic__damage_physical",
+        "mechanic__mobility_dash",
+        "mechanic__sustain_heal",
+        "mechanic__utility_basic_attack_enhancement",
+        "condition__directional",
+        "condition__proximity"
+      ],
+      "pick_count": 164,
+      "ban_count": 81,
+      "bp_action_count": 245,
+      "weighted_bp_action_count": 109.07515000000004,
+      "nearest_hero_ids": [
+        558,
+        510,
+        527,
+        564,
+        197
+      ]
+    },
+    {
+      "hero_id": 135,
+      "hero_name": "项羽",
+      "x": -0.28012436628341675,
+      "y": -0.44115743041038513,
+      "primary_lane": "unknown",
+      "damage_types": [],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_knockback",
+        "mechanic__control_knockup",
+        "mechanic__control_slow",
+        "mechanic__control_stun",
+        "mechanic__damage_amplification",
+        "mechanic__damage_execute",
+        "mechanic__damage_magic",
+        "mechanic__damage_physical",
+        "mechanic__defense_control_immunity",
+        "mechanic__defense_death_prevention",
+        "mechanic__mobility_dash",
+        "mechanic__sustain_heal",
+        "mechanic__utility_basic_attack_enhancement",
+        "mechanic__utility_zone",
+        "condition__channel_or_charge",
+        "condition__low_health_condition",
+        "condition__proximity"
+      ],
+      "pick_count": 31,
+      "ban_count": 9,
+      "bp_action_count": 40,
+      "weighted_bp_action_count": 38.39625,
+      "nearest_hero_ids": [
+        144,
+        197,
+        511,
+        524,
+        583
+      ]
+    },
+    {
+      "hero_id": 136,
+      "hero_name": "武则天",
+      "x": 0.8641166090965271,
+      "y": -0.10030097514390945,
+      "primary_lane": "mid",
+      "damage_types": [
+        "magic"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_knockback",
+        "mechanic__control_knockup",
+        "mechanic__control_stun",
+        "mechanic__damage_amplification",
+        "mechanic__damage_magic",
+        "mechanic__mobility_speed_boost",
+        "mechanic__sustain_mana_restore",
+        "mechanic__utility_summon",
+        "mechanic__utility_vision",
+        "mechanic__utility_zone",
+        "condition__directional",
+        "condition__proximity"
+      ],
+      "pick_count": 251,
+      "ban_count": 140,
+      "bp_action_count": 391,
+      "weighted_bp_action_count": 324.1311718750002,
+      "nearest_hero_ids": [
+        106,
+        142,
+        312,
+        179,
+        120
+      ]
+    },
+    {
+      "hero_id": 139,
+      "hero_name": "老夫子",
+      "x": 0.16230332851409912,
+      "y": -0.1926058828830719,
+      "primary_lane": "clash",
+      "damage_types": [
+        "physical",
+        "true"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_slow",
+        "mechanic__damage_physical",
+        "mechanic__damage_true",
+        "mechanic__defense_damage_reflect",
+        "mechanic__mobility_dash",
+        "mechanic__mobility_speed_boost",
+        "mechanic__utility_cooldown_reduction",
+        "condition__directional"
+      ],
+      "pick_count": 66,
+      "ban_count": 128,
+      "bp_action_count": 194,
+      "weighted_bp_action_count": 88.75213437500001,
+      "nearest_hero_ids": [
+        558,
+        191,
+        125,
+        537,
+        134
+      ]
+    },
+    {
+      "hero_id": 140,
+      "hero_name": "关羽",
+      "x": 0.8243642449378967,
+      "y": -0.13768036663532257,
+      "primary_lane": "clash",
+      "damage_types": [
+        "physical"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_knockback",
+        "mechanic__damage_amplification",
+        "mechanic__damage_physical",
+        "mechanic__defense_cleanse",
+        "mechanic__mobility_dash",
+        "mechanic__mobility_speed_boost",
+        "mechanic__utility_summon",
+        "condition__proximity"
+      ],
+      "pick_count": 369,
+      "ban_count": 857,
+      "bp_action_count": 1226,
+      "weighted_bp_action_count": 630.1091468750009,
+      "nearest_hero_ids": [
+        537,
+        531,
+        527,
+        503,
+        172
+      ]
+    },
+    {
+      "hero_id": 141,
+      "hero_name": "貂蝉",
+      "x": -0.9128420948982239,
+      "y": -0.07304096221923828,
+      "primary_lane": "mid",
+      "damage_types": [
+        "magic",
+        "true"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__damage_magic",
+        "mechanic__damage_true",
+        "mechanic__mobility_teleport",
+        "mechanic__sustain_heal",
+        "mechanic__utility_cooldown_reduction",
+        "mechanic__utility_mark",
+        "mechanic__utility_zone",
+        "condition__proximity",
+        "condition__recast",
+        "condition__requires_mark"
+      ],
+      "pick_count": 3,
+      "ban_count": 0,
+      "bp_action_count": 3,
+      "weighted_bp_action_count": 1.01294375,
+      "nearest_hero_ids": [
+        513,
+        109,
+        524,
+        154,
+        115
+      ]
+    },
+    {
+      "hero_id": 142,
+      "hero_name": "安琪拉",
+      "x": 0.3001604974269867,
+      "y": -0.220305934548378,
+      "primary_lane": "mid",
+      "damage_types": [
+        "magic"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__buff_attack_power",
+        "mechanic__control_stun",
+        "mechanic__damage_amplification",
+        "mechanic__damage_magic",
+        "mechanic__defense_shield",
+        "mechanic__mobility_speed_boost",
+        "mechanic__utility_summon",
+        "condition__channel_or_charge",
+        "condition__directional",
+        "condition__proximity",
+        "condition__recast"
+      ],
+      "pick_count": 219,
+      "ban_count": 130,
+      "bp_action_count": 349,
+      "weighted_bp_action_count": 239.9667437500001,
+      "nearest_hero_ids": [
+        110,
+        106,
+        148,
+        121,
+        136
+      ]
+    },
+    {
+      "hero_id": 144,
+      "hero_name": "程咬金",
+      "x": -0.7110385894775391,
+      "y": -0.20353056490421295,
+      "primary_lane": "clash",
+      "damage_types": [
+        "physical"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__buff_attack_power",
+        "mechanic__control_knockup",
+        "mechanic__damage_physical",
+        "mechanic__mobility_speed_boost",
+        "mechanic__sustain_heal",
+        "condition__proximity",
+        "condition__recast"
+      ],
+      "pick_count": 1,
+      "ban_count": 0,
+      "bp_action_count": 1,
+      "weighted_bp_action_count": 0.65,
+      "nearest_hero_ids": [
+        524,
+        149,
+        129,
+        114,
+        190
+      ]
+    },
+    {
+      "hero_id": 146,
+      "hero_name": "露娜",
+      "x": -0.39054685831069946,
+      "y": -0.3314216136932373,
+      "primary_lane": "unknown",
+      "damage_types": [],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__buff_attack_speed",
+        "mechanic__control_pull",
+        "mechanic__control_slow",
+        "mechanic__control_stun",
+        "mechanic__damage_amplification",
+        "mechanic__damage_magic",
+        "mechanic__defense_shield",
+        "mechanic__mobility_dash",
+        "mechanic__utility_mark",
+        "mechanic__utility_transformation",
+        "condition__directional",
+        "condition__proximity",
+        "condition__requires_mark"
+      ],
+      "pick_count": 16,
+      "ban_count": 12,
+      "bp_action_count": 28,
+      "weighted_bp_action_count": 12.433859375,
+      "nearest_hero_ids": [
+        150,
+        522,
+        162,
+        542,
+        528
+      ]
+    },
+    {
+      "hero_id": 148,
+      "hero_name": "姜子牙",
+      "x": -0.07484520226716995,
+      "y": -0.23443526029586792,
+      "primary_lane": "mid",
+      "damage_types": [
+        "magic"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__buff_attack_power",
+        "mechanic__control_knockup",
+        "mechanic__damage_magic",
+        "mechanic__debuff_magic_defense",
+        "mechanic__utility_transformation",
+        "mechanic__utility_zone",
+        "condition__ally_targeted",
+        "condition__channel_or_charge",
+        "condition__delayed_effect",
+        "condition__directional",
+        "condition__proximity",
+        "condition__recast"
+      ],
+      "pick_count": 112,
+      "ban_count": 36,
+      "bp_action_count": 148,
+      "weighted_bp_action_count": 82.20158749999996,
+      "nearest_hero_ids": [
+        142,
+        182,
+        127,
+        110,
+        149
+      ]
+    },
+    {
+      "hero_id": 149,
+      "hero_name": "刘邦",
+      "x": -0.6521170735359192,
+      "y": -0.2189369946718216,
+      "primary_lane": "roam",
+      "damage_types": [
+        "magic",
+        "physical"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_stun",
+        "mechanic__damage_amplification",
+        "mechanic__damage_magic",
+        "mechanic__defense_shield",
+        "mechanic__mobility_dash",
+        "mechanic__mobility_speed_boost",
+        "mechanic__mobility_teleport",
+        "mechanic__support_ally_heal",
+        "mechanic__support_ally_reposition",
+        "mechanic__sustain_heal",
+        "mechanic__utility_basic_attack_enhancement",
+        "mechanic__utility_mark",
+        "condition__ally_targeted",
+        "condition__channel_or_charge",
+        "condition__requires_mark"
+      ],
+      "pick_count": 10,
+      "ban_count": 1,
+      "bp_action_count": 11,
+      "weighted_bp_action_count": 4.8891375,
+      "nearest_hero_ids": [
+        144,
+        115,
+        114,
+        524,
+        529
+      ]
+    },
+    {
+      "hero_id": 150,
+      "hero_name": "韩信",
+      "x": -0.5359996557235718,
+      "y": -0.17229540646076202,
+      "primary_lane": "jungle",
+      "damage_types": [
+        "physical"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_knockup",
+        "mechanic__damage_amplification",
+        "mechanic__damage_physical",
+        "mechanic__defense_control_immunity",
+        "mechanic__defense_damage_reduction",
+        "mechanic__mobility_dash",
+        "mechanic__sustain_lifesteal",
+        "mechanic__utility_basic_attack_enhancement",
+        "condition__directional",
+        "condition__proximity"
+      ],
+      "pick_count": 4,
+      "ban_count": 0,
+      "bp_action_count": 4,
+      "weighted_bp_action_count": 1.90125,
+      "nearest_hero_ids": [
+        522,
+        109,
+        513,
+        524,
+        146
+      ]
+    },
+    {
+      "hero_id": 151,
+      "hero_name": "孙权",
+      "x": 0.31798267364501953,
+      "y": -0.2434915453195572,
+      "primary_lane": "unknown",
+      "damage_types": [],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__buff_attack_speed",
+        "mechanic__control_slow",
+        "mechanic__damage_physical",
+        "mechanic__sustain_mana_restore",
+        "mechanic__utility_mark",
+        "condition__proximity",
+        "condition__requires_mark"
+      ],
+      "pick_count": 132,
+      "ban_count": 52,
+      "bp_action_count": 184,
+      "weighted_bp_action_count": 136.83236249999996,
+      "nearest_hero_ids": [
+        172,
+        548,
+        199,
+        121,
+        584
+      ]
+    },
+    {
+      "hero_id": 152,
+      "hero_name": "王昭君",
+      "x": 0.42142027616500854,
+      "y": 0.17798809707164764,
+      "primary_lane": "mid",
+      "damage_types": [
+        "magic"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__buff_attack_power",
+        "mechanic__control_freeze",
+        "mechanic__damage_magic",
+        "mechanic__damage_physical",
+        "mechanic__debuff_shield_break",
+        "mechanic__defense_shield",
+        "mechanic__utility_basic_attack_enhancement",
+        "mechanic__utility_summon",
+        "mechanic__utility_zone",
+        "condition__delayed_effect",
+        "condition__proximity"
+      ],
+      "pick_count": 172,
+      "ban_count": 73,
+      "bp_action_count": 245,
+      "weighted_bp_action_count": 129.419503125,
+      "nearest_hero_ids": [
+        106,
+        136,
+        140,
+        179,
+        197
+      ]
+    },
+    {
+      "hero_id": 153,
+      "hero_name": "兰陵王",
+      "x": -0.768216609954834,
+      "y": -0.3212922215461731,
+      "primary_lane": "jungle",
+      "damage_types": [
+        "physical"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__buff_attack_speed",
+        "mechanic__control_stun",
+        "mechanic__damage_physical",
+        "mechanic__mobility_dash",
+        "mechanic__mobility_speed_boost",
+        "mechanic__sustain_heal",
+        "mechanic__utility_mark",
+        "mechanic__utility_stealth",
+        "mechanic__utility_summon",
+        "condition__directional",
+        "condition__proximity",
+        "condition__requires_mark"
+      ],
+      "pick_count": 5,
+      "ban_count": 4,
+      "bp_action_count": 9,
+      "weighted_bp_action_count": 1.9635687500000005,
+      "nearest_hero_ids": [
+        514,
+        510,
+        513,
+        154,
+        129
+      ]
+    },
+    {
+      "hero_id": 154,
+      "hero_name": "花木兰",
+      "x": -1.1048134565353394,
+      "y": -6.720029341522604e-05,
+      "primary_lane": "clash",
+      "damage_types": [
+        "physical"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__buff_attack_power",
+        "mechanic__control_silence",
+        "mechanic__control_slow",
+        "mechanic__damage_amplification",
+        "mechanic__damage_physical",
+        "mechanic__defense_control_immunity",
+        "mechanic__mobility_dash",
+        "mechanic__sustain_heal",
+        "mechanic__utility_cooldown_reduction",
+        "mechanic__utility_mark",
+        "mechanic__utility_transformation",
+        "condition__directional",
+        "condition__proximity",
+        "condition__requires_mark"
+      ],
+      "pick_count": 0,
+      "ban_count": 0,
+      "bp_action_count": 0,
+      "weighted_bp_action_count": 0.0,
+      "nearest_hero_ids": [
+        513,
+        129,
+        195,
+        524,
+        117
+      ]
+    },
+    {
+      "hero_id": 155,
+      "hero_name": "艾琳",
+      "x": 0.4019318222999573,
+      "y": -0.23267550766468048,
+      "primary_lane": "farm",
+      "damage_types": [
+        "magic",
+        "physical"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_slow",
+        "mechanic__damage_magic",
+        "mechanic__damage_physical",
+        "mechanic__mobility_speed_boost",
+        "mechanic__sustain_lifesteal",
+        "mechanic__utility_basic_attack_enhancement",
+        "mechanic__utility_cooldown_reduction",
+        "mechanic__utility_mark",
+        "condition__proximity",
+        "condition__recast",
+        "condition__requires_mark"
+      ],
+      "pick_count": 327,
+      "ban_count": 105,
+      "bp_action_count": 432,
+      "weighted_bp_action_count": 255.78872500000026,
+      "nearest_hero_ids": [
+        172,
+        584,
+        548,
+        128,
+        199
+      ]
+    },
+    {
+      "hero_id": 156,
+      "hero_name": "张良",
+      "x": 0.21020004153251648,
+      "y": 0.9508044123649597,
+      "primary_lane": "mid",
+      "damage_types": [
+        "magic",
+        "true"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_slow",
+        "mechanic__control_stun",
+        "mechanic__control_suppress",
+        "mechanic__damage_amplification",
+        "mechanic__damage_magic",
+        "mechanic__damage_true",
+        "mechanic__mobility_speed_boost",
+        "mechanic__utility_summon",
+        "mechanic__utility_zone"
+      ],
+      "pick_count": 167,
+      "ban_count": 261,
+      "bp_action_count": 428,
+      "weighted_bp_action_count": 180.5780593750002,
+      "nearest_hero_ids": [
+        113,
+        125,
+        152,
+        550,
+        186
+      ]
+    },
+    {
+      "hero_id": 157,
+      "hero_name": "不知火舞",
+      "x": 0.7209030389785767,
+      "y": -0.15142613649368286,
+      "primary_lane": "mid",
+      "damage_types": [
+        "magic"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_knockback",
+        "mechanic__control_knockup",
+        "mechanic__control_slow",
+        "mechanic__damage_amplification",
+        "mechanic__damage_magic",
+        "mechanic__mobility_dash",
+        "mechanic__mobility_speed_boost",
+        "mechanic__sustain_mana_restore",
+        "mechanic__utility_basic_attack_enhancement",
+        "condition__distance_scaling"
+      ],
+      "pick_count": 323,
+      "ban_count": 491,
+      "bp_action_count": 814,
+      "weighted_bp_action_count": 366.0354875000014,
+      "nearest_hero_ids": [
+        515,
+        521,
+        312,
+        537,
+        517
+      ]
+    },
+    {
+      "hero_id": 159,
+      "hero_name": "朵莉亚",
+      "x": 0.14368601143360138,
+      "y": 0.6323217749595642,
+      "primary_lane": "roam",
+      "damage_types": [
+        "magic"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_knockback",
+        "mechanic__control_slow",
+        "mechanic__control_stun",
+        "mechanic__damage_magic",
+        "mechanic__support_ally_heal",
+        "mechanic__support_ally_skill_refresh",
+        "mechanic__sustain_heal",
+        "mechanic__sustain_mana_restore",
+        "mechanic__utility_cooldown_reduction",
+        "mechanic__utility_skill_refresh",
+        "mechanic__utility_terrain",
+        "mechanic__utility_transformation",
+        "condition__ally_targeted",
+        "condition__channel_or_charge",
+        "condition__on_kill_or_assist",
+        "condition__proximity",
+        "condition__water_or_river"
+      ],
+      "pick_count": 192,
+      "ban_count": 93,
+      "bp_action_count": 285,
+      "weighted_bp_action_count": 119.35962187500014,
+      "nearest_hero_ids": [
+        577,
+        584,
+        194,
+        108,
+        188
+      ]
+    },
+    {
+      "hero_id": 162,
+      "hero_name": "娜可露露",
+      "x": -0.018559932708740234,
+      "y": -0.33552178740501404,
+      "primary_lane": "jungle",
+      "damage_types": [
+        "physical"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__damage_amplification",
+        "mechanic__damage_percent_health",
+        "mechanic__damage_physical",
+        "mechanic__mobility_dash",
+        "mechanic__mobility_speed_boost",
+        "mechanic__sustain_heal",
+        "mechanic__sustain_mana_restore",
+        "mechanic__utility_basic_attack_enhancement",
+        "mechanic__utility_cooldown_reduction",
+        "mechanic__utility_mark",
+        "mechanic__utility_summon",
+        "condition__directional",
+        "condition__proximity",
+        "condition__recast",
+        "condition__requires_mark"
+      ],
+      "pick_count": 85,
+      "ban_count": 59,
+      "bp_action_count": 144,
+      "weighted_bp_action_count": 59.16269687499997,
+      "nearest_hero_ids": [
+        522,
+        542,
+        146,
+        538,
+        150
+      ]
+    },
+    {
+      "hero_id": 163,
+      "hero_name": "橘右京",
+      "x": 0.5268731713294983,
+      "y": -0.38105708360671997,
+      "primary_lane": "jungle",
+      "damage_types": [
+        "physical"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_slow",
+        "mechanic__control_stun",
+        "mechanic__damage_amplification",
+        "mechanic__damage_physical",
+        "mechanic__sustain_heal",
+        "mechanic__utility_basic_attack_enhancement",
+        "mechanic__utility_cooldown_reduction",
+        "condition__proximity",
+        "condition__recast"
+      ],
+      "pick_count": 239,
+      "ban_count": 228,
+      "bp_action_count": 467,
+      "weighted_bp_action_count": 288.16989375000026,
+      "nearest_hero_ids": [
+        542,
+        502,
+        538,
+        517,
+        193
+      ]
+    },
+    {
+      "hero_id": 168,
+      "hero_name": "牛魔",
+      "x": -0.6753190755844116,
+      "y": 0.5322937369346619,
+      "primary_lane": "roam",
+      "damage_types": [
+        "physical"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__buff_defense",
+        "mechanic__control_knockup",
+        "mechanic__damage_amplification",
+        "mechanic__damage_physical",
+        "mechanic__mobility_dash",
+        "mechanic__utility_mark",
+        "condition__ally_targeted",
+        "condition__channel_or_charge",
+        "condition__directional",
+        "condition__proximity",
+        "condition__requires_mark"
+      ],
+      "pick_count": 18,
+      "ban_count": 2,
+      "bp_action_count": 20,
+      "weighted_bp_action_count": 8.16583125,
+      "nearest_hero_ids": [
+        529,
+        114,
+        115,
+        189,
+        144
+      ]
+    },
+    {
+      "hero_id": 169,
+      "hero_name": "后羿",
+      "x": -0.027473127469420433,
+      "y": -0.22012759745121002,
+      "primary_lane": "farm",
+      "damage_types": [
+        "physical",
+        "magic"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__buff_attack_speed",
+        "mechanic__control_slow",
+        "mechanic__control_stun",
+        "mechanic__damage_magic",
+        "mechanic__damage_physical",
+        "mechanic__utility_vision",
+        "mechanic__utility_zone",
+        "condition__proximity"
+      ],
+      "pick_count": 78,
+      "ban_count": 144,
+      "bp_action_count": 222,
+      "weighted_bp_action_count": 94.28124062499998,
+      "nearest_hero_ids": [
+        196,
+        584,
+        130,
+        174,
+        510
+      ]
+    },
+    {
+      "hero_id": 170,
+      "hero_name": "刘备",
+      "x": -0.5200760364532471,
+      "y": -0.07504217326641083,
+      "primary_lane": "jungle",
+      "damage_types": [
+        "physical"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_knockback",
+        "mechanic__damage_physical",
+        "mechanic__defense_cleanse",
+        "mechanic__defense_shield",
+        "mechanic__utility_basic_attack_enhancement",
+        "mechanic__utility_cooldown_reduction"
+      ],
+      "pick_count": 0,
+      "ban_count": 1,
+      "bp_action_count": 1,
+      "weighted_bp_action_count": 1.0,
+      "nearest_hero_ids": [
+        195,
+        524,
+        513,
+        129,
+        522
+      ]
+    },
+    {
+      "hero_id": 171,
+      "hero_name": "张飞",
+      "x": 0.7545707821846008,
+      "y": 0.6895352602005005,
+      "primary_lane": "roam",
+      "damage_types": [
+        "physical"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_knockback",
+        "mechanic__control_stun",
+        "mechanic__damage_physical",
+        "mechanic__defense_control_immunity",
+        "mechanic__defense_invulnerable",
+        "mechanic__defense_shield",
+        "mechanic__mobility_speed_boost",
+        "mechanic__utility_mark",
+        "mechanic__utility_transformation",
+        "condition__ally_targeted",
+        "condition__proximity",
+        "condition__requires_mark"
+      ],
+      "pick_count": 403,
+      "ban_count": 191,
+      "bp_action_count": 594,
+      "weighted_bp_action_count": 344.7692906250008,
+      "nearest_hero_ids": [
+        194,
+        544,
+        503,
+        108,
+        577
+      ]
+    },
+    {
+      "hero_id": 172,
+      "hero_name": "蚩奼",
+      "x": 0.7557023763656616,
+      "y": -0.09247595071792603,
+      "primary_lane": "unknown",
+      "damage_types": [],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__buff_attack_speed",
+        "mechanic__control_knockback",
+        "mechanic__control_knockup",
+        "mechanic__damage_physical",
+        "mechanic__mobility_speed_boost",
+        "mechanic__sustain_heal",
+        "mechanic__sustain_lifesteal",
+        "mechanic__utility_cooldown_reduction",
+        "mechanic__utility_transformation",
+        "condition__directional"
+      ],
+      "pick_count": 295,
+      "ban_count": 225,
+      "bp_action_count": 520,
+      "weighted_bp_action_count": 307.263375000001,
+      "nearest_hero_ids": [
+        548,
+        537,
+        519,
+        140,
+        128
+      ]
+    },
+    {
+      "hero_id": 173,
+      "hero_name": "李元芳",
+      "x": -0.3048824667930603,
+      "y": -0.04402746632695198,
+      "primary_lane": "farm",
+      "damage_types": [
+        "physical",
+        "true"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__damage_amplification",
+        "mechanic__damage_physical",
+        "mechanic__utility_mark",
+        "mechanic__utility_vision",
+        "condition__proximity",
+        "condition__requires_mark"
+      ],
+      "pick_count": 19,
+      "ban_count": 3,
+      "bp_action_count": 22,
+      "weighted_bp_action_count": 14.936006250000002,
+      "nearest_hero_ids": [
+        174,
+        584,
+        132,
+        196,
+        195
+      ]
+    },
+    {
+      "hero_id": 174,
+      "hero_name": "虞姬",
+      "x": -0.07586737722158432,
+      "y": -0.0491325706243515,
+      "primary_lane": "farm",
+      "damage_types": [
+        "physical"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__buff_attack_speed",
+        "mechanic__control_slow",
+        "mechanic__control_stun",
+        "mechanic__damage_physical",
+        "mechanic__defense_control_immunity",
+        "mechanic__mobility_dash",
+        "condition__channel_or_charge"
+      ],
+      "pick_count": 93,
+      "ban_count": 43,
+      "bp_action_count": 136,
+      "weighted_bp_action_count": 106.45120937499996,
+      "nearest_hero_ids": [
+        196,
+        173,
+        584,
+        169,
+        119
+      ]
+    },
+    {
+      "hero_id": 175,
+      "hero_name": "钟馗",
+      "x": 0.15057699382305145,
+      "y": 1.0112954378128052,
+      "primary_lane": "mid",
+      "damage_types": [
+        "magic"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_stun",
+        "mechanic__damage_magic",
+        "mechanic__defense_shield",
+        "mechanic__utility_mark",
+        "condition__on_kill_or_assist",
+        "condition__proximity",
+        "condition__requires_mark"
+      ],
+      "pick_count": 85,
+      "ban_count": 112,
+      "bp_action_count": 197,
+      "weighted_bp_action_count": 191.132659375,
+      "nearest_hero_ids": [
+        544,
+        585,
+        195,
+        583,
+        140
+      ]
+    },
+    {
+      "hero_id": 176,
+      "hero_name": "杨玉环",
+      "x": 0.04173366352915764,
+      "y": 0.24834345281124115,
+      "primary_lane": "mid",
+      "damage_types": [
+        "magic"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_stun",
+        "mechanic__damage_magic",
+        "mechanic__defense_cleanse",
+        "mechanic__mobility_dash",
+        "mechanic__mobility_speed_boost",
+        "mechanic__sustain_heal",
+        "mechanic__utility_transformation",
+        "condition__ally_targeted",
+        "condition__proximity"
+      ],
+      "pick_count": 163,
+      "ban_count": 29,
+      "bp_action_count": 192,
+      "weighted_bp_action_count": 77.30532500000001,
+      "nearest_hero_ids": [
+        110,
+        515,
+        115,
+        157,
+        109
+      ]
+    },
+    {
+      "hero_id": 177,
+      "hero_name": "苍",
+      "x": 0.6042166352272034,
+      "y": 0.08170810341835022,
+      "primary_lane": "farm",
+      "damage_types": [
+        "physical"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_knockback",
+        "mechanic__control_slow",
+        "mechanic__damage_amplification",
+        "mechanic__damage_physical",
+        "mechanic__mobility_dash",
+        "mechanic__mobility_speed_boost",
+        "mechanic__utility_basic_attack_enhancement",
+        "mechanic__utility_stealth",
+        "mechanic__utility_summon",
+        "mechanic__utility_vision",
+        "condition__directional"
+      ],
+      "pick_count": 451,
+      "ban_count": 142,
+      "bp_action_count": 593,
+      "weighted_bp_action_count": 334.1287687500003,
+      "nearest_hero_ids": [
+        199,
+        584,
+        196,
+        548,
+        519
+      ]
+    },
+    {
+      "hero_id": 178,
+      "hero_name": "杨戬",
+      "x": 0.851707398891449,
+      "y": -0.21647076308727264,
+      "primary_lane": "clash",
+      "damage_types": [
+        "physical",
+        "true"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_knockback",
+        "mechanic__control_slow",
+        "mechanic__control_stun",
+        "mechanic__damage_physical",
+        "mechanic__damage_true",
+        "mechanic__defense_control_immunity",
+        "mechanic__mobility_dash",
+        "mechanic__sustain_heal",
+        "mechanic__utility_cooldown_reduction",
+        "mechanic__utility_mark",
+        "mechanic__utility_summon",
+        "mechanic__utility_vision",
+        "condition__proximity",
+        "condition__recast",
+        "condition__requires_mark"
+      ],
+      "pick_count": 362,
+      "ban_count": 466,
+      "bp_action_count": 828,
+      "weighted_bp_action_count": 409.66325312500067,
+      "nearest_hero_ids": [
+        193,
+        531,
+        581,
+        502,
+        511
+      ]
+    },
+    {
+      "hero_id": 179,
+      "hero_name": "女娲",
+      "x": 0.6619777679443359,
+      "y": -0.08325687050819397,
+      "primary_lane": "mid",
+      "damage_types": [
+        "magic"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_knockback",
+        "mechanic__control_slow",
+        "mechanic__damage_magic",
+        "mechanic__defense_shield",
+        "mechanic__mobility_speed_boost",
+        "mechanic__mobility_teleport",
+        "mechanic__utility_range_extension",
+        "mechanic__utility_vision",
+        "condition__proximity"
+      ],
+      "pick_count": 347,
+      "ban_count": 367,
+      "bp_action_count": 714,
+      "weighted_bp_action_count": 302.40371250000203,
+      "nearest_hero_ids": [
+        127,
+        563,
+        312,
+        110,
+        523
+      ]
+    },
+    {
+      "hero_id": 180,
+      "hero_name": "哪吒",
+      "x": 0.48381802439689636,
+      "y": -0.5045074224472046,
+      "primary_lane": "clash",
+      "damage_types": [
+        "physical",
+        "true"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_knockback",
+        "mechanic__damage_amplification",
+        "mechanic__damage_physical",
+        "mechanic__damage_true",
+        "mechanic__debuff_healing_reduction",
+        "mechanic__defense_shield",
+        "mechanic__defense_untargetable",
+        "mechanic__mobility_speed_boost",
+        "mechanic__utility_vision",
+        "condition__proximity",
+        "condition__single_target_bonus"
+      ],
+      "pick_count": 114,
+      "ban_count": 286,
+      "bp_action_count": 400,
+      "weighted_bp_action_count": 269.66165625000014,
+      "nearest_hero_ids": [
+        531,
+        538,
+        511,
+        163,
+        130
+      ]
+    },
+    {
+      "hero_id": 182,
+      "hero_name": "干将莫邪",
+      "x": -0.22272831201553345,
+      "y": -0.2578665614128113,
+      "primary_lane": "mid",
+      "damage_types": [
+        "magic"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_knockback",
+        "mechanic__control_knockup",
+        "mechanic__damage_magic",
+        "mechanic__utility_cooldown_reduction",
+        "condition__on_kill_or_assist"
+      ],
+      "pick_count": 57,
+      "ban_count": 36,
+      "bp_action_count": 93,
+      "weighted_bp_action_count": 25.384725,
+      "nearest_hero_ids": [
+        127,
+        110,
+        141,
+        564,
+        148
+      ]
+    },
+    {
+      "hero_id": 184,
+      "hero_name": "蔡文姬",
+      "x": -0.8604695200920105,
+      "y": 0.30608657002449036,
+      "primary_lane": "roam",
+      "damage_types": [
+        "magic"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_stun",
+        "mechanic__damage_amplification",
+        "mechanic__damage_magic",
+        "mechanic__mobility_speed_boost",
+        "mechanic__support_ally_heal",
+        "mechanic__sustain_heal",
+        "condition__ally_targeted",
+        "condition__proximity"
+      ],
+      "pick_count": 13,
+      "ban_count": 6,
+      "bp_action_count": 19,
+      "weighted_bp_action_count": 4.76474375,
+      "nearest_hero_ids": [
+        534,
+        117,
+        529,
+        501,
+        115
+      ]
+    },
+    {
+      "hero_id": 186,
+      "hero_name": "太乙真人",
+      "x": 0.11797186732292175,
+      "y": 0.9394232630729675,
+      "primary_lane": "roam",
+      "damage_types": [
+        "magic"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_pull",
+        "mechanic__control_stun",
+        "mechanic__damage_magic",
+        "mechanic__defense_revive",
+        "mechanic__defense_shield",
+        "mechanic__mobility_speed_boost",
+        "mechanic__utility_cooldown_reduction",
+        "mechanic__utility_gold_generation",
+        "mechanic__utility_skill_refresh",
+        "mechanic__utility_summon",
+        "condition__ally_targeted",
+        "condition__directional",
+        "condition__proximity"
+      ],
+      "pick_count": 385,
+      "ban_count": 169,
+      "bp_action_count": 554,
+      "weighted_bp_action_count": 231.24052500000053,
+      "nearest_hero_ids": [
+        550,
+        188,
+        501,
+        105,
+        577
+      ]
+    },
+    {
+      "hero_id": 187,
+      "hero_name": "东皇太一",
+      "x": -0.6859135627746582,
+      "y": 0.6282193660736084,
+      "primary_lane": "roam",
+      "damage_types": [
+        "magic"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__buff_attack_power",
+        "mechanic__control_slow",
+        "mechanic__control_stun",
+        "mechanic__control_suppress",
+        "mechanic__damage_amplification",
+        "mechanic__damage_magic",
+        "mechanic__mobility_speed_boost",
+        "mechanic__sustain_heal",
+        "mechanic__utility_cooldown_reduction",
+        "mechanic__utility_summon"
+      ],
+      "pick_count": 22,
+      "ban_count": 16,
+      "bp_action_count": 38,
+      "weighted_bp_action_count": 19.519996874999997,
+      "nearest_hero_ids": [
+        114,
+        105,
+        544,
+        189,
+        113
+      ]
+    },
+    {
+      "hero_id": 188,
+      "hero_name": "大禹",
+      "x": -0.051796261221170425,
+      "y": 0.6639630198478699,
+      "primary_lane": "unknown",
+      "damage_types": [],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_knockback",
+        "mechanic__control_knockup",
+        "mechanic__control_slow",
+        "mechanic__damage_amplification",
+        "mechanic__damage_physical",
+        "mechanic__defense_control_immunity",
+        "mechanic__mobility_teleport",
+        "mechanic__sustain_heal",
+        "mechanic__utility_basic_attack_enhancement",
+        "mechanic__utility_summon",
+        "mechanic__utility_transformation",
+        "mechanic__utility_zone",
+        "condition__ally_targeted",
+        "condition__directional",
+        "condition__distance_scaling"
+      ],
+      "pick_count": 59,
+      "ban_count": 12,
+      "bp_action_count": 71,
+      "weighted_bp_action_count": 48.92249999999997,
+      "nearest_hero_ids": [
+        118,
+        544,
+        577,
+        186,
+        534
+      ]
+    },
+    {
+      "hero_id": 189,
+      "hero_name": "鬼谷子",
+      "x": -0.7121731042861938,
+      "y": 0.4752565324306488,
+      "primary_lane": "roam",
+      "damage_types": [
+        "magic"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_slow",
+        "mechanic__control_stun",
+        "mechanic__damage_magic",
+        "mechanic__defense_shield",
+        "mechanic__mobility_speed_boost",
+        "mechanic__utility_basic_attack_enhancement",
+        "mechanic__utility_stealth",
+        "mechanic__utility_summon",
+        "mechanic__utility_vision",
+        "condition__ally_targeted",
+        "condition__proximity"
+      ],
+      "pick_count": 8,
+      "ban_count": 8,
+      "bp_action_count": 16,
+      "weighted_bp_action_count": 5.294940625000001,
+      "nearest_hero_ids": [
+        109,
+        114,
+        529,
+        501,
+        115
+      ]
+    },
+    {
+      "hero_id": 190,
+      "hero_name": "诸葛亮",
+      "x": -0.8329731225967407,
+      "y": 0.017709881067276,
+      "primary_lane": "mid",
+      "damage_types": [
+        "magic"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_knockup",
+        "mechanic__damage_amplification",
+        "mechanic__damage_magic",
+        "mechanic__mobility_teleport",
+        "mechanic__utility_cooldown_reduction",
+        "mechanic__utility_mark",
+        "mechanic__utility_summon",
+        "condition__channel_or_charge",
+        "condition__directional",
+        "condition__on_kill_or_assist",
+        "condition__proximity",
+        "condition__requires_mark",
+        "condition__single_target_bonus"
+      ],
+      "pick_count": 2,
+      "ban_count": 0,
+      "bp_action_count": 2,
+      "weighted_bp_action_count": 1.2675,
+      "nearest_hero_ids": [
+        129,
+        524,
+        115,
+        117,
+        154
+      ]
+    },
+    {
+      "hero_id": 191,
+      "hero_name": "大乔",
+      "x": 0.035781171172857285,
+      "y": 0.12156360596418381,
+      "primary_lane": "roam",
+      "damage_types": [
+        "magic"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_knockup",
+        "mechanic__control_slow",
+        "mechanic__damage_magic",
+        "mechanic__defense_shield",
+        "mechanic__mobility_speed_boost",
+        "mechanic__mobility_teleport",
+        "mechanic__support_ally_reposition",
+        "mechanic__utility_cooldown_reduction",
+        "mechanic__utility_mark",
+        "mechanic__utility_summon",
+        "mechanic__utility_zone",
+        "condition__ally_targeted",
+        "condition__channel_or_charge",
+        "condition__directional",
+        "condition__proximity",
+        "condition__recast",
+        "condition__requires_mark"
+      ],
+      "pick_count": 64,
+      "ban_count": 57,
+      "bp_action_count": 121,
+      "weighted_bp_action_count": 45.14651562499999,
+      "nearest_hero_ids": [
+        139,
+        558,
+        125,
+        118,
+        110
+      ]
+    },
+    {
+      "hero_id": 192,
+      "hero_name": "黄忠",
+      "x": -1.083904504776001,
+      "y": -0.227834090590477,
+      "primary_lane": "farm",
+      "damage_types": [
+        "physical"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__buff_defense",
+        "mechanic__control_knockback",
+        "mechanic__control_slow",
+        "mechanic__damage_amplification",
+        "mechanic__damage_physical",
+        "mechanic__defense_shield",
+        "mechanic__mobility_dash",
+        "mechanic__utility_structure_interaction",
+        "mechanic__utility_transformation",
+        "mechanic__utility_vision",
+        "condition__distance_scaling",
+        "condition__proximity"
+      ],
+      "pick_count": 5,
+      "ban_count": 0,
+      "bp_action_count": 5,
+      "weighted_bp_action_count": 3.5070125,
+      "nearest_hero_ids": [
+        154,
+        117,
+        173,
+        132,
+        513
+      ]
+    },
+    {
+      "hero_id": 193,
+      "hero_name": "铠",
+      "x": 0.6812525987625122,
+      "y": -0.3650335669517517,
+      "primary_lane": "unknown",
+      "damage_types": [],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_knockup",
+        "mechanic__control_slow",
+        "mechanic__damage_amplification",
+        "mechanic__damage_magic",
+        "mechanic__damage_physical",
+        "mechanic__defense_damage_block",
+        "mechanic__mobility_dash",
+        "mechanic__sustain_heal",
+        "mechanic__sustain_mana_restore",
+        "mechanic__utility_basic_attack_enhancement",
+        "mechanic__utility_cooldown_reduction",
+        "mechanic__utility_summon",
+        "condition__directional",
+        "condition__proximity",
+        "condition__recast",
+        "condition__single_target_bonus"
+      ],
+      "pick_count": 347,
+      "ban_count": 306,
+      "bp_action_count": 653,
+      "weighted_bp_action_count": 255.97227187500002,
+      "nearest_hero_ids": [
+        502,
+        178,
+        531,
+        542,
+        126
+      ]
+    },
+    {
+      "hero_id": 194,
+      "hero_name": "苏烈",
+      "x": 0.7945653200149536,
+      "y": 0.7563572525978088,
+      "primary_lane": "roam",
+      "damage_types": [
+        "physical"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__buff_attack_power",
+        "mechanic__control_knockback",
+        "mechanic__control_knockup",
+        "mechanic__control_slow",
+        "mechanic__control_stun",
+        "mechanic__damage_amplification",
+        "mechanic__damage_magic",
+        "mechanic__damage_physical",
+        "mechanic__debuff_armor",
+        "mechanic__debuff_magic_defense",
+        "mechanic__mobility_dash",
+        "mechanic__mobility_speed_boost",
+        "mechanic__sustain_heal",
+        "mechanic__utility_basic_attack_enhancement",
+        "mechanic__utility_cooldown_reduction",
+        "condition__ally_targeted",
+        "condition__channel_or_charge",
+        "condition__proximity"
+      ],
+      "pick_count": 538,
+      "ban_count": 364,
+      "bp_action_count": 902,
+      "weighted_bp_action_count": 512.1621937500021,
+      "nearest_hero_ids": [
+        171,
+        577,
+        159,
+        312,
+        548
+      ]
+    },
+    {
+      "hero_id": 195,
+      "hero_name": "百里玄策",
+      "x": -0.7361209988594055,
+      "y": 0.1681782454252243,
+      "primary_lane": "jungle",
+      "damage_types": [
+        "physical"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_root",
+        "mechanic__control_slow",
+        "mechanic__damage_amplification",
+        "mechanic__damage_percent_health",
+        "mechanic__damage_physical",
+        "mechanic__defense_damage_reduction",
+        "mechanic__mobility_dash",
+        "mechanic__mobility_speed_boost",
+        "mechanic__utility_basic_attack_enhancement",
+        "mechanic__utility_cooldown_reduction",
+        "mechanic__utility_mark",
+        "condition__channel_or_charge",
+        "condition__directional",
+        "condition__distance_scaling",
+        "condition__on_kill_or_assist",
+        "condition__recast",
+        "condition__requires_mark"
+      ],
+      "pick_count": 0,
+      "ban_count": 1,
+      "bp_action_count": 1,
+      "weighted_bp_action_count": 0.274625,
+      "nearest_hero_ids": [
+        513,
+        129,
+        524,
+        154,
+        117
+      ]
+    },
+    {
+      "hero_id": 196,
+      "hero_name": "百里守约",
+      "x": -0.13046546280384064,
+      "y": -0.2962172031402588,
+      "primary_lane": "farm",
+      "damage_types": [
+        "physical"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__damage_physical",
+        "mechanic__mobility_speed_boost",
+        "mechanic__utility_stealth",
+        "mechanic__utility_vision",
+        "condition__directional"
+      ],
+      "pick_count": 105,
+      "ban_count": 60,
+      "bp_action_count": 165,
+      "weighted_bp_action_count": 100.53195,
+      "nearest_hero_ids": [
+        174,
+        177,
+        169,
+        173,
+        584
+      ]
+    },
+    {
+      "hero_id": 197,
+      "hero_name": "弈星",
+      "x": -0.20621247589588165,
+      "y": -0.3308753967285156,
+      "primary_lane": "mid",
+      "damage_types": [
+        "magic"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__buff_attack_power",
+        "mechanic__control_knockup",
+        "mechanic__control_pull",
+        "mechanic__control_slow",
+        "mechanic__damage_amplification",
+        "mechanic__damage_magic",
+        "mechanic__defense_death_prevention",
+        "mechanic__mobility_speed_boost",
+        "mechanic__utility_basic_attack_enhancement",
+        "mechanic__utility_cooldown_reduction",
+        "mechanic__utility_mark",
+        "mechanic__utility_vision",
+        "mechanic__utility_zone",
+        "condition__on_kill_or_assist",
+        "condition__proximity",
+        "condition__requires_mark"
+      ],
+      "pick_count": 36,
+      "ban_count": 23,
+      "bp_action_count": 59,
+      "weighted_bp_action_count": 20.136987499999996,
+      "nearest_hero_ids": [
+        510,
+        134,
+        144,
+        523,
+        149
+      ]
+    },
+    {
+      "hero_id": 198,
+      "hero_name": "梦奇",
+      "x": 0.19367258250713348,
+      "y": -0.41301098465919495,
+      "primary_lane": "clash",
+      "damage_types": [
+        "physical",
+        "magic"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__buff_attack_power",
+        "mechanic__buff_defense",
+        "mechanic__control_knockup",
+        "mechanic__control_slow",
+        "mechanic__damage_amplification",
+        "mechanic__damage_magic",
+        "mechanic__defense_control_immunity",
+        "mechanic__defense_shield",
+        "mechanic__mobility_speed_boost",
+        "mechanic__utility_cooldown_reduction",
+        "condition__proximity"
+      ],
+      "pick_count": 132,
+      "ban_count": 48,
+      "bp_action_count": 180,
+      "weighted_bp_action_count": 93.92009375000004,
+      "nearest_hero_ids": [
+        502,
+        126,
+        193,
+        531,
+        511
+      ]
+    },
+    {
+      "hero_id": 199,
+      "hero_name": "公孙离",
+      "x": 0.5216642618179321,
+      "y": 0.0029861233197152615,
+      "primary_lane": "farm",
+      "damage_types": [
+        "physical",
+        "magic"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__buff_attack_speed",
+        "mechanic__control_knockback",
+        "mechanic__damage_magic",
+        "mechanic__damage_physical",
+        "mechanic__defense_projectile_block",
+        "mechanic__mobility_speed_boost",
+        "mechanic__mobility_teleport",
+        "mechanic__utility_mark",
+        "condition__directional",
+        "condition__proximity",
+        "condition__requires_mark"
+      ],
+      "pick_count": 472,
+      "ban_count": 305,
+      "bp_action_count": 777,
+      "weighted_bp_action_count": 324.164215625001,
+      "nearest_hero_ids": [
+        177,
+        584,
+        548,
+        172,
+        502
+      ]
+    },
+    {
+      "hero_id": 312,
+      "hero_name": "沈梦溪",
+      "x": 1.062091588973999,
+      "y": 0.07387751340866089,
+      "primary_lane": "mid",
+      "damage_types": [
+        "magic"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_knockup",
+        "mechanic__damage_amplification",
+        "mechanic__damage_magic",
+        "mechanic__mobility_dash",
+        "mechanic__utility_vision",
+        "condition__channel_or_charge",
+        "condition__directional"
+      ],
+      "pick_count": 602,
+      "ban_count": 750,
+      "bp_action_count": 1352,
+      "weighted_bp_action_count": 649.036018750002,
+      "nearest_hero_ids": [
+        503,
+        536,
+        179,
+        106,
+        537
+      ]
+    },
+    {
+      "hero_id": 501,
+      "hero_name": "明世隐",
+      "x": -0.7042689323425293,
+      "y": 0.41959744691848755,
+      "primary_lane": "roam",
+      "damage_types": [
+        "magic",
+        "true"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__damage_amplification",
+        "mechanic__damage_magic",
+        "mechanic__damage_true",
+        "mechanic__support_ally_heal",
+        "mechanic__sustain_heal",
+        "mechanic__utility_basic_attack_enhancement",
+        "mechanic__utility_cooldown_reduction",
+        "mechanic__utility_vision",
+        "condition__ally_targeted",
+        "condition__channel_or_charge"
+      ],
+      "pick_count": 7,
+      "ban_count": 3,
+      "bp_action_count": 10,
+      "weighted_bp_action_count": 2.5243156250000007,
+      "nearest_hero_ids": [
+        534,
+        529,
+        513,
+        184,
+        195
+      ]
+    },
+    {
+      "hero_id": 502,
+      "hero_name": "裴擒虎",
+      "x": 0.6290439367294312,
+      "y": -0.16464397311210632,
+      "primary_lane": "jungle",
+      "damage_types": [
+        "physical",
+        "magic"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_slow",
+        "mechanic__damage_amplification",
+        "mechanic__damage_magic",
+        "mechanic__damage_physical",
+        "mechanic__defense_shield",
+        "mechanic__mobility_speed_boost",
+        "mechanic__sustain_mana_restore",
+        "mechanic__utility_basic_attack_enhancement",
+        "mechanic__utility_transformation",
+        "condition__distance_scaling",
+        "condition__proximity"
+      ],
+      "pick_count": 319,
+      "ban_count": 374,
+      "bp_action_count": 693,
+      "weighted_bp_action_count": 304.06771250000054,
+      "nearest_hero_ids": [
+        193,
+        531,
+        178,
+        517,
+        581
+      ]
+    },
+    {
+      "hero_id": 503,
+      "hero_name": "狂铁",
+      "x": 0.9950771331787109,
+      "y": -0.10478866100311279,
+      "primary_lane": "clash",
+      "damage_types": [
+        "physical"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_knockup",
+        "mechanic__control_slow",
+        "mechanic__damage_amplification",
+        "mechanic__damage_physical",
+        "mechanic__defense_shield",
+        "mechanic__mobility_dash",
+        "mechanic__sustain_heal",
+        "mechanic__sustain_mana_restore",
+        "mechanic__utility_basic_attack_enhancement"
+      ],
+      "pick_count": 609,
+      "ban_count": 516,
+      "bp_action_count": 1125,
+      "weighted_bp_action_count": 579.6316718750015,
+      "nearest_hero_ids": [
+        536,
+        312,
+        537,
+        128,
+        140
+      ]
+    },
+    {
+      "hero_id": 507,
+      "hero_name": "李信",
+      "x": -0.7752917408943176,
+      "y": -0.38589420914649963,
+      "primary_lane": "clash",
+      "damage_types": [
+        "physical"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_slow",
+        "mechanic__damage_physical",
+        "mechanic__mobility_dash",
+        "mechanic__utility_transformation",
+        "condition__directional"
+      ],
+      "pick_count": 3,
+      "ban_count": 1,
+      "bp_action_count": 4,
+      "weighted_bp_action_count": 5.0,
+      "nearest_hero_ids": [
+        123,
+        153,
+        154,
+        524,
+        170
+      ]
+    },
+    {
+      "hero_id": 508,
+      "hero_name": "伽罗",
+      "x": -1.1622182130813599,
+      "y": -0.3361072242259979,
+      "primary_lane": "farm",
+      "damage_types": [
+        "physical",
+        "magic"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__buff_attack_speed",
+        "mechanic__control_silence",
+        "mechanic__control_slow",
+        "mechanic__damage_amplification",
+        "mechanic__damage_magic",
+        "mechanic__debuff_shield_break",
+        "mechanic__defense_shield",
+        "mechanic__mobility_speed_boost",
+        "mechanic__sustain_mana_restore",
+        "mechanic__utility_zone",
+        "condition__directional",
+        "condition__proximity"
+      ],
+      "pick_count": 19,
+      "ban_count": 12,
+      "bp_action_count": 31,
+      "weighted_bp_action_count": 9.329453125,
+      "nearest_hero_ids": [
+        132,
+        141,
+        154,
+        524,
+        129
+      ]
+    },
+    {
+      "hero_id": 509,
+      "hero_name": "盾山",
+      "x": 0.9542188048362732,
+      "y": 1.4344196319580078,
+      "primary_lane": "roam",
+      "damage_types": [
+        "physical"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_knockback",
+        "mechanic__control_knockup",
+        "mechanic__control_slow",
+        "mechanic__control_stun",
+        "mechanic__damage_amplification",
+        "mechanic__damage_physical",
+        "mechanic__defense_control_immunity",
+        "mechanic__defense_projectile_block",
+        "mechanic__defense_shield",
+        "mechanic__defense_untargetable",
+        "mechanic__mobility_dash",
+        "mechanic__support_ally_reposition",
+        "mechanic__sustain_heal",
+        "mechanic__utility_cooldown_reduction",
+        "mechanic__utility_transformation",
+        "condition__ally_targeted",
+        "condition__channel_or_charge",
+        "condition__proximity",
+        "condition__recast"
+      ],
+      "pick_count": 281,
+      "ban_count": 801,
+      "bp_action_count": 1082,
+      "weighted_bp_action_count": 690.4715843750004,
+      "nearest_hero_ids": [
+        186,
+        519,
+        172,
+        188,
+        194
+      ]
+    },
+    {
+      "hero_id": 510,
+      "hero_name": "孙策",
+      "x": -0.3336416184902191,
+      "y": -0.33564385771751404,
+      "primary_lane": "clash",
+      "damage_types": [
+        "physical"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_knockup",
+        "mechanic__control_slow",
+        "mechanic__damage_physical",
+        "mechanic__damage_true",
+        "mechanic__defense_control_immunity",
+        "mechanic__mobility_dash",
+        "mechanic__support_ally_reposition",
+        "mechanic__sustain_heal",
+        "condition__ally_targeted",
+        "condition__delayed_effect",
+        "condition__proximity"
+      ],
+      "pick_count": 47,
+      "ban_count": 31,
+      "bp_action_count": 78,
+      "weighted_bp_action_count": 31.267546874999994,
+      "nearest_hero_ids": [
+        134,
+        153,
+        125,
+        197,
+        564
+      ]
+    },
+    {
+      "hero_id": 511,
+      "hero_name": "猪八戒",
+      "x": 0.3607378602027893,
+      "y": -0.3444046676158905,
+      "primary_lane": "clash",
+      "damage_types": [
+        "physical"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_knockup",
+        "mechanic__control_pull",
+        "mechanic__control_slow",
+        "mechanic__control_stun",
+        "mechanic__damage_amplification",
+        "mechanic__damage_physical",
+        "mechanic__defense_control_immunity",
+        "mechanic__utility_terrain",
+        "mechanic__utility_transformation"
+      ],
+      "pick_count": 66,
+      "ban_count": 21,
+      "bp_action_count": 87,
+      "weighted_bp_action_count": 60.873731249999985,
+      "nearest_hero_ids": [
+        126,
+        178,
+        538,
+        180,
+        502
+      ]
+    },
+    {
+      "hero_id": 513,
+      "hero_name": "上官婉儿",
+      "x": -0.8197999000549316,
+      "y": 0.09626642614603043,
+      "primary_lane": "mid",
+      "damage_types": [
+        "magic"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_slow",
+        "mechanic__damage_amplification",
+        "mechanic__damage_magic",
+        "mechanic__defense_cleanse",
+        "mechanic__mobility_dash",
+        "mechanic__sustain_heal",
+        "mechanic__utility_basic_attack_enhancement",
+        "mechanic__utility_cooldown_reduction",
+        "condition__directional",
+        "condition__proximity"
+      ],
+      "pick_count": 0,
+      "ban_count": 0,
+      "bp_action_count": 0,
+      "weighted_bp_action_count": 0.0,
+      "nearest_hero_ids": [
+        129,
+        154,
+        195,
+        109,
+        524
+      ]
+    },
+    {
+      "hero_id": 514,
+      "hero_name": "亚连",
+      "x": -0.5209956765174866,
+      "y": -0.42617157101631165,
+      "primary_lane": "clash",
+      "damage_types": [
+        "physical",
+        "magic",
+        "true"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_knockup",
+        "mechanic__damage_magic",
+        "mechanic__damage_physical",
+        "mechanic__damage_true",
+        "mechanic__defense_control_immunity",
+        "mechanic__defense_damage_reduction",
+        "mechanic__defense_shield",
+        "mechanic__defense_untargetable",
+        "mechanic__mobility_dash",
+        "mechanic__sustain_heal",
+        "mechanic__sustain_lifesteal",
+        "mechanic__utility_mark",
+        "condition__ally_targeted",
+        "condition__directional",
+        "condition__requires_mark"
+      ],
+      "pick_count": 8,
+      "ban_count": 16,
+      "bp_action_count": 24,
+      "weighted_bp_action_count": 7.596634375000001,
+      "nearest_hero_ids": [
+        153,
+        513,
+        123,
+        524,
+        115
+      ]
+    },
+    {
+      "hero_id": 515,
+      "hero_name": "嫦娥",
+      "x": 0.23909248411655426,
+      "y": -0.17886796593666077,
+      "primary_lane": "mid",
+      "damage_types": [
+        "magic"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_root",
+        "mechanic__control_slow",
+        "mechanic__damage_amplification",
+        "mechanic__damage_magic",
+        "mechanic__defense_damage_reduction",
+        "mechanic__mobility_speed_boost",
+        "mechanic__sustain_heal",
+        "mechanic__sustain_mana_restore",
+        "mechanic__utility_basic_attack_enhancement",
+        "mechanic__utility_cooldown_reduction",
+        "mechanic__utility_summon",
+        "condition__directional",
+        "condition__proximity"
+      ],
+      "pick_count": 127,
+      "ban_count": 91,
+      "bp_action_count": 218,
+      "weighted_bp_action_count": 92.67060624999996,
+      "nearest_hero_ids": [
+        157,
+        110,
+        176,
+        511,
+        563
+      ]
+    },
+    {
+      "hero_id": 517,
+      "hero_name": "大司命",
+      "x": 0.9681086540222168,
+      "y": -0.2563004195690155,
+      "primary_lane": "jungle",
+      "damage_types": [
+        "physical",
+        "magic"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_knockback",
+        "mechanic__control_slow",
+        "mechanic__damage_execute",
+        "mechanic__damage_magic",
+        "mechanic__damage_physical",
+        "mechanic__sustain_heal",
+        "mechanic__utility_basic_attack_enhancement",
+        "mechanic__utility_mark",
+        "condition__proximity",
+        "condition__requires_mark"
+      ],
+      "pick_count": 448,
+      "ban_count": 611,
+      "bp_action_count": 1059,
+      "weighted_bp_action_count": 539.6634531250005,
+      "nearest_hero_ids": [
+        533,
+        502,
+        537,
+        163,
+        126
+      ]
+    },
+    {
+      "hero_id": 518,
+      "hero_name": "马超",
+      "x": 0.6734848022460938,
+      "y": -0.036789972335100174,
+      "primary_lane": "clash",
+      "damage_types": [
+        "physical"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_slow",
+        "mechanic__damage_amplification",
+        "mechanic__damage_physical",
+        "mechanic__mobility_speed_boost",
+        "mechanic__sustain_heal",
+        "mechanic__utility_basic_attack_enhancement",
+        "mechanic__utility_cooldown_reduction",
+        "mechanic__utility_summon",
+        "condition__directional",
+        "condition__distance_scaling",
+        "condition__on_kill_or_assist",
+        "condition__proximity"
+      ],
+      "pick_count": 300,
+      "ban_count": 263,
+      "bp_action_count": 563,
+      "weighted_bp_action_count": 313.74190000000044,
+      "nearest_hero_ids": [
+        536,
+        140,
+        537,
+        172,
+        519
+      ]
+    },
+    {
+      "hero_id": 519,
+      "hero_name": "敖隐",
+      "x": 1.0527836084365845,
+      "y": 0.28410962224006653,
+      "primary_lane": "farm",
+      "damage_types": [
+        "physical",
+        "true"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__buff_attack_speed",
+        "mechanic__control_knockback",
+        "mechanic__control_slow",
+        "mechanic__damage_amplification",
+        "mechanic__damage_physical",
+        "mechanic__damage_true",
+        "mechanic__defense_untargetable",
+        "mechanic__mobility_speed_boost",
+        "mechanic__sustain_heal",
+        "mechanic__utility_basic_attack_enhancement",
+        "mechanic__utility_mark",
+        "mechanic__utility_transformation",
+        "condition__proximity",
+        "condition__requires_mark"
+      ],
+      "pick_count": 481,
+      "ban_count": 496,
+      "bp_action_count": 977,
+      "weighted_bp_action_count": 606.0681875000005,
+      "nearest_hero_ids": [
+        548,
+        172,
+        312,
+        518,
+        177
+      ]
+    },
+    {
+      "hero_id": 521,
+      "hero_name": "海月",
+      "x": 1.0452988147735596,
+      "y": 0.12054693698883057,
+      "primary_lane": "mid",
+      "damage_types": [
+        "magic",
+        "true"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_stun",
+        "mechanic__damage_amplification",
+        "mechanic__damage_magic",
+        "mechanic__damage_true",
+        "mechanic__defense_damage_reduction",
+        "mechanic__defense_damage_reflect",
+        "mechanic__defense_shield",
+        "mechanic__mobility_dash",
+        "mechanic__mobility_speed_boost",
+        "mechanic__utility_basic_attack_enhancement",
+        "mechanic__utility_cooldown_reduction",
+        "mechanic__utility_mark",
+        "condition__directional",
+        "condition__recast",
+        "condition__requires_mark"
+      ],
+      "pick_count": 313,
+      "ban_count": 779,
+      "bp_action_count": 1092,
+      "weighted_bp_action_count": 565.4571812500012,
+      "nearest_hero_ids": [
+        312,
+        157,
+        140,
+        106,
+        563
+      ]
+    },
+    {
+      "hero_id": 522,
+      "hero_name": "曜",
+      "x": -0.3497289717197418,
+      "y": -0.33438995480537415,
+      "primary_lane": "jungle",
+      "damage_types": [
+        "physical"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_slow",
+        "mechanic__damage_amplification",
+        "mechanic__damage_magic",
+        "mechanic__damage_physical",
+        "mechanic__mobility_dash",
+        "mechanic__sustain_heal",
+        "mechanic__utility_basic_attack_enhancement"
+      ],
+      "pick_count": 14,
+      "ban_count": 3,
+      "bp_action_count": 17,
+      "weighted_bp_action_count": 5.396381250000001,
+      "nearest_hero_ids": [
+        150,
+        162,
+        524,
+        170,
+        129
+      ]
+    },
+    {
+      "hero_id": 523,
+      "hero_name": "西施",
+      "x": 0.10482391715049744,
+      "y": -0.22138017416000366,
+      "primary_lane": "mid",
+      "damage_types": [
+        "magic"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_pull",
+        "mechanic__damage_amplification",
+        "mechanic__damage_magic",
+        "mechanic__mobility_speed_boost",
+        "mechanic__utility_vision",
+        "condition__distance_scaling",
+        "condition__proximity",
+        "condition__recast"
+      ],
+      "pick_count": 139,
+      "ban_count": 258,
+      "bp_action_count": 397,
+      "weighted_bp_action_count": 137.54161250000024,
+      "nearest_hero_ids": [
+        127,
+        179,
+        130,
+        197,
+        563
+      ]
+    },
+    {
+      "hero_id": 524,
+      "hero_name": "蒙犽",
+      "x": -0.7630472183227539,
+      "y": -0.08970724046230316,
+      "primary_lane": "unknown",
+      "damage_types": [],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__buff_attack_speed",
+        "mechanic__control_slow",
+        "mechanic__damage_amplification",
+        "mechanic__damage_physical",
+        "mechanic__mobility_speed_boost",
+        "mechanic__sustain_heal",
+        "mechanic__utility_cooldown_reduction",
+        "mechanic__utility_mark",
+        "condition__ally_targeted",
+        "condition__channel_or_charge",
+        "condition__directional",
+        "condition__proximity",
+        "condition__recast",
+        "condition__requires_mark",
+        "condition__single_target_bonus"
+      ],
+      "pick_count": 1,
+      "ban_count": 0,
+      "bp_action_count": 1,
+      "weighted_bp_action_count": 0.17850625000000003,
+      "nearest_hero_ids": [
+        129,
+        513,
+        195,
+        154,
+        115
+      ]
+    },
+    {
+      "hero_id": 525,
+      "hero_name": "鲁班大师",
+      "x": 1.3972080945968628,
+      "y": 0.9727944135665894,
+      "primary_lane": "roam",
+      "damage_types": [
+        "magic"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_knockup",
+        "mechanic__control_pull",
+        "mechanic__control_stun",
+        "mechanic__damage_amplification",
+        "mechanic__damage_magic",
+        "mechanic__defense_shield",
+        "mechanic__mobility_dash",
+        "mechanic__support_ally_reposition",
+        "mechanic__utility_basic_attack_enhancement",
+        "condition__ally_targeted",
+        "condition__delayed_effect"
+      ],
+      "pick_count": 325,
+      "ban_count": 1496,
+      "bp_action_count": 1821,
+      "weighted_bp_action_count": 877.1875687500014,
+      "nearest_hero_ids": [
+        312,
+        519,
+        171,
+        178,
+        194
+      ]
+    },
+    {
+      "hero_id": 527,
+      "hero_name": "蒙恬",
+      "x": 0.42757317423820496,
+      "y": -0.3488890826702118,
+      "primary_lane": "clash",
+      "damage_types": [
+        "physical"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_knockback",
+        "mechanic__control_slow",
+        "mechanic__damage_amplification",
+        "mechanic__damage_physical",
+        "mechanic__defense_control_immunity",
+        "mechanic__mobility_dash",
+        "mechanic__mobility_speed_boost",
+        "mechanic__utility_basic_attack_enhancement",
+        "mechanic__utility_cooldown_reduction",
+        "mechanic__utility_summon",
+        "mechanic__utility_transformation",
+        "condition__channel_or_charge",
+        "condition__directional",
+        "condition__recast"
+      ],
+      "pick_count": 176,
+      "ban_count": 264,
+      "bp_action_count": 440,
+      "weighted_bp_action_count": 213.08311562500023,
+      "nearest_hero_ids": [
+        134,
+        140,
+        558,
+        120,
+        531
+      ]
+    },
+    {
+      "hero_id": 528,
+      "hero_name": "澜",
+      "x": -0.42682453989982605,
+      "y": -0.31097450852394104,
+      "primary_lane": "jungle",
+      "damage_types": [
+        "physical",
+        "true"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_slow",
+        "mechanic__damage_amplification",
+        "mechanic__damage_physical",
+        "mechanic__damage_true",
+        "mechanic__mobility_dash",
+        "mechanic__sustain_heal",
+        "mechanic__utility_cooldown_reduction",
+        "mechanic__utility_mark",
+        "mechanic__utility_zone",
+        "condition__delayed_effect",
+        "condition__directional",
+        "condition__low_health_condition",
+        "condition__proximity",
+        "condition__requires_mark",
+        "condition__water_or_river"
+      ],
+      "pick_count": 7,
+      "ban_count": 10,
+      "bp_action_count": 17,
+      "weighted_bp_action_count": 3.302365625,
+      "nearest_hero_ids": [
+        150,
+        153,
+        109,
+        524,
+        522
+      ]
+    },
+    {
+      "hero_id": 529,
+      "hero_name": "盘古",
+      "x": -0.8553255796432495,
+      "y": 0.3346390426158905,
+      "primary_lane": "jungle",
+      "damage_types": [
+        "physical"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__buff_attack_speed",
+        "mechanic__control_disarm",
+        "mechanic__control_knockback",
+        "mechanic__control_slow",
+        "mechanic__damage_amplification",
+        "mechanic__damage_physical",
+        "mechanic__defense_control_immunity",
+        "mechanic__mobility_dash",
+        "mechanic__sustain_heal",
+        "mechanic__utility_basic_attack_enhancement",
+        "mechanic__utility_mark",
+        "mechanic__utility_skill_refresh",
+        "mechanic__utility_summon",
+        "condition__directional",
+        "condition__requires_mark"
+      ],
+      "pick_count": 1,
+      "ban_count": 1,
+      "bp_action_count": 2,
+      "weighted_bp_action_count": 0.6010062500000001,
+      "nearest_hero_ids": [
+        115,
+        513,
+        524,
+        129,
+        114
+      ]
+    },
+    {
+      "hero_id": 531,
+      "hero_name": "镜",
+      "x": 0.7548481822013855,
+      "y": -0.3702302873134613,
+      "primary_lane": "jungle",
+      "damage_types": [
+        "physical"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_root",
+        "mechanic__control_slow",
+        "mechanic__damage_physical",
+        "mechanic__mobility_dash",
+        "mechanic__utility_basic_attack_enhancement",
+        "mechanic__utility_mark",
+        "mechanic__utility_structure_interaction",
+        "condition__distance_scaling",
+        "condition__requires_mark"
+      ],
+      "pick_count": 284,
+      "ban_count": 529,
+      "bp_action_count": 813,
+      "weighted_bp_action_count": 392.7618187500017,
+      "nearest_hero_ids": [
+        502,
+        581,
+        193,
+        178,
+        180
+      ]
+    },
+    {
+      "hero_id": 533,
+      "hero_name": "阿古朵",
+      "x": 0.7438528537750244,
+      "y": -0.22241981327533722,
+      "primary_lane": "jungle",
+      "damage_types": [
+        "physical"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__buff_attack_speed",
+        "mechanic__control_stun",
+        "mechanic__damage_physical",
+        "mechanic__defense_damage_block",
+        "mechanic__mobility_speed_boost",
+        "mechanic__utility_basic_attack_enhancement",
+        "mechanic__utility_summon",
+        "condition__distance_scaling"
+      ],
+      "pick_count": 305,
+      "ban_count": 397,
+      "bp_action_count": 702,
+      "weighted_bp_action_count": 331.1303281250015,
+      "nearest_hero_ids": [
+        517,
+        531,
+        502,
+        163,
+        140
+      ]
+    },
+    {
+      "hero_id": 534,
+      "hero_name": "桑启",
+      "x": -0.7758390307426453,
+      "y": 0.3900473415851593,
+      "primary_lane": "roam",
+      "damage_types": [
+        "magic"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_knockup",
+        "mechanic__damage_magic",
+        "mechanic__support_ally_heal",
+        "mechanic__sustain_heal",
+        "mechanic__utility_summon",
+        "mechanic__utility_vision",
+        "condition__ally_targeted",
+        "condition__channel_or_charge",
+        "condition__proximity"
+      ],
+      "pick_count": 15,
+      "ban_count": 4,
+      "bp_action_count": 19,
+      "weighted_bp_action_count": 5.212471875000001,
+      "nearest_hero_ids": [
+        501,
+        184,
+        529,
+        118,
+        513
+      ]
+    },
+    {
+      "hero_id": 536,
+      "hero_name": "夏洛特",
+      "x": 0.7912314534187317,
+      "y": -0.2171379029750824,
+      "primary_lane": "clash",
+      "damage_types": [
+        "physical"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_slow",
+        "mechanic__damage_amplification",
+        "mechanic__damage_physical",
+        "mechanic__defense_control_immunity",
+        "mechanic__defense_damage_reduction",
+        "mechanic__mobility_dash",
+        "mechanic__mobility_speed_boost",
+        "mechanic__sustain_heal",
+        "mechanic__utility_basic_attack_enhancement",
+        "mechanic__utility_mark",
+        "condition__delayed_effect",
+        "condition__directional",
+        "condition__requires_mark"
+      ],
+      "pick_count": 577,
+      "ban_count": 353,
+      "bp_action_count": 930,
+      "weighted_bp_action_count": 480.3814312500009,
+      "nearest_hero_ids": [
+        503,
+        537,
+        312,
+        518,
+        128
+      ]
+    },
+    {
+      "hero_id": 537,
+      "hero_name": "司空震",
+      "x": 0.8394302129745483,
+      "y": -0.19791582226753235,
+      "primary_lane": "clash",
+      "damage_types": [
+        "magic"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_knockback",
+        "mechanic__damage_amplification",
+        "mechanic__damage_magic",
+        "mechanic__damage_physical",
+        "mechanic__defense_control_immunity",
+        "mechanic__defense_shield",
+        "mechanic__mobility_speed_boost",
+        "mechanic__sustain_heal",
+        "mechanic__utility_basic_attack_enhancement",
+        "mechanic__utility_transformation",
+        "condition__delayed_effect",
+        "condition__proximity"
+      ],
+      "pick_count": 359,
+      "ban_count": 368,
+      "bp_action_count": 727,
+      "weighted_bp_action_count": 375.8685718750012,
+      "nearest_hero_ids": [
+        536,
+        128,
+        503,
+        140,
+        558
+      ]
+    },
+    {
+      "hero_id": 538,
+      "hero_name": "云缨",
+      "x": 0.20049335062503815,
+      "y": -0.6730291247367859,
+      "primary_lane": "unknown",
+      "damage_types": [],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_knockup",
+        "mechanic__control_slow",
+        "mechanic__damage_magic",
+        "mechanic__damage_physical",
+        "mechanic__defense_control_immunity",
+        "mechanic__defense_damage_reduction",
+        "mechanic__mobility_dash",
+        "mechanic__utility_cooldown_reduction",
+        "condition__channel_or_charge",
+        "condition__recast"
+      ],
+      "pick_count": 151,
+      "ban_count": 86,
+      "bp_action_count": 237,
+      "weighted_bp_action_count": 161.39150937500006,
+      "nearest_hero_ids": [
+        163,
+        511,
+        180,
+        542,
+        130
+      ]
+    },
+    {
+      "hero_id": 540,
+      "hero_name": "金蝉",
+      "x": -0.7765138149261475,
+      "y": 0.09700646996498108,
+      "primary_lane": "mid",
+      "damage_types": [
+        "magic"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__buff_attack_power",
+        "mechanic__control_knockback",
+        "mechanic__damage_amplification",
+        "mechanic__damage_magic",
+        "mechanic__defense_damage_block",
+        "mechanic__utility_mark",
+        "mechanic__utility_vision",
+        "mechanic__utility_zone",
+        "condition__ally_targeted",
+        "condition__distance_scaling",
+        "condition__proximity",
+        "condition__requires_mark"
+      ],
+      "pick_count": 20,
+      "ban_count": 17,
+      "bp_action_count": 37,
+      "weighted_bp_action_count": 11.440000000000001,
+      "nearest_hero_ids": [
+        114,
+        529,
+        115,
+        109,
+        513
+      ]
+    },
+    {
+      "hero_id": 542,
+      "hero_name": "暃",
+      "x": 0.31765979528427124,
+      "y": -0.45726773142814636,
+      "primary_lane": "jungle",
+      "damage_types": [
+        "physical"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_knockup",
+        "mechanic__control_slow",
+        "mechanic__damage_amplification",
+        "mechanic__damage_physical",
+        "mechanic__defense_untargetable",
+        "mechanic__mobility_dash",
+        "mechanic__utility_basic_attack_enhancement",
+        "mechanic__utility_mark",
+        "mechanic__utility_transformation",
+        "mechanic__utility_vision",
+        "condition__proximity",
+        "condition__requires_mark"
+      ],
+      "pick_count": 126,
+      "ban_count": 126,
+      "bp_action_count": 252,
+      "weighted_bp_action_count": 90.09894062500007,
+      "nearest_hero_ids": [
+        163,
+        193,
+        502,
+        130,
+        531
+      ]
+    },
+    {
+      "hero_id": 544,
+      "hero_name": "赵怀真",
+      "x": -0.07598230987787247,
+      "y": 0.7214298844337463,
+      "primary_lane": "clash",
+      "damage_types": [
+        "physical"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_knockback",
+        "mechanic__control_slow",
+        "mechanic__control_stun",
+        "mechanic__damage_amplification",
+        "mechanic__damage_physical",
+        "mechanic__defense_control_immunity",
+        "mechanic__defense_shield",
+        "mechanic__mobility_dash",
+        "mechanic__sustain_heal",
+        "condition__channel_or_charge",
+        "condition__distance_scaling"
+      ],
+      "pick_count": 57,
+      "ban_count": 23,
+      "bp_action_count": 80,
+      "weighted_bp_action_count": 61.049396874999985,
+      "nearest_hero_ids": [
+        108,
+        105,
+        187,
+        188,
+        118
+      ]
+    },
+    {
+      "hero_id": 545,
+      "hero_name": "莱西奥",
+      "x": -0.56751549243927,
+      "y": -0.20305964350700378,
+      "primary_lane": "farm",
+      "damage_types": [
+        "physical"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__damage_amplification",
+        "mechanic__damage_physical",
+        "mechanic__defense_control_immunity",
+        "mechanic__mobility_dash",
+        "mechanic__utility_aoe_basic_attack",
+        "mechanic__utility_basic_attack_enhancement",
+        "mechanic__utility_stealth",
+        "mechanic__vulnerability_projectile_blockable",
+        "condition__ally_targeted",
+        "condition__proximity"
+      ],
+      "pick_count": 11,
+      "ban_count": 1,
+      "bp_action_count": 12,
+      "weighted_bp_action_count": 15.5,
+      "nearest_hero_ids": [
+        524,
+        507,
+        132,
+        196,
+        584
+      ]
+    },
+    {
+      "hero_id": 548,
+      "hero_name": "戈娅",
+      "x": 1.002426266670227,
+      "y": -0.0931072011590004,
+      "primary_lane": "farm",
+      "damage_types": [
+        "physical"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__buff_attack_speed",
+        "mechanic__control_pull",
+        "mechanic__control_slow",
+        "mechanic__damage_amplification",
+        "mechanic__damage_physical",
+        "mechanic__utility_basic_attack_enhancement",
+        "mechanic__utility_cooldown_reduction",
+        "mechanic__utility_zone",
+        "condition__channel_or_charge",
+        "condition__delayed_effect",
+        "condition__proximity"
+      ],
+      "pick_count": 564,
+      "ban_count": 230,
+      "bp_action_count": 794,
+      "weighted_bp_action_count": 470.53377187500087,
+      "nearest_hero_ids": [
+        172,
+        199,
+        519,
+        177,
+        584
+      ]
+    },
+    {
+      "hero_id": 549,
+      "hero_name": "心魔六耳",
+      "x": -0.21092084050178528,
+      "y": -0.36341342329978943,
+      "primary_lane": "unknown",
+      "damage_types": [],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_knockback",
+        "mechanic__control_knockup",
+        "mechanic__control_slow",
+        "mechanic__control_stun",
+        "mechanic__damage_amplification",
+        "mechanic__damage_physical",
+        "mechanic__defense_untargetable",
+        "mechanic__mobility_dash",
+        "mechanic__sustain_heal",
+        "mechanic__utility_basic_attack_enhancement",
+        "mechanic__utility_cooldown_reduction",
+        "condition__channel_or_charge",
+        "condition__directional",
+        "condition__recast"
+      ],
+      "pick_count": 11,
+      "ban_count": 9,
+      "bp_action_count": 20,
+      "weighted_bp_action_count": 21.5,
+      "nearest_hero_ids": [
+        180,
+        538,
+        107,
+        511,
+        146
+      ]
+    },
+    {
+      "hero_id": 550,
+      "hero_name": "空空儿",
+      "x": 0.4566577672958374,
+      "y": 0.661641538143158,
+      "primary_lane": "unknown",
+      "damage_types": [],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_knockback",
+        "mechanic__control_pull",
+        "mechanic__control_slow",
+        "mechanic__damage_amplification",
+        "mechanic__damage_physical",
+        "mechanic__mobility_dash",
+        "mechanic__mobility_teleport",
+        "mechanic__utility_basic_attack_enhancement",
+        "condition__ally_targeted",
+        "condition__proximity"
+      ],
+      "pick_count": 305,
+      "ban_count": 509,
+      "bp_action_count": 814,
+      "weighted_bp_action_count": 275.16591562500207,
+      "nearest_hero_ids": [
+        186,
+        312,
+        194,
+        563,
+        179
+      ]
+    },
+    {
+      "hero_id": 558,
+      "hero_name": "影",
+      "x": 0.24405929446220398,
+      "y": -0.22438786923885345,
+      "primary_lane": "jungle",
+      "damage_types": [
+        "physical",
+        "true"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__buff_attack_speed",
+        "mechanic__control_knockback",
+        "mechanic__damage_amplification",
+        "mechanic__damage_physical",
+        "mechanic__defense_revive",
+        "mechanic__mobility_dash",
+        "mechanic__mobility_speed_boost",
+        "mechanic__sustain_heal",
+        "mechanic__utility_mark",
+        "condition__delayed_effect",
+        "condition__proximity",
+        "condition__recast",
+        "condition__requires_mark"
+      ],
+      "pick_count": 211,
+      "ban_count": 85,
+      "bp_action_count": 296,
+      "weighted_bp_action_count": 138.13516875000016,
+      "nearest_hero_ids": [
+        134,
+        128,
+        537,
+        564,
+        527
+      ]
+    },
+    {
+      "hero_id": 563,
+      "hero_name": "海诺",
+      "x": 0.4465336203575134,
+      "y": -0.25303640961647034,
+      "primary_lane": "mid",
+      "damage_types": [
+        "magic"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_slow",
+        "mechanic__damage_magic",
+        "mechanic__damage_physical",
+        "mechanic__defense_control_immunity",
+        "mechanic__mobility_speed_boost",
+        "mechanic__sustain_heal",
+        "mechanic__utility_cooldown_reduction",
+        "mechanic__utility_mark",
+        "mechanic__utility_transformation",
+        "mechanic__utility_zone",
+        "condition__delayed_effect",
+        "condition__proximity",
+        "condition__requires_mark"
+      ],
+      "pick_count": 120,
+      "ban_count": 145,
+      "bp_action_count": 265,
+      "weighted_bp_action_count": 85.11415312500012,
+      "nearest_hero_ids": [
+        179,
+        127,
+        110,
+        584,
+        542
+      ]
+    },
+    {
+      "hero_id": 564,
+      "hero_name": "姬小满",
+      "x": -0.18392568826675415,
+      "y": -0.3617228865623474,
+      "primary_lane": "clash",
+      "damage_types": [
+        "physical"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_knockback",
+        "mechanic__control_knockup",
+        "mechanic__control_slow",
+        "mechanic__damage_physical",
+        "mechanic__defense_control_immunity",
+        "mechanic__mobility_dash",
+        "mechanic__mobility_teleport",
+        "mechanic__sustain_heal",
+        "condition__on_kill_or_assist",
+        "condition__proximity"
+      ],
+      "pick_count": 91,
+      "ban_count": 35,
+      "bp_action_count": 126,
+      "weighted_bp_action_count": 36.14535312500001,
+      "nearest_hero_ids": [
+        558,
+        134,
+        153,
+        522,
+        182
+      ]
+    },
+    {
+      "hero_id": 577,
+      "hero_name": "少司缘",
+      "x": 0.6793633699417114,
+      "y": 0.7406644821166992,
+      "primary_lane": "roam",
+      "damage_types": [
+        "magic"
+      ],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_knockback",
+        "mechanic__control_root",
+        "mechanic__control_slow",
+        "mechanic__damage_amplification",
+        "mechanic__damage_magic",
+        "mechanic__mobility_dash",
+        "mechanic__mobility_speed_boost",
+        "mechanic__support_ally_heal",
+        "mechanic__sustain_heal",
+        "mechanic__utility_basic_attack_enhancement",
+        "mechanic__utility_gold_generation",
+        "mechanic__utility_skill_refresh",
+        "condition__ally_targeted",
+        "condition__recast"
+      ],
+      "pick_count": 503,
+      "ban_count": 266,
+      "bp_action_count": 769,
+      "weighted_bp_action_count": 409.91582812500076,
+      "nearest_hero_ids": [
+        159,
+        188,
+        194,
+        171,
+        186
+      ]
+    },
+    {
+      "hero_id": 581,
+      "hero_name": "元流之子(坦克)",
+      "x": 0.8831936717033386,
+      "y": -0.2165810614824295,
+      "primary_lane": "unknown",
+      "damage_types": [],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_knockback",
+        "mechanic__control_knockup",
+        "mechanic__damage_amplification",
+        "mechanic__damage_physical",
+        "mechanic__defense_shield",
+        "mechanic__mobility_dash",
+        "mechanic__support_ally_heal",
+        "mechanic__sustain_heal",
+        "mechanic__utility_basic_attack_enhancement",
+        "mechanic__utility_cooldown_reduction",
+        "condition__ally_targeted",
+        "condition__proximity"
+      ],
+      "pick_count": 329,
+      "ban_count": 376,
+      "bp_action_count": 705,
+      "weighted_bp_action_count": 390.90351562500126,
+      "nearest_hero_ids": [
+        531,
+        178,
+        502,
+        126,
+        533
+      ]
+    },
+    {
+      "hero_id": 582,
+      "hero_name": "元流之子(法师)",
+      "x": -0.974973738193512,
+      "y": 0.25939643383026123,
+      "primary_lane": "unknown",
+      "damage_types": [],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__buff_attack_power",
+        "mechanic__control_knockback",
+        "mechanic__control_slow",
+        "mechanic__control_stun",
+        "mechanic__damage_magic",
+        "mechanic__support_ally_heal",
+        "mechanic__sustain_heal",
+        "mechanic__utility_basic_attack_enhancement",
+        "mechanic__utility_cooldown_reduction",
+        "condition__ally_targeted",
+        "condition__channel_or_charge",
+        "condition__directional",
+        "condition__proximity"
+      ],
+      "pick_count": 2,
+      "ban_count": 0,
+      "bp_action_count": 2,
+      "weighted_bp_action_count": 1.3,
+      "nearest_hero_ids": [
+        513,
+        141,
+        154,
+        524,
+        129
+      ]
+    },
+    {
+      "hero_id": 583,
+      "hero_name": "元流之子(刺客)",
+      "x": -0.03271983936429024,
+      "y": 0.14457707107067108,
+      "primary_lane": "unknown",
+      "damage_types": [],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__control_knockback",
+        "mechanic__damage_amplification",
+        "mechanic__damage_magic",
+        "mechanic__damage_physical",
+        "mechanic__defense_control_immunity",
+        "mechanic__mobility_dash",
+        "mechanic__mobility_speed_boost",
+        "mechanic__sustain_heal",
+        "mechanic__utility_basic_attack_enhancement",
+        "mechanic__utility_cooldown_reduction",
+        "condition__ally_targeted",
+        "condition__directional",
+        "condition__proximity"
+      ],
+      "pick_count": 4,
+      "ban_count": 5,
+      "bp_action_count": 9,
+      "weighted_bp_action_count": 7.525,
+      "nearest_hero_ids": [
+        126,
+        170,
+        195,
+        522,
+        524
+      ]
+    },
+    {
+      "hero_id": 584,
+      "hero_name": "元流之子(射手)",
+      "x": 0.1975264549255371,
+      "y": -0.14985708892345428,
+      "primary_lane": "unknown",
+      "damage_types": [],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__buff_attack_power",
+        "mechanic__buff_attack_speed",
+        "mechanic__control_knockback",
+        "mechanic__damage_amplification",
+        "mechanic__damage_physical",
+        "mechanic__mobility_dash",
+        "mechanic__mobility_speed_boost",
+        "mechanic__sustain_heal",
+        "mechanic__utility_basic_attack_enhancement",
+        "mechanic__utility_cooldown_reduction",
+        "condition__ally_targeted",
+        "condition__distance_scaling",
+        "condition__proximity",
+        "condition__recast"
+      ],
+      "pick_count": 111,
+      "ban_count": 80,
+      "bp_action_count": 191,
+      "weighted_bp_action_count": 67.50549062500005,
+      "nearest_hero_ids": [
+        199,
+        563,
+        177,
+        169,
+        174
+      ]
+    },
+    {
+      "hero_id": 585,
+      "hero_name": "元流之子(辅助)",
+      "x": -0.3404836654663086,
+      "y": 1.323288083076477,
+      "primary_lane": "unknown",
+      "damage_types": [],
+      "feature_known": true,
+      "gameplay_mechanic_keys": [
+        "mechanic__buff_attack_power",
+        "mechanic__control_knockback",
+        "mechanic__damage_amplification",
+        "mechanic__damage_magic",
+        "mechanic__defense_shield",
+        "mechanic__mobility_speed_boost",
+        "mechanic__sustain_heal",
+        "mechanic__utility_basic_attack_enhancement",
+        "mechanic__utility_cooldown_reduction",
+        "mechanic__utility_vision",
+        "condition__ally_targeted",
+        "condition__directional",
+        "condition__distance_scaling",
+        "condition__proximity"
+      ],
+      "pick_count": 52,
+      "ban_count": 257,
+      "bp_action_count": 309,
+      "weighted_bp_action_count": 226.22625,
+      "nearest_hero_ids": [
+        175,
+        133,
+        195,
+        116,
+        117
+      ]
+    }
+  ]
+}
