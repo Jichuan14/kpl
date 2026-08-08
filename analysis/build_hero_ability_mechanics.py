@@ -242,7 +242,7 @@ MECHANIC_RULES: dict[str, tuple[str, tuple[str, ...]]] = {
 
 CONDITION_RULES: dict[str, tuple[str, tuple[str, ...]]] = {
     "delayed_effect": ("延迟生效", (r"延迟", r"短暂延迟")),
-    "channel_or_charge": ("吟唱/蓄力", (r"吟唱", r"引导", r"蓄力")),
+    "channel_or_charge": ("蓄力", (r"吟唱", r"引导", r"蓄力")),
     "recast": ("可再次释放", (r"再次点击", r"再次释放", r"第二段")),
     "requires_mark": ("依赖标记/印记", (r"标记", r"印记")),
     "water_or_river": ("依赖水域/河道", (r"水域", r"河道")),

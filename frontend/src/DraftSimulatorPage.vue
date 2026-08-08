@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from "vue";
 import {
   fetchDraftModel,
+  fetchSelectionCommentary,
   fetchSeasonTeams,
   fetchVisualizationSeasons,
   simulateDraft,
@@ -17,6 +18,10 @@ const leagueId = selectedLeagueId;
 const seasons = ref([]);
 const model = ref(null);
 const result = ref(null);
+const commentary = ref(null);
+const commentaryLoading = ref(false);
+const commentaryEnabled = ref(false);
+let commentaryRequestNumber = 0;
 const loading = ref(false);
 const simulating = ref(false);
 const error = ref("");
@@ -264,6 +269,7 @@ async function loadModel() {
   loading.value = true;
   error.value = "";
   result.value = null;
+  commentary.value = null;
   model.value = null;
   seasonTeams.value = [];
   selectedTeamIds.value = { [TEAM_A]: "", [TEAM_B]: "" };
@@ -352,6 +358,27 @@ async function chooseHero(heroId) {
     return;
   }
   if (!currentStep.value || usedHeroIds.value.has(Number(heroId))) return;
+  const preSelectionState = coachDraftState.value;
+  if (commentaryEnabled.value && preSelectionState) {
+    const requestNumber = ++commentaryRequestNumber;
+    commentaryLoading.value = true;
+    fetchSelectionCommentary({
+      league_id: leagueId.value,
+      ...preSelectionState,
+      action: currentStep.value.action,
+      side: currentStep.value.side,
+      selected_hero_id: Number(heroId),
+      rollouts: 100,
+    }).then((payload) => {
+      if (commentaryEnabled.value && requestNumber === commentaryRequestNumber) {
+        commentary.value = payload;
+      }
+    }).catch(() => {
+      if (requestNumber === commentaryRequestNumber) commentary.value = null;
+    }).finally(() => {
+      if (requestNumber === commentaryRequestNumber) commentaryLoading.value = false;
+    });
+  }
   const field = `${currentStep.value.side}_${
     currentStep.value.action === "pick" ? "picks" : "bans"
   }`;
@@ -361,6 +388,13 @@ async function chooseHero(heroId) {
   search.value = "";
   await forecast();
 }
+
+watch(commentaryEnabled, (enabled) => {
+  if (enabled) return;
+  commentaryRequestNumber += 1;
+  commentaryLoading.value = false;
+  commentary.value = null;
+});
 
 async function undo() {
   const event = history.value.pop();
@@ -376,6 +410,7 @@ async function reset() {
   history.value = [];
   bpOrder.value = 1;
   search.value = "";
+  commentary.value = null;
   await forecast();
 }
 
@@ -677,12 +712,28 @@ watch(selectedTeamIds, forecast, { deep: true });
             </aside>
           </section>
 
+          <section v-if="commentary || commentaryLoading" class="commentary-panel">
+            <p class="simulator-eyebrow">BP commentator</p>
+            <p v-if="commentaryLoading" class="commentary-loading">Generating commentary…</p>
+            <h2 v-else>{{ commentary.commentary }}</h2>
+          </section>
+
           <section class="hero-picker">
             <div class="picker-heading">
               <div>
                 <p class="simulator-eyebrow">{{ pickerTarget === 'draft' ? 'Add the next action' : 'Global BP setup' }}</p>
                 <h2 data-i18n-ignore>{{ pickerTitle }}</h2>
               </div>
+              <button
+                type="button"
+                class="commentary-toggle"
+                :class="{ active: commentaryEnabled }"
+                :aria-pressed="commentaryEnabled"
+                @click="commentaryEnabled = !commentaryEnabled"
+              >
+                <strong>AI 解说</strong>
+                <small>{{ commentaryEnabled ? '已开启 · 每步调用 Kimi' : '未开启' }}</small>
+              </button>
               <input v-model="search" type="search" placeholder="Find a hero…" :disabled="!teamsReady || (pickerTarget === 'draft' && !currentStep)" />
             </div>
             <div v-if="globalMode !== 'single'" class="picker-targets">
@@ -748,6 +799,7 @@ watch(selectedTeamIds, forecast, { deep: true });
 .forecast-panel { width: min(31%, 320px); min-width:250px; padding: 1rem; }.forecast-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }.forecast-heading h2 { font-size: 1.5rem; }.forecast-heading > span, .forecast-heading small { color: var(--ink-soft); font-size: .68rem; }
 .probability-list { margin-top: 1rem; }.probability-list > div { display: grid; grid-template-columns:2rem minmax(4rem,1.8fr) 3rem; gap: .55rem; align-items: center; margin-top: .55rem; font-size: .7rem; }.probability-list img { width:2rem; height:2rem; object-fit:cover; }.probability-list em { color: var(--ink-soft); font-style: normal; text-align: right; }.probability-track { height: .42rem; overflow: hidden; background: rgba(16,42,46,.1); }.probability-track i { display:block; height:100%; background: var(--accent); }
 .end-ban-list { margin-top: 1.2rem; padding-top: .85rem; border-top: 1px solid var(--line); }.end-ban-list p { margin:0 0 .5rem; color: var(--ink-soft); font-size:.65rem; }.end-ban-list span { display:inline-flex; align-items:center; gap:.25rem; margin:.25rem .6rem 0 0; font-size:.7rem; }.end-ban-list img { width:1.6rem; height:1.6rem; object-fit:cover; }
+.commentary-panel { margin-top:.75rem; padding:1rem 1.15rem; border:1px solid var(--accent-deep); background:linear-gradient(120deg, rgba(232,191,108,.18), rgba(255,255,255,.84)); }.commentary-panel h2 { max-width:70rem; margin:.25rem 0 0; font:700 1rem/1.55 var(--display); letter-spacing:-.015em; }.commentary-loading { margin:0; color:var(--ink-soft); font-size:.75rem; }.commentary-toggle { display:grid; gap:.12rem; min-width:8.5rem; padding:.42rem .6rem; border:1px solid var(--line); background:rgba(255,255,255,.8); color:var(--ink-soft); text-align:left; font:inherit; cursor:pointer; }.commentary-toggle strong { color:var(--ink); font-size:.72rem; }.commentary-toggle small { font-size:.58rem; }.commentary-toggle.active { border-color:var(--accent-deep); background:rgba(232,191,108,.2); }.commentary-toggle.active strong { color:var(--accent-deep); }
 .hero-picker { margin-top: .75rem; padding: 1rem; }.picker-heading { display:flex; align-items:end; justify-content:space-between; gap:1rem; }.picker-heading h2 { font-size:1.4rem; }.picker-heading input { width:min(100%, 260px); }.picker-targets { margin-top:.85rem; }.hero-options { display:grid; grid-template-columns:repeat(auto-fill, minmax(3.6rem, 1fr)); gap:.45rem; margin-top:1rem; max-height:360px; overflow:auto; }.hero-options button { position:relative; display:grid; place-items:center; aspect-ratio:1; padding:0; overflow:hidden; }.hero-options button img { width:100%; height:100%; object-fit:cover; }.hero-options button small { position:absolute; right:0; bottom:0; padding:.14rem .2rem; background:rgba(16,42,46,.84); color:#fff; font-size:.56rem; }.hero-options button:hover:not(:disabled), .draft-slots button:not(:disabled):hover { border-color: var(--accent); color: var(--accent-deep); }
 @media (max-width: 1000px) { .simulator-workspace { grid-template-columns:1fr; }.coach-rail { position:static; }.coach-rail { grid-row:1; }.simulator-main-column { grid-row:2; } }
 @media (max-width: 860px) { .simulator-hero, .simulator-status, .simulator-layout { flex-direction:column; align-items:stretch; }.simulator-season, .forecast-panel { width:100%; }.forecast-panel { min-width:0; }.model-choice { grid-template-columns:1fr; }.simulator-actions { justify-content:space-between; }.draft-board { grid-template-columns:1fr; }.global-bp-panel { grid-template-columns:1fr; }.global-used { grid-template-columns:1fr; }.next-battle { justify-self:start; } }

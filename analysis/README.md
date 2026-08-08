@@ -26,6 +26,7 @@ hero may have several rows when it has been played in multiple positions.
 | `compute_meta_heroes.py` | Rank opening-priority heroes from first-phase bans and Blue first picks |
 | `compute_team_synergies.py` | Rank availability-adjusted hero pairs preferred by each team |
 | `compute_team_draft_profiles.py` | Build season rosters, team tendencies/openings/combos, player pools, and recent trends |
+| `build_hero_tactical_roles.py` | Build the commentary-only hero class and tactical-role artifact from Tencent sources |
 | `build_draft_model.py` | Train an interpretable next-action probability model and run BP rollouts |
 | `train_learnable_draft_choice_model.ipynb` | Train the team-aware learnable choice model with acting-team and opponent-team embeddings |
 
@@ -201,6 +202,33 @@ analysis/outputs/20260003/learnable_draft_choice_model.json
 The backend uses these learned team embeddings directly for the `learnable`
 model. It does not apply `team_action_tendencies.jsonl` afterward; that artifact
 continues to calibrate only the statistical model.
+
+### Build hero tactical roles for commentary
+
+This sidecar describes what a hero does in a lineup rather than treating every
+control or damage tag as interchangeable. It records Tencent's official hero
+classes and tank classification, numeric attribute bars, structured official
+hero relationships, and conservative tactical labels such as `frontline`,
+`primary_engage`, `peel_disengage`, `ally_reposition`, and `long_range_poke`.
+The generated JSON retains only controlled labels and short matched evidence,
+not full webpage prose.
+
+```bash
+source backend/.venv/bin/activate
+python3 analysis/build_hero_tactical_roles.py
+```
+
+Output:
+
+```text
+analysis/hero_tactical_roles.json
+```
+
+This artifact is for the commentary evidence layer only. It is deliberately
+separate from `hero_draft_feature_vectors.json`, so rebuilding it neither
+changes the English ML feature space nor requires model retraining. The build
+fails validation when official class/page coverage is incomplete or when a
+tactical role is invalid.
 
 ### Compute team-specific hero synergies
 

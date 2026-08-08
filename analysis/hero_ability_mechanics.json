@@ -102,7 +102,7 @@
     },
     "conditions": {
       "delayed_effect": "延迟生效",
-      "channel_or_charge": "吟唱/蓄力",
+      "channel_or_charge": "蓄力",
       "recast": "可再次释放",
       "requires_mark": "依赖标记/印记",
       "water_or_river": "依赖水域/河道",
@@ -1074,7 +1074,7 @@
             "directional",
             "proximity"
           ],
-          "summary_zh": "物理伤害；吟唱/蓄力；方向性技能；近身/范围条件",
+          "summary_zh": "物理伤害；蓄力；方向性技能；近身/范围条件",
           "matched_terms": {
             "damage_physical": [
               "物理伤害"
@@ -2079,7 +2079,7 @@
             "proximity",
             "ally_targeted"
           ],
-          "summary_zh": "伤害回溯；冷却缩减/返还；吟唱/蓄力；近身/范围条件；与友方交互",
+          "summary_zh": "伤害回溯；冷却缩减/返还；蓄力；近身/范围条件；与友方交互",
           "matched_terms": {
             "support_damage_rewind": [
               "返还期间所受到25/30/35/40/45/50%的伤害",
@@ -2382,7 +2382,7 @@
           "conditions": [
             "channel_or_charge"
           ],
-          "summary_zh": "物理伤害；生命回复；吟唱/蓄力",
+          "summary_zh": "物理伤害；生命回复；蓄力",
           "matched_terms": {
             "damage_physical": [
               "物理伤害"
@@ -3189,7 +3189,7 @@
             "channel_or_charge",
             "directional"
           ],
-          "summary_zh": "法术伤害；延迟生效；吟唱/蓄力；方向性技能",
+          "summary_zh": "法术伤害；延迟生效；蓄力；方向性技能",
           "matched_terms": {
             "damage_magic": [
               "法术伤害"
@@ -4393,7 +4393,7 @@
             "channel_or_charge",
             "low_health_condition"
           ],
-          "summary_zh": "物理伤害；低生命斩杀；眩晕；控制免疫/霸体；致命伤害保护；吟唱/蓄力；低生命触发/强化",
+          "summary_zh": "物理伤害；低生命斩杀；眩晕；控制免疫/霸体；致命伤害保护；蓄力；低生命触发/强化",
           "matched_terms": {
             "damage_physical": [
               "物理伤害"
@@ -5112,7 +5112,7 @@
             "channel_or_charge",
             "recast"
           ],
-          "summary_zh": "法术伤害；护盾；吟唱/蓄力；可再次释放",
+          "summary_zh": "法术伤害；护盾；蓄力；可再次释放",
           "matched_terms": {
             "damage_magic": [
               "法术伤害"
@@ -5565,7 +5565,7 @@
             "recast",
             "directional"
           ],
-          "summary_zh": "法术伤害；形态切换；吟唱/蓄力；可再次释放；方向性技能",
+          "summary_zh": "法术伤害；形态切换；蓄力；可再次释放；方向性技能",
           "matched_terms": {
             "damage_magic": [
               "法术伤害"
@@ -5697,7 +5697,7 @@
           "conditions": [
             "channel_or_charge"
           ],
-          "summary_zh": "法术伤害；眩晕；突进/位移；吟唱/蓄力",
+          "summary_zh": "法术伤害；眩晕；突进/位移；蓄力",
           "matched_terms": {
             "damage_magic": [
               "法术伤害"
@@ -5731,7 +5731,7 @@
             "channel_or_charge",
             "ally_targeted"
           ],
-          "summary_zh": "法术伤害；传送/瞬移；移速强化；队友位移/传送；护盾；生命回复；友方治疗；吟唱/蓄力；与友方交互",
+          "summary_zh": "法术伤害；传送/瞬移；移速强化；队友位移/传送；护盾；生命回复；友方治疗；蓄力；与友方交互",
           "matched_terms": {
             "damage_magic": [
               "法术伤害"
@@ -7169,7 +7169,7 @@
             "proximity",
             "ally_targeted"
           ],
-          "summary_zh": "技能刷新；友方技能刷新；冷却缩减/返还；吟唱/蓄力；击败/助攻触发；近身/范围条件；与友方交互",
+          "summary_zh": "技能刷新；友方技能刷新；冷却缩减/返还；蓄力；击败/助攻触发；近身/范围条件；与友方交互",
           "matched_terms": {
             "utility_skill_refresh": [
               "刷新范围内一名友军当前冷却时间最长的技能",
@@ -7662,7 +7662,7 @@
             "channel_or_charge",
             "proximity"
           ],
-          "summary_zh": "物理伤害；击飞；吟唱/蓄力；近身/范围条件",
+          "summary_zh": "物理伤害；击飞；蓄力；近身/范围条件",
           "matched_terms": {
             "damage_physical": [
               "物理伤害"
@@ -8405,7 +8405,7 @@
           "conditions": [
             "channel_or_charge"
           ],
-          "summary_zh": "物理伤害；吟唱/蓄力",
+          "summary_zh": "物理伤害；蓄力",
           "matched_terms": {
             "damage_physical": [
               "物理伤害"
@@ -10437,7 +10437,7 @@
             "channel_or_charge",
             "on_kill_or_assist"
           ],
-          "summary_zh": "法术伤害；伤害强化；击飞；冷却缩减/返还；吟唱/蓄力；击败/助攻触发",
+          "summary_zh": "法术伤害；伤害强化；击飞；冷却缩减/返还；蓄力；击败/助攻触发",
           "matched_terms": {
             "damage_magic": [
               "法术伤害"
@@ -10584,7 +10584,7 @@
             "requires_mark",
             "ally_targeted"
           ],
-          "summary_zh": "传送/瞬移；队友位移/传送；持续区域；召唤物；冷却缩减/返还；标记/印记；吟唱/蓄力；可再次释放；依赖标记/印记；与友方交互",
+          "summary_zh": "传送/瞬移；队友位移/传送；持续区域；召唤物；冷却缩减/返还；标记/印记；蓄力；可再次释放；依赖标记/印记；与友方交互",
           "matched_terms": {
             "mobility_teleport": [
               "传送"
@@ -11141,7 +11141,7 @@
           "conditions": [
             "channel_or_charge"
           ],
-          "summary_zh": "物理伤害；眩晕；击退；突进/位移；吟唱/蓄力",
+          "summary_zh": "物理伤害；眩晕；击退；突进/位移；蓄力",
           "matched_terms": {
             "damage_physical": [
               "物理伤害"
@@ -11178,7 +11178,7 @@
             "channel_or_charge",
             "proximity"
           ],
-          "summary_zh": "物理伤害；法术伤害；伤害强化；击飞；移速强化；冷却缩减/返还；强化普攻；吟唱/蓄力；近身/范围条件",
+          "summary_zh": "物理伤害；法术伤害；伤害强化；击飞；移速强化；冷却缩减/返还；强化普攻；蓄力；近身/范围条件",
           "matched_terms": {
             "damage_physical": [
               "物理伤害"
@@ -11350,7 +11350,7 @@
             "recast",
             "requires_mark"
           ],
-          "summary_zh": "物理伤害；伤害强化；定身；移速强化；冷却缩减/返还；标记/印记；吟唱/蓄力；可再次释放；依赖标记/印记",
+          "summary_zh": "物理伤害；伤害强化；定身；移速强化；冷却缩减/返还；标记/印记；蓄力；可再次释放；依赖标记/印记",
           "matched_terms": {
             "damage_physical": [
               "物理伤害"
@@ -12077,7 +12077,7 @@
             "channel_or_charge",
             "directional"
           ],
-          "summary_zh": "法术伤害；伤害强化；吟唱/蓄力；方向性技能",
+          "summary_zh": "法术伤害；伤害强化；蓄力；方向性技能",
           "matched_terms": {
             "damage_magic": [
               "法术伤害"
@@ -12267,7 +12267,7 @@
             "channel_or_charge",
             "ally_targeted"
           ],
-          "summary_zh": "真实伤害；生命回复；友方治疗；冷却缩减/返还；吟唱/蓄力；与友方交互",
+          "summary_zh": "真实伤害；生命回复；友方治疗；冷却缩减/返还；蓄力；与友方交互",
           "matched_terms": {
             "damage_true": [
               "真实伤害"
@@ -12952,7 +12952,7 @@
           "conditions": [
             "channel_or_charge"
           ],
-          "summary_zh": "物理伤害；伤害强化；减速；形态切换；吟唱/蓄力",
+          "summary_zh": "物理伤害；伤害强化；减速；形态切换；蓄力",
           "matched_terms": {
             "damage_physical": [
               "物理伤害"
@@ -14975,7 +14975,7 @@
             "proximity",
             "ally_targeted"
           ],
-          "summary_zh": "物理伤害；移速强化；冷却缩减/返还；标记/印记；吟唱/蓄力；可再次释放；依赖标记/印记；近身/范围条件；与友方交互",
+          "summary_zh": "物理伤害；移速强化；冷却缩减/返还；标记/印记；蓄力；可再次释放；依赖标记/印记；近身/范围条件；与友方交互",
           "matched_terms": {
             "damage_physical": [
               "物理伤害"
@@ -15230,7 +15230,7 @@
           "conditions": [
             "channel_or_charge"
           ],
-          "summary_zh": "物理伤害；伤害强化；减速；控制免疫/霸体；强化普攻；吟唱/蓄力",
+          "summary_zh": "物理伤害；伤害强化；减速；控制免疫/霸体；强化普攻；蓄力",
           "matched_terms": {
             "damage_physical": [
               "物理伤害"
@@ -16054,7 +16054,7 @@
             "proximity",
             "ally_targeted"
           ],
-          "summary_zh": "法术伤害；生命回复；友方治疗；召唤物；吟唱/蓄力；近身/范围条件；与友方交互",
+          "summary_zh": "法术伤害；生命回复；友方治疗；召唤物；蓄力；近身/范围条件；与友方交互",
           "matched_terms": {
             "damage_magic": [
               "法术伤害"
@@ -16096,7 +16096,7 @@
             "channel_or_charge",
             "ally_targeted"
           ],
-          "summary_zh": "法术伤害；击飞；生命回复；友方治疗；吟唱/蓄力；与友方交互",
+          "summary_zh": "法术伤害；击飞；生命回复；友方治疗；蓄力；与友方交互",
           "matched_terms": {
             "damage_magic": [
               "法术伤害"
@@ -16612,7 +16612,7 @@
           "conditions": [
             "channel_or_charge"
           ],
-          "summary_zh": "物理伤害；减速；突进/位移；吟唱/蓄力",
+          "summary_zh": "物理伤害；减速；突进/位移；蓄力",
           "matched_terms": {
             "damage_physical": [
               "物理伤害"
@@ -17042,7 +17042,7 @@
             "channel_or_charge",
             "distance_scaling"
           ],
-          "summary_zh": "物理伤害；伤害强化；突进/位移；生命回复；吟唱/蓄力；随距离强化",
+          "summary_zh": "物理伤害；伤害强化；突进/位移；生命回复；蓄力；随距离强化",
           "matched_terms": {
             "damage_physical": [
               "物理伤害"
@@ -17096,7 +17096,7 @@
           "conditions": [
             "channel_or_charge"
           ],
-          "summary_zh": "物理伤害；减速；眩晕；击退；护盾；吟唱/蓄力",
+          "summary_zh": "物理伤害；减速；眩晕；击退；护盾；蓄力",
           "matched_terms": {
             "damage_physical": [
               "物理伤害"
@@ -17330,7 +17330,7 @@
           "conditions": [
             "channel_or_charge"
           ],
-          "summary_zh": "物理伤害；减速；攻速强化；冷却缩减/返还；吟唱/蓄力",
+          "summary_zh": "物理伤害；减速；攻速强化；冷却缩减/返还；蓄力",
           "matched_terms": {
             "damage_physical": [
               "物理伤害"
@@ -17549,7 +17549,7 @@
           "conditions": [
             "channel_or_charge"
           ],
-          "summary_zh": "物理伤害；减速；眩晕；突进/位移；吟唱/蓄力",
+          "summary_zh": "物理伤害；减速；眩晕；突进/位移；蓄力",
           "matched_terms": {
             "damage_physical": [
               "物理伤害"
@@ -18787,7 +18787,7 @@
           "conditions": [
             "channel_or_charge"
           ],
-          "summary_zh": "法术伤害；减速；吟唱/蓄力",
+          "summary_zh": "法术伤害；减速；蓄力",
           "matched_terms": {
             "damage_magic": [
               "法术伤害"
@@ -19447,7 +19447,7 @@
           "conditions": [
             "channel_or_charge"
           ],
-          "summary_zh": "物理伤害；眩晕；击退；护盾；冷却缩减/返还；吟唱/蓄力",
+          "summary_zh": "物理伤害；眩晕；击退；护盾；冷却缩减/返还；蓄力",
           "matched_terms": {
             "damage_physical": [
               "物理伤害"
@@ -20024,7 +20024,7 @@
           "conditions": [
             "channel_or_charge"
           ],
-          "summary_zh": "法术伤害；冷却缩减/返还；吟唱/蓄力",
+          "summary_zh": "法术伤害；冷却缩减/返还；蓄力",
           "matched_terms": {
             "damage_magic": [
               "法术伤害"

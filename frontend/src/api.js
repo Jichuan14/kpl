@@ -126,6 +126,13 @@ export function simulateDraft(state) {
   });
 }
 
+export function fetchSelectionCommentary(state) {
+  return request("/api/simulations/commentary", {
+    method: "POST",
+    body: JSON.stringify(state),
+  });
+}
+
 export function askDraftCoach(payload) {
   return request("/api/coach", {
     method: "POST",
