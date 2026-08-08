@@ -18,6 +18,8 @@ backend/data/*.sqlite*
 *.jsonl
 analysis/outputs/*/draft_model.json
 *.json
+!analysis/hero_ability_mechanics.json
+!analysis/hero_draft_feature_vectors.json
 *.gz
 # Hero artwork under frontend/public/assets/heroes is a deployable source asset.
 # Do not ignore it: a clean checkout must include the icons used by heroAssets.js.

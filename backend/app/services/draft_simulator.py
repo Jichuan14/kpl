@@ -19,7 +19,8 @@ _TEAM_TENDENCY_CACHE: dict[
         dict[tuple[str, str, str, str, int, str], dict[int, dict[str, Any]]],
     ],
 ] = {}
-SPECIALTY_FEATURES_PATH = ANALYSIS_DIR / "hero_specialty_vectors_thermometer.json"
+LEGACY_SPECIALTY_FEATURES_PATH = ANALYSIS_DIR / "hero_specialty_vectors_thermometer.json"
+DRAFT_FEATURES_PATH = ANALYSIS_DIR / "hero_draft_feature_vectors.json"
 
 
 def model_path(league_id: str) -> Path:
@@ -38,6 +39,19 @@ def feature_space_path(league_id: str) -> Path:
     if not league_id or not all(character.isalnum() or character in "-_" for character in league_id):
         raise ValueError("Invalid league id")
     return OUTPUT_ROOT / league_id / "learned_hero_feature_space.json"
+
+
+def feature_artifact_path(model: dict[str, Any]) -> Path:
+    """Resolve the model's versioned feature artifact without accepting paths."""
+    filename = str(model.get("feature_artifact") or LEGACY_SPECIALTY_FEATURES_PATH.name)
+    supported = {
+        LEGACY_SPECIALTY_FEATURES_PATH.name: LEGACY_SPECIALTY_FEATURES_PATH,
+        DRAFT_FEATURES_PATH.name: DRAFT_FEATURES_PATH,
+    }
+    try:
+        return supported[filename]
+    except KeyError as exc:
+        raise ValueError(f"Unsupported learnable feature artifact: {filename}") from exc
 
 
 def load_model(league_id: str) -> dict[str, Any]:
@@ -84,10 +98,6 @@ def load_learnable_model(league_id: str) -> dict[str, Any]:
     cached = _LEARNABLE_CACHE.get(path)
     if cached and cached[0] == modified:
         return cached[1]
-    if not SPECIALTY_FEATURES_PATH.is_file():
-        raise FileNotFoundError(
-            f"Hero specialty vectors are missing: {SPECIALTY_FEATURES_PATH}"
-        )
     with path.open(encoding="utf-8") as source:
         model = json.load(source)
     if (
@@ -99,11 +109,14 @@ def load_learnable_model(league_id: str) -> dict[str, Any]:
     if str(model.get("target_season")) != league_id:
         raise ValueError("Learnable draft model target season does not match the requested league")
 
-    with SPECIALTY_FEATURES_PATH.open(encoding="utf-8") as source:
-        specialty_artifact = json.load(source)
-    expected_feature_names = [*specialty_artifact.get("feature_names", []), "feature_known"]
+    features_path = feature_artifact_path(model)
+    if not features_path.is_file():
+        raise FileNotFoundError(f"Learnable feature vectors are missing: {features_path}")
+    with features_path.open(encoding="utf-8") as source:
+        feature_artifact = json.load(source)
+    expected_feature_names = [*feature_artifact.get("feature_names", []), "feature_known"]
     if model.get("feature_names") != expected_feature_names:
-        raise ValueError("Learnable draft model specialty schema does not match the current vectors")
+        raise ValueError("Learnable draft model feature schema does not match the current vectors")
     role_fields = (
         "current_team_picks",
         "current_opponent_picks",
@@ -121,14 +134,14 @@ def load_learnable_model(league_id: str) -> dict[str, Any]:
     if not team_ids or len(set(team_ids)) != len(team_ids):
         raise ValueError("Learnable draft model has an invalid team vocabulary")
     team_to_index = {team_id: index for index, team_id in enumerate(team_ids)}
-    specialty_by_id = {
+    features_by_id = {
         int(row["hero_id"]): [*row["vector"], float(row.get("feature_known", True))]
-        for row in specialty_artifact.get("rows", [])
+        for row in feature_artifact.get("rows", [])
         if row.get("hero_id") is not None
     }
     feature_width = len(expected_feature_names)
     feature_matrix = [
-        specialty_by_id.get(hero_id, [0.0] * feature_width) for hero_id in hero_ids
+        features_by_id.get(hero_id, [0.0] * feature_width) for hero_id in hero_ids
     ]
     parameters = model.get("parameters", {})
     required_parameters = {
@@ -235,7 +248,10 @@ def metadata(league_id: str) -> dict[str, Any]:
     model = load_model(league_id)
     learnable_ready = (
         learnable_model_path(league_id).is_file()
-        and SPECIALTY_FEATURES_PATH.is_file()
+        and (
+            DRAFT_FEATURES_PATH.is_file()
+            or LEGACY_SPECIALTY_FEATURES_PATH.is_file()
+        )
     )
     return {
         "league_id": league_id,

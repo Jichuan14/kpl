@@ -67,6 +67,14 @@ class AnalysisPipeline:
         self.export_dir.mkdir(parents=True, exist_ok=True)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         commands = [self._command(step)]
+        if step == "learnable_draft_model":
+            commands.insert(
+                0,
+                [
+                    sys.executable,
+                    str(ANALYSIS_DIR / "build_hero_draft_feature_vectors.py"),
+                ],
+            )
         started = time.monotonic()
         outputs: list[str] = []
         for command in commands:
