@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "artifact_type": "hero_ability_mechanics",
-  "generated_at": "2026-08-08T05:15:53.683508+00:00",
+  "generated_at": "2026-08-08T06:12:02.478913+00:00",
   "source": {
     "publisher": "腾讯游戏",
     "catalogue_url": "https://pvp.qq.com/web201605/herolist.shtml",
@@ -12022,7 +12022,6 @@
         "control_knockup",
         "damage_amplification",
         "damage_magic",
-        "defense_revive",
         "mobility_dash",
         "utility_vision"
       ],
@@ -12032,7 +12031,6 @@
       ],
       "commentary_hooks": {
         "provides": [
-          "death_protection",
           "engage_or_escape_mobility",
           "hard_crowd_control",
           "vision_reveal"
@@ -12041,7 +12039,6 @@
           "stealth_or_fog"
         ],
         "enables": [
-          "aggressive_commitment",
           "control_chain",
           "delayed_damage_followup",
           "dive",
@@ -12055,17 +12052,13 @@
           "skill_name": "暴躁节奏",
           "mechanics": [
             "damage_magic",
-            "defense_revive",
             "utility_vision"
           ],
           "conditions": [],
-          "summary_zh": "法术伤害；复活；视野获取/暴露",
+          "summary_zh": "法术伤害；视野获取/暴露",
           "matched_terms": {
             "damage_magic": [
               "法术伤害"
-            ],
-            "defense_revive": [
-              "复活"
             ],
             "utility_vision": [
               "暴露其视野"

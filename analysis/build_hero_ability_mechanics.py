@@ -22,6 +22,12 @@ DEFAULT_INPUT = Path("/tmp/kpl_tencent_hero_skills.json")
 DEFAULT_MODEL = REPO_ROOT / "analysis" / "outputs" / "20260003" / "draft_model.json"
 DEFAULT_OUTPUT = REPO_ROOT / "analysis" / "hero_ability_mechanics.json"
 
+# One confirmed catalogue-text false positive. 沈梦溪's passive mentions the
+# respawn state, but it does not grant a revival effect.
+HERO_MECHANIC_EXCLUSIONS: dict[str, set[str]] = {
+    "沈梦溪": {"defense_revive"},
+}
+
 
 # Tags are intentionally mechanical and conservative.  They describe what the
 # skill text explicitly says, not whether a hero is strategically good or bad.
@@ -394,9 +400,13 @@ def build_artifact(raw: dict[str, Any], model_path: Path, source_hash: str) -> d
         skill_rows: list[dict[str, Any]] = []
         hero_mechanics: set[str] = set()
         hero_conditions: set[str] = set()
+        excluded_mechanics = HERO_MECHANIC_EXCLUSIONS.get(hero_name, set())
         for skill in source_hero.get("skills", []):
             description = str(skill.get("description") or "").strip()
             mechanics, evidence = matching_tags(description, MECHANIC_RULES)
+            mechanics = [tag for tag in mechanics if tag not in excluded_mechanics]
+            for tag in excluded_mechanics:
+                evidence.pop(tag, None)
             conditions, condition_evidence = matching_tags(description, CONDITION_RULES)
             hero_mechanics.update(mechanics)
             hero_conditions.update(conditions)

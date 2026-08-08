@@ -852,11 +852,18 @@ np.fill_diagonal(distance_matrix, np.inf)
 
 feature_space_rows = []
 
+
 for index, hero_id in enumerate(hero_ids):
 
     source = source_by_id.get(hero_id, {})
 
     nearest_indices = np.argsort(distance_matrix[index])[:5]
+
+    gameplay_mechanic_keys = [
+        feature_name
+        for feature_name, value in zip(base_feature_names, hero_features[index, :-1])
+        if value > 0 and feature_name.startswith(('mechanic__', 'condition__'))
+    ]
 
     feature_space_rows.append({
 
@@ -873,6 +880,10 @@ for index, hero_id in enumerate(hero_ids):
         'damage_types': source.get('damage_types', []),
 
         'feature_known': bool(hero_features[index, -1]),
+
+        # Keep canonical feature keys here. Display translation belongs in the
+        # frontend and must never alter the numeric model input.
+        'gameplay_mechanic_keys': gameplay_mechanic_keys,
 
         'pick_count': int(pick_counts[hero_id]),
 
