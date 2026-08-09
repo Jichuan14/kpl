@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, Integer, String, UniqueConstraint, func
+from sqlalchemy import BigInteger, DateTime, Float, Integer, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -130,6 +130,47 @@ class BattlePlayer(Base):
     match_camp: Mapped[int] = mapped_column(Integer, default=0)
     position: Mapped[int] = mapped_column(Integer, default=0)
     position_desc: Mapped[str] = mapped_column(String(32), default="")
+    # Raw performance fields supplied by the official battle-detail endpoint.
+    # Keep the source values here; downstream models can normalize by role,
+    # patch, game duration, or league without redownloading battle history.
+    performance_data_available: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0"
+    )
+    kill_num: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    death_num: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    assist_num: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    gold: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    hurt_total: Mapped[int] = mapped_column(
+        BigInteger, default=0, server_default="0"
+    )
+    hurt_to_hero_total: Mapped[int] = mapped_column(
+        BigInteger, default=0, server_default="0"
+    )
+    be_hurt_total: Mapped[int] = mapped_column(
+        BigInteger, default=0, server_default="0"
+    )
+    be_hurt_by_hero_total: Mapped[int] = mapped_column(
+        BigInteger, default=0, server_default="0"
+    )
+    kda: Mapped[float] = mapped_column(Float, default=0.0, server_default="0")
+    mvp_score: Mapped[float] = mapped_column(Float, default=0.0, server_default="0")
+    is_mvp: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    is_lose_mvp: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    participation_rate: Mapped[float] = mapped_column(
+        Float, default=0.0, server_default="0"
+    )
+    hurt_total_rate: Mapped[float] = mapped_column(
+        Float, default=0.0, server_default="0"
+    )
+    be_hurt_total_rate: Mapped[float] = mapped_column(
+        Float, default=0.0, server_default="0"
+    )
+    hurt_to_hero_total_rate: Mapped[float] = mapped_column(
+        Float, default=0.0, server_default="0"
+    )
+    be_hurt_by_hero_total_rate: Mapped[float] = mapped_column(
+        Float, default=0.0, server_default="0"
+    )
 
 
 class Hero(Base):

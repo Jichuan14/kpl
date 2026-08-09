@@ -91,6 +91,21 @@ first with `POST /api/sync/leagues`. Leave `match_limit` out to process all
 available finished matches. Normal syncs are incremental and avoid re-fetching
 complete battles.
 
+Newly downloaded battles persist official player performance values, including
+K/D/A, KDA, gold, damage, participation, and MVP metrics. To backfill battles
+downloaded before this support was added, run the endpoint once with
+`incremental` set to `false` (use `match_limit` for a small validation batch):
+
+```bash
+curl -X POST http://localhost:8000/api/sync/league-bp \
+  -H 'Content-Type: application/json' \
+  -d '{"league_id":"20260003","match_limit":3,"incremental":false,"run_analysis":false}'
+```
+
+`performance_rows_written` reports how many player rows contained usable
+performance data. Historical all-zero API placeholders are retained with
+`performance_data_available = 0`.
+
 ## Application areas
 
 | Route | Purpose |

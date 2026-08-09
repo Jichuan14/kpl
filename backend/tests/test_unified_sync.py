@@ -1,9 +1,9 @@
 import unittest
 
-from sqlalchemy import create_engine, func, select
+from sqlalchemy import create_engine, func, inspect, select
 from sqlalchemy.orm import Session
 
-from app.database import Base
+from app.database import Base, ensure_schema_compatibility
 from app.models import Battle, BattleBp, BattlePlayer, Hero, Match, Player, Team
 from app.services.sync import SyncService
 
@@ -78,6 +78,22 @@ class UnifiedBattleSyncTest(unittest.TestCase):
                     "hero_name": "Picked Hero",
                     "camp": 2,
                     "position": 1,
+                    "kill_num": 4,
+                    "death_num": 1,
+                    "assist_num": 7,
+                    "gold": 9708,
+                    "hurt_total": 100000,
+                    "hurt_to_hero_total": 63068,
+                    "be_hurt_total": 42000,
+                    "be_hurt_by_hero_total": 31000,
+                    "kda": 11,
+                    "mvp_score": 11,
+                    "is_mvp": 1,
+                    "participation_rate": 78.5714,
+                    "hurt_total_rate": 22.5,
+                    "be_hurt_total_rate": 12.5,
+                    "hurt_to_hero_total_rate": 25.5,
+                    "be_hurt_by_hero_total_rate": 13.5,
                 },
                 {
                     "team_id": "team-b",
@@ -110,12 +126,61 @@ class UnifiedBattleSyncTest(unittest.TestCase):
         self.assertEqual(
             self.db.scalar(select(func.count()).select_from(BattlePlayer)), 2
         )
+
+        placeholder = self.detail()
+        placeholder["battle_player_list"][0] = {
+            key: value
+            for key, value in placeholder["battle_player_list"][0].items()
+            if key
+            not in {
+                "kill_num",
+                "death_num",
+                "assist_num",
+                "gold",
+                "hurt_total",
+                "hurt_to_hero_total",
+                "be_hurt_total",
+                "be_hurt_by_hero_total",
+                "kda",
+                "mvp_score",
+                "is_mvp",
+                "participation_rate",
+                "hurt_total_rate",
+                "be_hurt_total_rate",
+                "hurt_to_hero_total_rate",
+                "be_hurt_by_hero_total_rate",
+            }
+        }
+        self.service._persist_battle_detail(
+            battle=self.battle,
+            match=self.match,
+            data=placeholder,
+        )
+        self.db.commit()
+        preserved = self.db.scalar(
+            select(BattlePlayer).where(BattlePlayer.player_name == "Player A")
+        )
+        self.assertEqual(preserved.kill_num, 4)
+        self.assertEqual(preserved.kda, 11.0)
         self.assertEqual(self.db.scalar(select(func.count()).select_from(Hero)), 3)
 
         player_a = self.db.scalar(
             select(BattlePlayer).where(BattlePlayer.player_name == "Player A")
         )
         self.assertEqual(player_a.match_camp, 1)
+        self.assertEqual(player_a.performance_data_available, 1)
+        self.assertEqual(player_a.kill_num, 4)
+        self.assertEqual(player_a.death_num, 1)
+        self.assertEqual(player_a.assist_num, 7)
+        self.assertEqual(player_a.kda, 11.0)
+        self.assertEqual(player_a.hurt_to_hero_total, 63068)
+        self.assertAlmostEqual(player_a.participation_rate, 78.5714)
+
+        player_b = self.db.scalar(
+            select(BattlePlayer).where(BattlePlayer.player_name == "Player B")
+        )
+        self.assertEqual(player_b.performance_data_available, 0)
+        self.assertEqual(result["performance_rows"], 1)
 
         self.service._persist_battle_detail(
             battle=self.battle,
@@ -181,6 +246,7 @@ class UnifiedBattleSyncTest(unittest.TestCase):
         self.assertEqual(first["finished_matches_found"], 2)
         self.assertEqual(first["finished_matches_processed"], 1)
         self.assertEqual(first["finished_matches_skipped"], 1)
+        self.assertEqual(first["performance_rows_written"], 1)
         self.assertEqual(calls, ["battles:match-new", "detail:battle-new"])
 
         calls.clear()
@@ -190,6 +256,32 @@ class UnifiedBattleSyncTest(unittest.TestCase):
         self.assertFalse(second["data_changed"])
         self.assertEqual(second["finished_matches_processed"], 0)
         self.assertEqual(calls, [])
+
+
+class AdditiveSchemaMigrationTest(unittest.TestCase):
+    def test_existing_battle_player_rows_receive_safe_defaults(self) -> None:
+        engine = create_engine("sqlite:///:memory:")
+        with engine.begin() as connection:
+            connection.exec_driver_sql(
+                "CREATE TABLE battle_players (id INTEGER PRIMARY KEY)"
+            )
+            connection.exec_driver_sql("INSERT INTO battle_players (id) VALUES (1)")
+
+        added = ensure_schema_compatibility(engine)
+        columns = {
+            column["name"]
+            for column in inspect(engine).get_columns("battle_players")
+        }
+        self.assertIn("kda", added)
+        self.assertIn("performance_data_available", columns)
+        with engine.connect() as connection:
+            row = connection.exec_driver_sql(
+                "SELECT performance_data_available, kda "
+                "FROM battle_players WHERE id = 1"
+            ).one()
+        self.assertEqual(tuple(row), (0, 0.0))
+        self.assertEqual(ensure_schema_compatibility(engine), [])
+        engine.dispose()
 
 
 if __name__ == "__main__":
