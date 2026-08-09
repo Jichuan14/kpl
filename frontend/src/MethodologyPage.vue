@@ -16,6 +16,7 @@ const guideSections = [
   { id: "prediction", number: "03", label: "One prediction" },
   { id: "team-aware", number: "04", label: "Team awareness" },
   { id: "outputs", number: "05", label: "Simulator & coach" },
+  { id: "rankings", number: "06", label: "Power rankings" },
 ];
 
 const exampleHeroes = {
@@ -556,6 +557,81 @@ watch(selectedLeagueId, loadModel);
           </div>
         </section>
 
+        <section id="rankings" class="guide-section rankings-method-section">
+          <div class="section-heading split-heading">
+            <div>
+              <span>06 · Power rankings</span>
+              <h2>Two boards, two questions.</h2>
+            </div>
+            <p>
+              The team board asks who is strongest now. The hero board asks
+              which active player has performed best when using one specific
+              hero. Both combine results across available competitions while
+              giving more influence to recent matches.
+            </p>
+          </div>
+
+          <div class="ranking-method-grid">
+            <article class="ranking-method-card team-ranking-method">
+              <header>
+                <span>TEAM POWER SCORE</span>
+                <strong>Opponent strength + current form</strong>
+              </header>
+              <ol>
+                <li>
+                  <b>01</b>
+                  <div><strong>Update Elo after every game</strong><p>Every team begins at 1,500. Beating a stronger opponent earns more Elo than beating a weaker one, and losing to a weaker opponent costs more.</p></div>
+                </li>
+                <li>
+                  <b>02</b>
+                  <div><strong>Reduce stale evidence</strong><p>Older results gradually receive less influence. Elo also moves back toward 1,500 when a team has been inactive for a long period.</p></div>
+                </li>
+                <li>
+                  <b>03</b>
+                  <div><strong>Estimate current-form win rate</strong><p>Recent weighted wins are divided by recent weighted games. Six neutral prior games—three wins and three losses—keep small samples close to 50%.</p></div>
+                </li>
+              </ol>
+              <div class="ranking-equation" data-i18n-ignore>
+                <span>{{ language === "zh-CN" ? "战队实力分" : "TEAM POWER" }}</span>
+                <strong>{{ language === "zh-CN" ? "72% Elo 强度 + 28% 近期胜率" : "72% Elo strength + 28% current-form win rate" }}</strong>
+              </div>
+            </article>
+
+            <article class="ranking-method-card player-ranking-method">
+              <header>
+                <span>PLAYER–HERO SCORE</span>
+                <strong>Performance in the selected hero</strong>
+              </header>
+              <ol>
+                <li>
+                  <b>01</b>
+                  <div><strong>Compare players in the same role</strong><p>Each game is compared with players in the same competition and position, so support and carry statistics are not judged on the same raw scale.</p></div>
+                </li>
+                <li>
+                  <b>02</b>
+                  <div><strong>Build one game-performance score</strong><p>KDA contributes 40%, official MVP score 18%, participation 12%, hero-damage share 10%, gold pace 8%, and whether the player won 12%.</p></div>
+                </li>
+                <li>
+                  <b>03</b>
+                  <div><strong>Protect against tiny samples</strong><p>Recent games receive more influence. Four neutral games at a score of 50 are added before ranking, preventing one exceptional appearance from leading the board.</p></div>
+                </li>
+              </ol>
+              <div class="ranking-equation" data-i18n-ignore>
+                <span>{{ language === "zh-CN" ? "选手英雄综合分" : "PLAYER–HERO SCORE" }}</span>
+                <strong>{{ language === "zh-CN" ? "（加权表现 + 4 × 50）÷（有效局数 + 4）" : "(weighted performance + 4 × 50) ÷ (effective games + 4)" }}</strong>
+              </div>
+            </article>
+          </div>
+
+          <div class="ranking-reading-guide">
+            <span>HOW TO READ THE BOARDS</span>
+            <div>
+              <p><strong>Power score is comparative.</strong> It is designed for ordering teams or players inside the available evidence, not as a prediction that the top entry will win every next match.</p>
+              <p><strong>Evidence still matters.</strong> Current-season games, effective games, and confidence show how much support sits behind a score. Treat close scores and small samples as approximately even.</p>
+            </div>
+          </div>
+        </section>
+
       </div>
     </div>
   </main>
@@ -605,6 +681,7 @@ watch(selectedLeagueId, loadModel);
 .output-panel { position:relative; min-height:410px; }.panel-head { display:grid; }.panel-head b { margin-top:.3rem; font:700 1.25rem var(--display); }.loop-list { display:grid; gap:0; margin:0; padding:1rem; list-style:none; }.loop-list li { display:grid; grid-template-columns:2rem 1fr; align-items:center; gap:.6rem; padding:.72rem 0; border-bottom:1px solid var(--line); }.loop-list li > span { display:grid; place-items:center; width:1.7rem; height:1.7rem; border-radius:50%; background:rgba(15,138,107,.1); color:var(--accent-deep); font-size:.58rem; }.loop-list p { margin:0; color:var(--ink-soft); font-size:.66rem; }.loop-list strong { color:var(--ink); }.loop-mark { position:absolute; right:1rem; bottom:.7rem; color:rgba(15,138,107,.18); font:800 5rem var(--display); }
 .coach-panel { background:#102a2e; }.coach-panel .panel-head { border-color:rgba(255,255,255,.12); background:rgba(255,255,255,.04); }.coach-panel .panel-head span { color:#8fe0c8; }.coach-panel .panel-head b { color:#fff; }.coach-flow { display:grid; grid-template-columns:1fr 24px 1fr 24px 1fr 24px 1fr; gap:.4rem; align-items:center; padding:1rem; }.coach-flow div { min-height:170px; padding:.75rem; border:1px solid rgba(255,255,255,.1); border-radius:.4rem; background:rgba(255,255,255,.035); }.coach-flow span { color:#8fe0c8; font-size:.5rem; letter-spacing:.1em; }.coach-flow p { margin:2rem 0 0; color:rgba(255,255,255,.72); font:500 .65rem/1.55 var(--display); }.coach-flow i { color:#ffd16d; font-style:normal; text-align:center; transform:rotate(-90deg); }
 .responsibility-line { display:grid; grid-template-columns:repeat(3, 1fr); margin-top:1rem; border:1px solid var(--line); }.responsibility-line div { padding:.85rem; border-right:1px solid var(--line); }.responsibility-line div:last-child { border:0; }.responsibility-line span { display:block; color:var(--accent); font-size:.52rem; letter-spacing:.1em; }.responsibility-line strong { display:block; margin-top:.3rem; font:700 .72rem var(--display); }
+.ranking-method-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.8rem; }.ranking-method-card { overflow:hidden; border:1px solid var(--line); border-radius:.8rem; background:rgba(255,255,255,.7); }.ranking-method-card header { display:grid; gap:.35rem; padding:1.15rem; border-bottom:1px solid var(--line); }.ranking-method-card header span,.ranking-reading-guide>span { color:var(--accent-deep); font-size:.55rem; font-weight:700; letter-spacing:.11em; }.ranking-method-card header strong { font:700 1.2rem var(--display); }.ranking-method-card ol { margin:0; padding:0 1.15rem; list-style:none; }.ranking-method-card li { display:grid; grid-template-columns:2rem 1fr; gap:.65rem; padding:1rem 0; border-bottom:1px solid var(--line); }.ranking-method-card li>b { color:var(--accent); font:.7rem var(--mono); }.ranking-method-card li strong { font:700 .78rem var(--display); }.ranking-method-card li p { margin:.3rem 0 0; color:var(--ink-soft); font-size:.65rem; line-height:1.55; }.ranking-equation { display:grid; gap:.35rem; margin:1rem 1.15rem 1.15rem; padding:1rem; border-radius:.45rem; background:#102a2e; color:#fff; }.ranking-equation span { color:#8fe0c8; font-size:.52rem; letter-spacing:.1em; }.ranking-equation strong { font:700 .78rem/1.45 var(--display); }.ranking-reading-guide { display:grid; grid-template-columns:180px 1fr; gap:1.2rem; margin-top:.8rem; padding:1.1rem; border-left:3px solid #e8bf6c; background:rgba(232,191,108,.12); }.ranking-reading-guide>div { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1rem; }.ranking-reading-guide p { margin:0; color:var(--ink-soft); font-size:.68rem; line-height:1.6; }.ranking-reading-guide strong { color:var(--ink); }
 .meaning-grid { display:grid; grid-template-columns:repeat(2, 1fr); gap:1rem; }.meaning-grid article { padding:1.2rem; border-radius:.7rem; }.meaning-grid article > span { font-size:.55rem; font-weight:700; letter-spacing:.12em; }.meaning-grid ul { margin:1rem 0 0; padding:0; list-style:none; }.meaning-grid li { position:relative; padding:.7rem 0 .7rem 1.6rem; border-bottom:1px solid rgba(16,42,46,.09); color:var(--ink-soft); font:500 .69rem/1.45 var(--display); }.meaning-grid li::before { position:absolute; left:0; font-weight:700; }.means-yes { background:rgba(15,138,107,.08); }.means-yes > span, .means-yes li::before { color:var(--accent-deep); }.means-yes li::before { content:"✓"; }.means-no { background:rgba(196,92,38,.07); }.means-no > span, .means-no li::before { color:var(--warn); }.means-no li::before { content:"×"; }
 .honesty-note { display:grid; grid-template-columns:190px 1fr; gap:1rem; margin-top:1rem; padding:1.1rem; border:1px solid #e8bf6c; border-radius:.55rem; background:rgba(232,191,108,.12); }.honesty-note span { color:#8b641e; font-size:.55rem; font-weight:700; letter-spacing:.1em; }.honesty-note p { margin:0; color:var(--ink-soft); font-size:.68rem; line-height:1.6; }
 .closing-link { display:grid; grid-template-columns:1fr auto; gap:.25rem 1rem; margin-top:1rem; padding:1.2rem; border-radius:.6rem; background:var(--ink); color:#fff; text-decoration:none; }.closing-link span { color:rgba(255,255,255,.52); font-size:.57rem; letter-spacing:.1em; text-transform:uppercase; }.closing-link strong { font:700 1.15rem var(--display); }.closing-link b { grid-column:2; grid-row:1/3; align-self:center; color:#8fe0c8; font-size:1.5rem; }.closing-link:hover b { transform:translateX(.25rem); }
@@ -613,5 +690,6 @@ watch(selectedLeagueId, loadModel);
 @media (max-width:520px) { .method-page { width:calc(100% - .8rem); }.method-hero { border-radius:.8rem; }.hero-copy h1 { font-size:3.5rem; }.hero-intro { font-size:.8rem; }.hero-actions { display:grid; }.hero-actions a { justify-content:center; }.terminal-body p { align-items:start; }.truth-strip { grid-template-columns:1fr; }.truth-strip article { min-height:auto; border-right:0; border-bottom:1px solid var(--line); }.truth-strip article:nth-child(3) { border-bottom:1px solid var(--line); }.guide-rail { margin-left:0; margin-right:0; }.section-heading h2 { font-size:2.75rem; }.system-map, .signal-grid { grid-template-columns:1fr; }.system-card:last-child { grid-column:auto; }.plain-callout, .honesty-note { grid-template-columns:1fr; }.matchup-row { grid-template-columns:1fr; }.plus { display:none; }.same-board b { text-align:center; }.decision-record dl div { grid-template-columns:1fr; gap:.2rem; }.decision-record dd { text-align:left; }.coach-flow p { margin-top:.8rem; }.closing-link { grid-template-columns:1fr auto; } }
 @media (max-width:1180px) { .architecture-flow { grid-template-columns:minmax(190px, 1fr) 24px minmax(170px, .8fr) 24px minmax(190px, 1fr); gap:.35rem; }.architecture-board { gap:.25rem; }.architecture-board b { display:none; } }
 @media (max-width:820px) { .architecture-flow { grid-template-columns:1fr; gap:.6rem; }.architecture-arrow { transform:rotate(90deg); }.architecture-inputs { grid-template-columns:1fr; }.encoder-node { min-height:auto; }.architecture-candidate { grid-template-columns:1fr; }.architecture-board b { display:block; } }
+@media (max-width:820px) { .ranking-method-grid { grid-template-columns:1fr; }.ranking-reading-guide { grid-template-columns:1fr; }.ranking-reading-guide>div { grid-template-columns:1fr; } }
 @media (max-width:640px) { .team-probability-head { align-items:start; flex-direction:column; }.team-probability-grid { grid-template-columns:1fr; }.team-probability-card { padding:1rem; }.shared-board small { display:none; }.team-probability-example > p { padding:.7rem 1rem; } }
 </style>
