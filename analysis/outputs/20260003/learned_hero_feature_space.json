@@ -5,15 +5,15 @@
   "projection": "pca",
   "source_space": "learned_candidate_representation",
   "explained_variance_ratio": [
-    0.2733801305294037,
-    0.11248349398374557
+    0.24602210521697998,
+    0.12097585946321487
   ],
   "rows": [
     {
       "hero_id": 105,
       "hero_name": "廉颇",
-      "x": -0.26414215564727783,
-      "y": 0.3995729684829712,
+      "x": -0.2127998173236847,
+      "y": -0.48609596490859985,
       "primary_lane": "clash",
       "damage_types": [
         "physical"
@@ -34,23 +34,23 @@
         "condition__distance_scaling",
         "condition__proximity"
       ],
-      "pick_count": 79,
+      "pick_count": 80,
       "ban_count": 26,
-      "bp_action_count": 105,
-      "weighted_bp_action_count": 45.00265624999997,
+      "bp_action_count": 106,
+      "weighted_bp_action_count": 46.00265624999997,
       "nearest_hero_ids": [
-        114,
+        171,
         544,
-        108,
-        187,
-        189
+        114,
+        168,
+        187
       ]
     },
     {
       "hero_id": 106,
       "hero_name": "小乔",
-      "x": 0.8024672865867615,
-      "y": -0.015479768626391888,
+      "x": 0.8245733380317688,
+      "y": -0.06283228099346161,
       "primary_lane": "mid",
       "damage_types": [
         "magic"
@@ -64,23 +64,23 @@
         "condition__directional",
         "condition__proximity"
       ],
-      "pick_count": 391,
-      "ban_count": 207,
-      "bp_action_count": 598,
-      "weighted_bp_action_count": 379.85144062500046,
+      "pick_count": 408,
+      "ban_count": 216,
+      "bp_action_count": 624,
+      "weighted_bp_action_count": 410.35144062500046,
       "nearest_hero_ids": [
         136,
-        312,
         142,
+        312,
         179,
-        148
+        517
       ]
     },
     {
       "hero_id": 107,
       "hero_name": "赵云",
-      "x": 0.38413673639297485,
-      "y": -0.5694818496704102,
+      "x": 0.5260089635848999,
+      "y": 0.3765612840652466,
       "primary_lane": "jungle",
       "damage_types": [
         "physical"
@@ -101,23 +101,23 @@
         "condition__distance_scaling",
         "condition__proximity"
       ],
-      "pick_count": 109,
-      "ban_count": 75,
-      "bp_action_count": 184,
-      "weighted_bp_action_count": 200.2,
+      "pick_count": 126,
+      "ban_count": 89,
+      "bp_action_count": 215,
+      "weighted_bp_action_count": 237.7,
       "nearest_hero_ids": [
+        549,
         511,
-        180,
         163,
         538,
-        178
+        180
       ]
     },
     {
       "hero_id": 108,
       "hero_name": "墨子",
-      "x": -0.11431638151407242,
-      "y": 0.4355240762233734,
+      "x": -0.1117139682173729,
+      "y": -0.4509522318840027,
       "primary_lane": "mid",
       "damage_types": [
         "magic"
@@ -136,22 +136,22 @@
         "condition__proximity"
       ],
       "pick_count": 92,
-      "ban_count": 141,
-      "bp_action_count": 233,
-      "weighted_bp_action_count": 99.89537187500001,
+      "ban_count": 146,
+      "bp_action_count": 238,
+      "weighted_bp_action_count": 104.89537187500001,
       "nearest_hero_ids": [
         544,
-        105,
         113,
-        501,
-        118
+        105,
+        534,
+        501
       ]
     },
     {
       "hero_id": 109,
       "hero_name": "妲己",
-      "x": -0.6782746315002441,
-      "y": 0.1133384108543396,
+      "x": -0.7025651335716248,
+      "y": -0.06660737842321396,
       "primary_lane": "mid",
       "damage_types": [
         "magic"
@@ -171,16 +171,16 @@
       "nearest_hero_ids": [
         115,
         513,
-        154,
-        150,
-        141
+        141,
+        129,
+        195
       ]
     },
     {
       "hero_id": 110,
       "hero_name": "嬴政",
-      "x": 0.23183470964431763,
-      "y": -0.3219713568687439,
+      "x": 0.2878671884536743,
+      "y": 0.30521583557128906,
       "primary_lane": "mid",
       "damage_types": [
         "magic",
@@ -198,23 +198,23 @@
         "condition__proximity",
         "condition__recast"
       ],
-      "pick_count": 229,
-      "ban_count": 164,
-      "bp_action_count": 393,
-      "weighted_bp_action_count": 174.86769687500026,
+      "pick_count": 234,
+      "ban_count": 169,
+      "bp_action_count": 403,
+      "weighted_bp_action_count": 186.36769687500026,
       "nearest_hero_ids": [
-        142,
-        127,
         179,
-        558,
-        182
+        142,
+        523,
+        127,
+        537
       ]
     },
     {
       "hero_id": 111,
       "hero_name": "孙尚香",
-      "x": -0.02513948269188404,
-      "y": 0.23039206862449646,
+      "x": -0.11662307381629944,
+      "y": -0.10182658582925797,
       "primary_lane": "farm",
       "damage_types": [
         "physical"
@@ -239,18 +239,18 @@
       "bp_action_count": 331,
       "weighted_bp_action_count": 117.06029375000033,
       "nearest_hero_ids": [
-        173,
-        199,
-        155,
         584,
-        550
+        524,
+        548,
+        190,
+        155
       ]
     },
     {
       "hero_id": 112,
       "hero_name": "鲁班七号",
-      "x": -0.17853526771068573,
-      "y": -0.022448578849434853,
+      "x": -0.331727534532547,
+      "y": 0.3453863859176636,
       "primary_lane": "farm",
       "damage_types": [
         "physical"
@@ -269,23 +269,23 @@
         "condition__directional",
         "condition__proximity"
       ],
-      "pick_count": 129,
-      "ban_count": 53,
-      "bp_action_count": 182,
-      "weighted_bp_action_count": 60.97645625000003,
+      "pick_count": 130,
+      "ban_count": 54,
+      "bp_action_count": 184,
+      "weighted_bp_action_count": 63.47645625000003,
       "nearest_hero_ids": [
-        584,
-        173,
-        174,
+        119,
+        192,
         133,
-        176
+        174,
+        584
       ]
     },
     {
       "hero_id": 113,
       "hero_name": "庄周",
-      "x": -0.16068518161773682,
-      "y": 0.469884991645813,
+      "x": -0.12732262909412384,
+      "y": -0.5665508508682251,
       "primary_lane": "roam",
       "damage_types": [
         "magic"
@@ -305,23 +305,23 @@
         "condition__directional",
         "condition__proximity"
       ],
-      "pick_count": 40,
+      "pick_count": 41,
       "ban_count": 39,
-      "bp_action_count": 79,
-      "weighted_bp_action_count": 38.92555937499998,
+      "bp_action_count": 80,
+      "weighted_bp_action_count": 39.92555937499998,
       "nearest_hero_ids": [
         108,
-        187,
         118,
-        544,
+        187,
+        189,
         169
       ]
     },
     {
       "hero_id": 114,
       "hero_name": "刘禅",
-      "x": -0.7526047229766846,
-      "y": 0.11227409541606903,
+      "x": -0.7472465634346008,
+      "y": -0.17126227915287018,
       "primary_lane": "roam",
       "damage_types": [
         "physical"
@@ -346,17 +346,17 @@
       "weighted_bp_action_count": 1.17850625,
       "nearest_hero_ids": [
         529,
-        115,
-        109,
         154,
+        534,
+        115,
         540
       ]
     },
     {
       "hero_id": 115,
       "hero_name": "高渐离",
-      "x": -0.7603186368942261,
-      "y": 0.08213023096323013,
+      "x": -0.7868854403495789,
+      "y": 0.014498920179903507,
       "primary_lane": "mid",
       "damage_types": [
         "magic"
@@ -379,17 +379,17 @@
       "weighted_bp_action_count": 0.44626562500000005,
       "nearest_hero_ids": [
         109,
-        529,
         513,
-        129,
-        524
+        524,
+        154,
+        141
       ]
     },
     {
       "hero_id": 116,
       "hero_name": "阿轲",
-      "x": -1.311387062072754,
-      "y": 0.3129117786884308,
+      "x": -1.3025727272033691,
+      "y": -0.2449718415737152,
       "primary_lane": "jungle",
       "damage_types": [
         "physical"
@@ -419,18 +419,18 @@
       "bp_action_count": 1,
       "weighted_bp_action_count": 0.274625,
       "nearest_hero_ids": [
-        129,
-        117,
         154,
+        117,
         195,
+        129,
         513
       ]
     },
     {
       "hero_id": 117,
       "hero_name": "钟无艳",
-      "x": -0.9490272998809814,
-      "y": 0.22878476977348328,
+      "x": -0.9900402426719666,
+      "y": -0.0818646028637886,
       "primary_lane": "clash",
       "damage_types": [
         "physical"
@@ -452,18 +452,18 @@
       "bp_action_count": 1,
       "weighted_bp_action_count": 0.274625,
       "nearest_hero_ids": [
-        129,
-        513,
         154,
-        116,
-        195
+        195,
+        513,
+        129,
+        116
       ]
     },
     {
       "hero_id": 118,
       "hero_name": "孙膑",
-      "x": -0.4295826554298401,
-      "y": 0.40524807572364807,
+      "x": -0.4335014224052429,
+      "y": -0.5098297595977783,
       "primary_lane": "roam",
       "damage_types": [
         "magic"
@@ -485,18 +485,18 @@
       "bp_action_count": 38,
       "weighted_bp_action_count": 21.19814375,
       "nearest_hero_ids": [
+        191,
         534,
-        184,
-        188,
-        501,
-        191
+        114,
+        170,
+        187
       ]
     },
     {
       "hero_id": 119,
       "hero_name": "扁鹊",
-      "x": -0.6334263682365417,
-      "y": -0.030114533379673958,
+      "x": -0.4948449730873108,
+      "y": 0.2173929512500763,
       "primary_lane": "mid",
       "damage_types": [
         "magic"
@@ -522,18 +522,18 @@
       "bp_action_count": 7,
       "weighted_bp_action_count": 2.56563125,
       "nearest_hero_ids": [
-        195,
         513,
-        524,
+        195,
+        115,
         144,
-        174
+        524
       ]
     },
     {
       "hero_id": 120,
       "hero_name": "白起",
-      "x": 0.4607600271701813,
-      "y": -0.25756245851516724,
+      "x": 0.555002748966217,
+      "y": 0.21748284995555878,
       "primary_lane": "clash",
       "damage_types": [
         "physical"
@@ -552,23 +552,23 @@
         "condition__channel_or_charge",
         "condition__proximity"
       ],
-      "pick_count": 97,
-      "ban_count": 138,
-      "bp_action_count": 235,
-      "weighted_bp_action_count": 167.95074062499998,
+      "pick_count": 103,
+      "ban_count": 141,
+      "bp_action_count": 244,
+      "weighted_bp_action_count": 179.95074062499998,
       "nearest_hero_ids": [
         527,
         140,
-        134,
         503,
-        558
+        511,
+        537
       ]
     },
     {
       "hero_id": 121,
       "hero_name": "芈月",
-      "x": 0.2020595818758011,
-      "y": -0.4083145558834076,
+      "x": 0.20053845643997192,
+      "y": 0.38354822993278503,
       "primary_lane": "unknown",
       "damage_types": [],
       "feature_known": true,
@@ -583,23 +583,23 @@
         "mechanic__utility_summon",
         "condition__proximity"
       ],
-      "pick_count": 46,
-      "ban_count": 74,
-      "bp_action_count": 120,
-      "weighted_bp_action_count": 96.90137499999997,
+      "pick_count": 48,
+      "ban_count": 84,
+      "bp_action_count": 132,
+      "weighted_bp_action_count": 109.40137499999997,
       "nearest_hero_ids": [
         537,
-        110,
-        142,
-        123,
-        180
+        198,
+        139,
+        514,
+        110
       ]
     },
     {
       "hero_id": 123,
       "hero_name": "吕布",
-      "x": -0.15301139652729034,
-      "y": -0.4688580334186554,
+      "x": 0.06700973212718964,
+      "y": 0.5449526309967041,
       "primary_lane": "clash",
       "damage_types": [
         "physical",
@@ -616,23 +616,23 @@
         "mechanic__sustain_heal",
         "condition__proximity"
       ],
-      "pick_count": 54,
-      "ban_count": 60,
-      "bp_action_count": 114,
-      "weighted_bp_action_count": 63.49769999999997,
+      "pick_count": 57,
+      "ban_count": 63,
+      "bp_action_count": 120,
+      "weighted_bp_action_count": 69.99769999999998,
       "nearest_hero_ids": [
         514,
+        180,
         507,
-        170,
-        584,
-        121
+        536,
+        584
       ]
     },
     {
       "hero_id": 125,
       "hero_name": "元歌",
-      "x": -0.3677489459514618,
-      "y": -0.076478973031044,
+      "x": -0.28907930850982666,
+      "y": 0.12164876610040665,
       "primary_lane": "unknown",
       "damage_types": [],
       "feature_known": true,
@@ -657,17 +657,17 @@
       "weighted_bp_action_count": 9.434343750000002,
       "nearest_hero_ids": [
         510,
-        529,
-        134,
-        564,
-        501
+        153,
+        501,
+        558,
+        524
       ]
     },
     {
       "hero_id": 126,
       "hero_name": "夏侯惇",
-      "x": 0.5915546417236328,
-      "y": -0.2536102533340454,
+      "x": 0.6279536485671997,
+      "y": 0.3156881034374237,
       "primary_lane": "clash",
       "damage_types": [
         "physical",
@@ -690,23 +690,23 @@
         "condition__low_health_condition",
         "condition__proximity"
       ],
-      "pick_count": 290,
-      "ban_count": 164,
-      "bp_action_count": 454,
-      "weighted_bp_action_count": 271.52636562500027,
+      "pick_count": 296,
+      "ban_count": 168,
+      "bp_action_count": 464,
+      "weighted_bp_action_count": 282.52636562500027,
       "nearest_hero_ids": [
-        511,
+        198,
         502,
-        193,
+        517,
         581,
-        517
+        537
       ]
     },
     {
       "hero_id": 127,
       "hero_name": "甄姬",
-      "x": 0.17757949233055115,
-      "y": -0.23391854763031006,
+      "x": -0.04358109459280968,
+      "y": 0.09841237217187881,
       "primary_lane": "mid",
       "damage_types": [
         "magic"
@@ -730,22 +730,22 @@
         "condition__water_or_river"
       ],
       "pick_count": 168,
-      "ban_count": 187,
-      "bp_action_count": 355,
-      "weighted_bp_action_count": 111.03463125000009,
+      "ban_count": 189,
+      "bp_action_count": 357,
+      "weighted_bp_action_count": 113.03463125000009,
       "nearest_hero_ids": [
         182,
         179,
         563,
-        110,
-        523
+        523,
+        110
       ]
     },
     {
       "hero_id": 128,
       "hero_name": "曹操",
-      "x": 0.6500566601753235,
-      "y": -0.17915236949920654,
+      "x": 0.6053210496902466,
+      "y": 0.21942558884620667,
       "primary_lane": "clash",
       "damage_types": [
         "physical"
@@ -762,23 +762,23 @@
         "mechanic__utility_cooldown_reduction",
         "condition__proximity"
       ],
-      "pick_count": 441,
-      "ban_count": 268,
-      "bp_action_count": 709,
-      "weighted_bp_action_count": 350.930471875001,
+      "pick_count": 454,
+      "ban_count": 269,
+      "bp_action_count": 723,
+      "weighted_bp_action_count": 368.430471875001,
       "nearest_hero_ids": [
         558,
         537,
         503,
         536,
-        140
+        134
       ]
     },
     {
       "hero_id": 129,
       "hero_name": "典韦",
-      "x": -0.9323084950447083,
-      "y": -0.03089195489883423,
+      "x": -0.8653356432914734,
+      "y": 0.12909837067127228,
       "primary_lane": "jungle",
       "damage_types": [
         "physical",
@@ -804,16 +804,16 @@
       "nearest_hero_ids": [
         513,
         154,
-        117,
+        195,
         524,
-        195
+        117
       ]
     },
     {
       "hero_id": 130,
       "hero_name": "宫本武藏",
-      "x": 0.2997492849826813,
-      "y": -0.5360369086265564,
+      "x": 0.29017120599746704,
+      "y": 0.32776546478271484,
       "primary_lane": "unknown",
       "damage_types": [],
       "feature_known": true,
@@ -838,17 +838,17 @@
       "weighted_bp_action_count": 80.26172812499998,
       "nearest_hero_ids": [
         542,
-        531,
+        180,
         538,
-        163,
-        523
+        162,
+        531
       ]
     },
     {
       "hero_id": 131,
       "hero_name": "李白",
-      "x": -1.1361569166183472,
-      "y": -0.19935984909534454,
+      "x": -1.033705234527588,
+      "y": 0.2007203847169876,
       "primary_lane": "jungle",
       "damage_types": [
         "physical"
@@ -868,18 +868,18 @@
       "bp_action_count": 1,
       "weighted_bp_action_count": 0.63375,
       "nearest_hero_ids": [
-        154,
         129,
-        195,
+        154,
         513,
-        170
+        170,
+        195
       ]
     },
     {
       "hero_id": 132,
       "hero_name": "马可波罗",
-      "x": -0.9106773138046265,
-      "y": -0.3594594895839691,
+      "x": -0.7679142355918884,
+      "y": 0.5376342535018921,
       "primary_lane": "farm",
       "damage_types": [
         "physical",
@@ -901,18 +901,18 @@
       "bp_action_count": 13,
       "weighted_bp_action_count": 4.475321875000001,
       "nearest_hero_ids": [
-        129,
         508,
+        129,
         513,
-        154,
-        524
+        545,
+        131
       ]
     },
     {
       "hero_id": 133,
       "hero_name": "狄仁杰",
-      "x": 0.16982018947601318,
-      "y": 0.1716417372226715,
+      "x": 0.21156629920005798,
+      "y": 0.01978122629225254,
       "primary_lane": "farm",
       "damage_types": [
         "physical",
@@ -931,23 +931,23 @@
         "mechanic__utility_vision",
         "condition__ally_targeted"
       ],
-      "pick_count": 235,
-      "ban_count": 152,
-      "bp_action_count": 387,
-      "weighted_bp_action_count": 178.77568125000025,
+      "pick_count": 238,
+      "ban_count": 155,
+      "bp_action_count": 393,
+      "weighted_bp_action_count": 184.77568125000025,
       "nearest_hero_ids": [
-        112,
-        173,
-        519,
         172,
-        140
+        112,
+        519,
+        173,
+        169
       ]
     },
     {
       "hero_id": 134,
       "hero_name": "达摩",
-      "x": 0.0028457154985517263,
-      "y": -0.4316593408584595,
+      "x": 0.14149154722690582,
+      "y": 0.5267367959022522,
       "primary_lane": "clash",
       "damage_types": [
         "physical"
@@ -967,23 +967,23 @@
         "condition__directional",
         "condition__proximity"
       ],
-      "pick_count": 164,
-      "ban_count": 81,
-      "bp_action_count": 245,
-      "weighted_bp_action_count": 109.07515000000004,
+      "pick_count": 169,
+      "ban_count": 82,
+      "bp_action_count": 251,
+      "weighted_bp_action_count": 116.07515000000004,
       "nearest_hero_ids": [
         558,
-        510,
         527,
         564,
-        197
+        510,
+        537
       ]
     },
     {
       "hero_id": 135,
       "hero_name": "项羽",
-      "x": -0.28012436628341675,
-      "y": -0.44115743041038513,
+      "x": -0.09350363165140152,
+      "y": 0.6159029603004456,
       "primary_lane": "unknown",
       "damage_types": [],
       "feature_known": true,
@@ -1006,23 +1006,23 @@
         "condition__low_health_condition",
         "condition__proximity"
       ],
-      "pick_count": 31,
-      "ban_count": 9,
-      "bp_action_count": 40,
-      "weighted_bp_action_count": 38.39625,
+      "pick_count": 35,
+      "ban_count": 12,
+      "bp_action_count": 47,
+      "weighted_bp_action_count": 45.89625,
       "nearest_hero_ids": [
         144,
-        197,
         511,
-        524,
-        583
+        197,
+        549,
+        120
       ]
     },
     {
       "hero_id": 136,
       "hero_name": "武则天",
-      "x": 0.8641166090965271,
-      "y": -0.10030097514390945,
+      "x": 0.8173353672027588,
+      "y": 0.11212490499019623,
       "primary_lane": "mid",
       "damage_types": [
         "magic"
@@ -1042,23 +1042,23 @@
         "condition__directional",
         "condition__proximity"
       ],
-      "pick_count": 251,
-      "ban_count": 140,
-      "bp_action_count": 391,
-      "weighted_bp_action_count": 324.1311718750002,
+      "pick_count": 266,
+      "ban_count": 152,
+      "bp_action_count": 418,
+      "weighted_bp_action_count": 355.1311718750002,
       "nearest_hero_ids": [
         106,
         142,
         312,
-        179,
-        120
+        511,
+        519
       ]
     },
     {
       "hero_id": 139,
       "hero_name": "老夫子",
-      "x": 0.16230332851409912,
-      "y": -0.1926058828830719,
+      "x": 0.08853147178888321,
+      "y": 0.23964814841747284,
       "primary_lane": "clash",
       "damage_types": [
         "physical",
@@ -1075,23 +1075,23 @@
         "mechanic__utility_cooldown_reduction",
         "condition__directional"
       ],
-      "pick_count": 66,
-      "ban_count": 128,
-      "bp_action_count": 194,
-      "weighted_bp_action_count": 88.75213437500001,
+      "pick_count": 67,
+      "ban_count": 131,
+      "bp_action_count": 198,
+      "weighted_bp_action_count": 93.25213437500001,
       "nearest_hero_ids": [
-        558,
-        191,
-        125,
         537,
-        134
+        191,
+        121,
+        125,
+        558
       ]
     },
     {
       "hero_id": 140,
       "hero_name": "关羽",
-      "x": 0.8243642449378967,
-      "y": -0.13768036663532257,
+      "x": 0.869992733001709,
+      "y": 0.07801556587219238,
       "primary_lane": "clash",
       "damage_types": [
         "physical"
@@ -1107,23 +1107,23 @@
         "mechanic__utility_summon",
         "condition__proximity"
       ],
-      "pick_count": 369,
-      "ban_count": 857,
-      "bp_action_count": 1226,
-      "weighted_bp_action_count": 630.1091468750009,
+      "pick_count": 385,
+      "ban_count": 884,
+      "bp_action_count": 1269,
+      "weighted_bp_action_count": 677.1091468750009,
       "nearest_hero_ids": [
         537,
         531,
+        120,
         527,
-        503,
-        172
+        518
       ]
     },
     {
       "hero_id": 141,
       "hero_name": "貂蝉",
-      "x": -0.9128420948982239,
-      "y": -0.07304096221923828,
+      "x": -0.9224969744682312,
+      "y": 0.06367836147546768,
       "primary_lane": "mid",
       "damage_types": [
         "magic",
@@ -1147,18 +1147,18 @@
       "bp_action_count": 3,
       "weighted_bp_action_count": 1.01294375,
       "nearest_hero_ids": [
-        513,
         109,
-        524,
-        154,
-        115
+        513,
+        115,
+        129,
+        524
       ]
     },
     {
       "hero_id": 142,
       "hero_name": "安琪拉",
-      "x": 0.3001604974269867,
-      "y": -0.220305934548378,
+      "x": 0.3907109797000885,
+      "y": 0.18138156831264496,
       "primary_lane": "mid",
       "damage_types": [
         "magic"
@@ -1177,23 +1177,23 @@
         "condition__proximity",
         "condition__recast"
       ],
-      "pick_count": 219,
-      "ban_count": 130,
-      "bp_action_count": 349,
-      "weighted_bp_action_count": 239.9667437500001,
+      "pick_count": 231,
+      "ban_count": 143,
+      "bp_action_count": 374,
+      "weighted_bp_action_count": 266.9667437500001,
       "nearest_hero_ids": [
-        110,
         106,
+        110,
         148,
-        121,
-        136
+        136,
+        179
       ]
     },
     {
       "hero_id": 144,
       "hero_name": "程咬金",
-      "x": -0.7110385894775391,
-      "y": -0.20353056490421295,
+      "x": -0.5248888731002808,
+      "y": 0.2887207269668579,
       "primary_lane": "clash",
       "damage_types": [
         "physical"
@@ -1213,18 +1213,18 @@
       "bp_action_count": 1,
       "weighted_bp_action_count": 0.65,
       "nearest_hero_ids": [
-        524,
         149,
-        129,
+        115,
+        524,
         114,
-        190
+        153
       ]
     },
     {
       "hero_id": 146,
       "hero_name": "露娜",
-      "x": -0.39054685831069946,
-      "y": -0.3314216136932373,
+      "x": -0.47770461440086365,
+      "y": 0.17465002834796906,
       "primary_lane": "unknown",
       "damage_types": [],
       "feature_known": true,
@@ -1250,16 +1250,16 @@
       "nearest_hero_ids": [
         150,
         522,
-        162,
-        542,
-        528
+        129,
+        131,
+        162
       ]
     },
     {
       "hero_id": 148,
       "hero_name": "姜子牙",
-      "x": -0.07484520226716995,
-      "y": -0.23443526029586792,
+      "x": -0.048230040818452835,
+      "y": 0.2097368985414505,
       "primary_lane": "mid",
       "damage_types": [
         "magic"
@@ -1279,23 +1279,23 @@
         "condition__proximity",
         "condition__recast"
       ],
-      "pick_count": 112,
-      "ban_count": 36,
-      "bp_action_count": 148,
-      "weighted_bp_action_count": 82.20158749999996,
+      "pick_count": 115,
+      "ban_count": 39,
+      "bp_action_count": 154,
+      "weighted_bp_action_count": 89.70158749999996,
       "nearest_hero_ids": [
         142,
         182,
-        127,
         110,
-        149
+        523,
+        179
       ]
     },
     {
       "hero_id": 149,
       "hero_name": "刘邦",
-      "x": -0.6521170735359192,
-      "y": -0.2189369946718216,
+      "x": -0.6235170960426331,
+      "y": 0.1841961294412613,
       "primary_lane": "roam",
       "damage_types": [
         "magic",
@@ -1324,18 +1324,18 @@
       "bp_action_count": 11,
       "weighted_bp_action_count": 4.8891375,
       "nearest_hero_ids": [
-        144,
         115,
-        114,
-        524,
-        529
+        144,
+        501,
+        153,
+        564
       ]
     },
     {
       "hero_id": 150,
       "hero_name": "韩信",
-      "x": -0.5359996557235718,
-      "y": -0.17229540646076202,
+      "x": -0.618408203125,
+      "y": 0.06034337729215622,
       "primary_lane": "jungle",
       "damage_types": [
         "physical"
@@ -1358,18 +1358,18 @@
       "bp_action_count": 4,
       "weighted_bp_action_count": 1.90125,
       "nearest_hero_ids": [
+        129,
+        146,
         522,
-        109,
         513,
-        524,
-        146
+        154
       ]
     },
     {
       "hero_id": 151,
       "hero_name": "孙权",
-      "x": 0.31798267364501953,
-      "y": -0.2434915453195572,
+      "x": 0.21247921884059906,
+      "y": 0.21457935869693756,
       "primary_lane": "unknown",
       "damage_types": [],
       "feature_known": true,
@@ -1382,23 +1382,23 @@
         "condition__proximity",
         "condition__requires_mark"
       ],
-      "pick_count": 132,
-      "ban_count": 52,
-      "bp_action_count": 184,
-      "weighted_bp_action_count": 136.83236249999996,
+      "pick_count": 138,
+      "ban_count": 55,
+      "bp_action_count": 193,
+      "weighted_bp_action_count": 147.33236249999996,
       "nearest_hero_ids": [
         172,
         548,
-        199,
-        121,
+        545,
+        196,
         584
       ]
     },
     {
       "hero_id": 152,
       "hero_name": "王昭君",
-      "x": 0.42142027616500854,
-      "y": 0.17798809707164764,
+      "x": 0.08237187564373016,
+      "y": -0.2095319628715515,
       "primary_lane": "mid",
       "damage_types": [
         "magic"
@@ -1417,23 +1417,23 @@
         "condition__delayed_effect",
         "condition__proximity"
       ],
-      "pick_count": 172,
-      "ban_count": 73,
-      "bp_action_count": 245,
-      "weighted_bp_action_count": 129.419503125,
+      "pick_count": 175,
+      "ban_count": 74,
+      "bp_action_count": 249,
+      "weighted_bp_action_count": 133.919503125,
       "nearest_hero_ids": [
-        106,
-        136,
-        140,
-        179,
-        197
+        119,
+        195,
+        523,
+        110,
+        179
       ]
     },
     {
       "hero_id": 153,
       "hero_name": "兰陵王",
-      "x": -0.768216609954834,
-      "y": -0.3212922215461731,
+      "x": -0.6438366174697876,
+      "y": 0.2379179149866104,
       "primary_lane": "jungle",
       "damage_types": [
         "physical"
@@ -1458,18 +1458,18 @@
       "bp_action_count": 9,
       "weighted_bp_action_count": 1.9635687500000005,
       "nearest_hero_ids": [
-        514,
-        510,
+        528,
+        115,
         513,
         154,
-        129
+        501
       ]
     },
     {
       "hero_id": 154,
       "hero_name": "花木兰",
-      "x": -1.1048134565353394,
-      "y": -6.720029341522604e-05,
+      "x": -1.0790377855300903,
+      "y": 0.0012729278532788157,
       "primary_lane": "clash",
       "damage_types": [
         "physical"
@@ -1496,18 +1496,18 @@
       "bp_action_count": 0,
       "weighted_bp_action_count": 0.0,
       "nearest_hero_ids": [
+        117,
         513,
         129,
         195,
-        524,
-        117
+        524
       ]
     },
     {
       "hero_id": 155,
       "hero_name": "艾琳",
-      "x": 0.4019318222999573,
-      "y": -0.23267550766468048,
+      "x": 0.41437241435050964,
+      "y": 0.3620849549770355,
       "primary_lane": "farm",
       "damage_types": [
         "magic",
@@ -1527,23 +1527,23 @@
         "condition__recast",
         "condition__requires_mark"
       ],
-      "pick_count": 327,
-      "ban_count": 105,
-      "bp_action_count": 432,
-      "weighted_bp_action_count": 255.78872500000026,
+      "pick_count": 340,
+      "ban_count": 107,
+      "bp_action_count": 447,
+      "weighted_bp_action_count": 273.2887250000002,
       "nearest_hero_ids": [
-        172,
-        584,
         548,
-        128,
-        199
+        584,
+        172,
+        173,
+        545
       ]
     },
     {
       "hero_id": 156,
       "hero_name": "张良",
-      "x": 0.21020004153251648,
-      "y": 0.9508044123649597,
+      "x": 0.15804803371429443,
+      "y": -1.0970029830932617,
       "primary_lane": "mid",
       "damage_types": [
         "magic",
@@ -1561,23 +1561,23 @@
         "mechanic__utility_summon",
         "mechanic__utility_zone"
       ],
-      "pick_count": 167,
-      "ban_count": 261,
-      "bp_action_count": 428,
-      "weighted_bp_action_count": 180.5780593750002,
+      "pick_count": 171,
+      "ban_count": 266,
+      "bp_action_count": 437,
+      "weighted_bp_action_count": 190.5780593750002,
       "nearest_hero_ids": [
         113,
-        125,
+        186,
         152,
-        550,
-        186
+        125,
+        550
       ]
     },
     {
       "hero_id": 157,
       "hero_name": "不知火舞",
-      "x": 0.7209030389785767,
-      "y": -0.15142613649368286,
+      "x": 0.7042243480682373,
+      "y": 0.2832547426223755,
       "primary_lane": "mid",
       "damage_types": [
         "magic"
@@ -1595,23 +1595,23 @@
         "mechanic__utility_basic_attack_enhancement",
         "condition__distance_scaling"
       ],
-      "pick_count": 323,
-      "ban_count": 491,
-      "bp_action_count": 814,
-      "weighted_bp_action_count": 366.0354875000014,
+      "pick_count": 331,
+      "ban_count": 496,
+      "bp_action_count": 827,
+      "weighted_bp_action_count": 381.0354875000014,
       "nearest_hero_ids": [
         515,
         521,
         312,
-        537,
-        517
+        517,
+        140
       ]
     },
     {
       "hero_id": 159,
       "hero_name": "朵莉亚",
-      "x": 0.14368601143360138,
-      "y": 0.6323217749595642,
+      "x": -0.07533731311559677,
+      "y": -0.7210633754730225,
       "primary_lane": "roam",
       "damage_types": [
         "magic"
@@ -1636,23 +1636,23 @@
         "condition__proximity",
         "condition__water_or_river"
       ],
-      "pick_count": 192,
-      "ban_count": 93,
-      "bp_action_count": 285,
-      "weighted_bp_action_count": 119.35962187500014,
+      "pick_count": 199,
+      "ban_count": 96,
+      "bp_action_count": 295,
+      "weighted_bp_action_count": 131.85962187500013,
       "nearest_hero_ids": [
         577,
-        584,
-        194,
-        108,
-        188
+        171,
+        118,
+        191,
+        127
       ]
     },
     {
       "hero_id": 162,
       "hero_name": "娜可露露",
-      "x": -0.018559932708740234,
-      "y": -0.33552178740501404,
+      "x": 0.06465665996074677,
+      "y": 0.2460772842168808,
       "primary_lane": "jungle",
       "damage_types": [
         "physical"
@@ -1680,18 +1680,18 @@
       "bp_action_count": 144,
       "weighted_bp_action_count": 59.16269687499997,
       "nearest_hero_ids": [
-        522,
         542,
-        146,
+        522,
         538,
-        150
+        130,
+        502
       ]
     },
     {
       "hero_id": 163,
       "hero_name": "橘右京",
-      "x": 0.5268731713294983,
-      "y": -0.38105708360671997,
+      "x": 0.6373740434646606,
+      "y": 0.3143243193626404,
       "primary_lane": "jungle",
       "damage_types": [
         "physical"
@@ -1708,23 +1708,23 @@
         "condition__proximity",
         "condition__recast"
       ],
-      "pick_count": 239,
-      "ban_count": 228,
-      "bp_action_count": 467,
-      "weighted_bp_action_count": 288.16989375000026,
+      "pick_count": 252,
+      "ban_count": 231,
+      "bp_action_count": 483,
+      "weighted_bp_action_count": 306.16989375000026,
       "nearest_hero_ids": [
         542,
-        502,
         538,
-        517,
-        193
+        502,
+        533,
+        517
       ]
     },
     {
       "hero_id": 168,
       "hero_name": "牛魔",
-      "x": -0.6753190755844116,
-      "y": 0.5322937369346619,
+      "x": -0.6692665815353394,
+      "y": -0.5578208565711975,
       "primary_lane": "roam",
       "damage_types": [
         "physical"
@@ -1743,23 +1743,23 @@
         "condition__proximity",
         "condition__requires_mark"
       ],
-      "pick_count": 18,
+      "pick_count": 20,
       "ban_count": 2,
-      "bp_action_count": 20,
-      "weighted_bp_action_count": 8.16583125,
+      "bp_action_count": 22,
+      "weighted_bp_action_count": 10.16583125,
       "nearest_hero_ids": [
+        501,
+        184,
         529,
         114,
-        115,
-        189,
-        144
+        115
       ]
     },
     {
       "hero_id": 169,
       "hero_name": "后羿",
-      "x": -0.027473127469420433,
-      "y": -0.22012759745121002,
+      "x": 0.21073056757450104,
+      "y": 0.2139129787683487,
       "primary_lane": "farm",
       "damage_types": [
         "physical",
@@ -1776,23 +1776,23 @@
         "mechanic__utility_zone",
         "condition__proximity"
       ],
-      "pick_count": 78,
-      "ban_count": 144,
-      "bp_action_count": 222,
-      "weighted_bp_action_count": 94.28124062499998,
+      "pick_count": 83,
+      "ban_count": 146,
+      "bp_action_count": 229,
+      "weighted_bp_action_count": 102.78124062499998,
       "nearest_hero_ids": [
         196,
+        173,
+        510,
         584,
-        130,
-        174,
-        510
+        518
       ]
     },
     {
       "hero_id": 170,
       "hero_name": "刘备",
-      "x": -0.5200760364532471,
-      "y": -0.07504217326641083,
+      "x": -0.4789242148399353,
+      "y": 0.05891295522451401,
       "primary_lane": "jungle",
       "damage_types": [
         "physical"
@@ -1812,17 +1812,17 @@
       "weighted_bp_action_count": 1.0,
       "nearest_hero_ids": [
         195,
-        524,
         513,
+        522,
         129,
-        522
+        154
       ]
     },
     {
       "hero_id": 171,
       "hero_name": "张飞",
-      "x": 0.7545707821846008,
-      "y": 0.6895352602005005,
+      "x": 0.451574444770813,
+      "y": -0.8895098567008972,
       "primary_lane": "roam",
       "damage_types": [
         "physical"
@@ -1842,23 +1842,23 @@
         "condition__proximity",
         "condition__requires_mark"
       ],
-      "pick_count": 403,
-      "ban_count": 191,
-      "bp_action_count": 594,
-      "weighted_bp_action_count": 344.7692906250008,
+      "pick_count": 421,
+      "ban_count": 194,
+      "bp_action_count": 615,
+      "weighted_bp_action_count": 373.2692906250008,
       "nearest_hero_ids": [
-        194,
+        577,
+        105,
         544,
-        503,
-        108,
-        577
+        188,
+        194
       ]
     },
     {
       "hero_id": 172,
       "hero_name": "蚩奼",
-      "x": 0.7557023763656616,
-      "y": -0.09247595071792603,
+      "x": 0.6726294159889221,
+      "y": 0.11321133375167847,
       "primary_lane": "unknown",
       "damage_types": [],
       "feature_known": true,
@@ -1874,23 +1874,23 @@
         "mechanic__utility_transformation",
         "condition__directional"
       ],
-      "pick_count": 295,
-      "ban_count": 225,
-      "bp_action_count": 520,
-      "weighted_bp_action_count": 307.263375000001,
+      "pick_count": 298,
+      "ban_count": 228,
+      "bp_action_count": 526,
+      "weighted_bp_action_count": 313.763375000001,
       "nearest_hero_ids": [
         548,
-        537,
         519,
-        140,
+        537,
+        312,
         128
       ]
     },
     {
       "hero_id": 173,
       "hero_name": "李元芳",
-      "x": -0.3048824667930603,
-      "y": -0.04402746632695198,
+      "x": -0.14639051258563995,
+      "y": 0.2569711208343506,
       "primary_lane": "farm",
       "damage_types": [
         "physical",
@@ -1905,23 +1905,23 @@
         "condition__proximity",
         "condition__requires_mark"
       ],
-      "pick_count": 19,
+      "pick_count": 20,
       "ban_count": 3,
-      "bp_action_count": 22,
-      "weighted_bp_action_count": 14.936006250000002,
+      "bp_action_count": 23,
+      "weighted_bp_action_count": 16.436006250000002,
       "nearest_hero_ids": [
-        174,
         584,
-        132,
         196,
-        195
+        169,
+        174,
+        109
       ]
     },
     {
       "hero_id": 174,
       "hero_name": "虞姬",
-      "x": -0.07586737722158432,
-      "y": -0.0491325706243515,
+      "x": 0.21791692078113556,
+      "y": 0.2955504357814789,
       "primary_lane": "farm",
       "damage_types": [
         "physical"
@@ -1936,23 +1936,23 @@
         "mechanic__mobility_dash",
         "condition__channel_or_charge"
       ],
-      "pick_count": 93,
-      "ban_count": 43,
-      "bp_action_count": 136,
-      "weighted_bp_action_count": 106.45120937499996,
+      "pick_count": 101,
+      "ban_count": 44,
+      "bp_action_count": 145,
+      "weighted_bp_action_count": 117.45120937499996,
       "nearest_hero_ids": [
         196,
-        173,
         584,
-        169,
-        119
+        173,
+        177,
+        169
       ]
     },
     {
       "hero_id": 175,
       "hero_name": "钟馗",
-      "x": 0.15057699382305145,
-      "y": 1.0112954378128052,
+      "x": 0.14740370213985443,
+      "y": -0.9927104115486145,
       "primary_lane": "mid",
       "damage_types": [
         "magic"
@@ -1967,23 +1967,23 @@
         "condition__proximity",
         "condition__requires_mark"
       ],
-      "pick_count": 85,
-      "ban_count": 112,
-      "bp_action_count": 197,
-      "weighted_bp_action_count": 191.132659375,
+      "pick_count": 90,
+      "ban_count": 121,
+      "bp_action_count": 211,
+      "weighted_bp_action_count": 205.632659375,
       "nearest_hero_ids": [
         544,
-        585,
         195,
-        583,
-        140
+        140,
+        113,
+        108
       ]
     },
     {
       "hero_id": 176,
       "hero_name": "杨玉环",
-      "x": 0.04173366352915764,
-      "y": 0.24834345281124115,
+      "x": 0.09411448985338211,
+      "y": -0.18094483017921448,
       "primary_lane": "mid",
       "damage_types": [
         "magic"
@@ -2000,23 +2000,23 @@
         "condition__ally_targeted",
         "condition__proximity"
       ],
-      "pick_count": 163,
+      "pick_count": 164,
       "ban_count": 29,
-      "bp_action_count": 192,
-      "weighted_bp_action_count": 77.30532500000001,
+      "bp_action_count": 193,
+      "weighted_bp_action_count": 78.30532500000001,
       "nearest_hero_ids": [
-        110,
         515,
-        115,
-        157,
-        109
+        312,
+        109,
+        142,
+        110
       ]
     },
     {
       "hero_id": 177,
       "hero_name": "苍",
-      "x": 0.6042166352272034,
-      "y": 0.08170810341835022,
+      "x": 0.592468798160553,
+      "y": 0.04493984952569008,
       "primary_lane": "farm",
       "damage_types": [
         "physical"
@@ -2035,23 +2035,23 @@
         "mechanic__utility_vision",
         "condition__directional"
       ],
-      "pick_count": 451,
-      "ban_count": 142,
-      "bp_action_count": 593,
-      "weighted_bp_action_count": 334.1287687500003,
+      "pick_count": 466,
+      "ban_count": 147,
+      "bp_action_count": 613,
+      "weighted_bp_action_count": 358.6287687500003,
       "nearest_hero_ids": [
         199,
-        584,
         196,
-        548,
+        584,
+        174,
         519
       ]
     },
     {
       "hero_id": 178,
       "hero_name": "杨戬",
-      "x": 0.851707398891449,
-      "y": -0.21647076308727264,
+      "x": 0.8051772117614746,
+      "y": 0.021032895892858505,
       "primary_lane": "clash",
       "damage_types": [
         "physical",
@@ -2075,23 +2075,23 @@
         "condition__recast",
         "condition__requires_mark"
       ],
-      "pick_count": 362,
-      "ban_count": 466,
-      "bp_action_count": 828,
-      "weighted_bp_action_count": 409.66325312500067,
+      "pick_count": 374,
+      "ban_count": 489,
+      "bp_action_count": 863,
+      "weighted_bp_action_count": 447.66325312500067,
       "nearest_hero_ids": [
         193,
+        502,
         531,
         581,
-        502,
-        511
+        126
       ]
     },
     {
       "hero_id": 179,
       "hero_name": "女娲",
-      "x": 0.6619777679443359,
-      "y": -0.08325687050819397,
+      "x": 0.502653181552887,
+      "y": 0.11828747391700745,
       "primary_lane": "mid",
       "damage_types": [
         "magic"
@@ -2108,23 +2108,23 @@
         "mechanic__utility_vision",
         "condition__proximity"
       ],
-      "pick_count": 347,
-      "ban_count": 367,
-      "bp_action_count": 714,
-      "weighted_bp_action_count": 302.40371250000203,
+      "pick_count": 353,
+      "ban_count": 371,
+      "bp_action_count": 724,
+      "weighted_bp_action_count": 314.40371250000203,
       "nearest_hero_ids": [
+        523,
+        110,
         127,
         563,
-        312,
-        110,
-        523
+        182
       ]
     },
     {
       "hero_id": 180,
       "hero_name": "哪吒",
-      "x": 0.48381802439689636,
-      "y": -0.5045074224472046,
+      "x": 0.46142950654029846,
+      "y": 0.362753301858902,
       "primary_lane": "clash",
       "damage_types": [
         "physical",
@@ -2144,14 +2144,14 @@
         "condition__proximity",
         "condition__single_target_bonus"
       ],
-      "pick_count": 114,
-      "ban_count": 286,
-      "bp_action_count": 400,
-      "weighted_bp_action_count": 269.66165625000014,
+      "pick_count": 119,
+      "ban_count": 303,
+      "bp_action_count": 422,
+      "weighted_bp_action_count": 293.66165625000014,
       "nearest_hero_ids": [
-        531,
         538,
-        511,
+        542,
+        531,
         163,
         130
       ]
@@ -2159,8 +2159,8 @@
     {
       "hero_id": 182,
       "hero_name": "干将莫邪",
-      "x": -0.22272831201553345,
-      "y": -0.2578665614128113,
+      "x": -0.2617740333080292,
+      "y": 0.1975335329771042,
       "primary_lane": "mid",
       "damage_types": [
         "magic"
@@ -2179,17 +2179,17 @@
       "weighted_bp_action_count": 25.384725,
       "nearest_hero_ids": [
         127,
-        110,
+        523,
         141,
-        564,
-        148
+        109,
+        528
       ]
     },
     {
       "hero_id": 184,
       "hero_name": "蔡文姬",
-      "x": -0.8604695200920105,
-      "y": 0.30608657002449036,
+      "x": -0.9011679887771606,
+      "y": -0.22796939313411713,
       "primary_lane": "roam",
       "damage_types": [
         "magic"
@@ -2213,15 +2213,15 @@
         534,
         117,
         529,
-        501,
-        115
+        115,
+        168
       ]
     },
     {
       "hero_id": 186,
       "hero_name": "太乙真人",
-      "x": 0.11797186732292175,
-      "y": 0.9394232630729675,
+      "x": 0.2555391192436218,
+      "y": -1.0407404899597168,
       "primary_lane": "roam",
       "damage_types": [
         "magic"
@@ -2242,23 +2242,23 @@
         "condition__directional",
         "condition__proximity"
       ],
-      "pick_count": 385,
-      "ban_count": 169,
-      "bp_action_count": 554,
-      "weighted_bp_action_count": 231.24052500000053,
+      "pick_count": 392,
+      "ban_count": 170,
+      "bp_action_count": 562,
+      "weighted_bp_action_count": 240.24052500000053,
       "nearest_hero_ids": [
         550,
-        188,
-        501,
-        105,
-        577
+        171,
+        194,
+        108,
+        113
       ]
     },
     {
       "hero_id": 187,
       "hero_name": "东皇太一",
-      "x": -0.6859135627746582,
-      "y": 0.6282193660736084,
+      "x": -0.6477863192558289,
+      "y": -0.6158977150917053,
       "primary_lane": "roam",
       "damage_types": [
         "magic"
@@ -2277,22 +2277,22 @@
         "mechanic__utility_summon"
       ],
       "pick_count": 22,
-      "ban_count": 16,
-      "bp_action_count": 38,
-      "weighted_bp_action_count": 19.519996874999997,
+      "ban_count": 17,
+      "bp_action_count": 39,
+      "weighted_bp_action_count": 20.519996874999997,
       "nearest_hero_ids": [
         114,
-        105,
-        544,
+        118,
         189,
-        113
+        113,
+        105
       ]
     },
     {
       "hero_id": 188,
       "hero_name": "大禹",
-      "x": -0.051796261221170425,
-      "y": 0.6639630198478699,
+      "x": -0.28265199065208435,
+      "y": -0.6223939657211304,
       "primary_lane": "unknown",
       "damage_types": [],
       "feature_known": true,
@@ -2313,23 +2313,23 @@
         "condition__directional",
         "condition__distance_scaling"
       ],
-      "pick_count": 59,
+      "pick_count": 63,
       "ban_count": 12,
-      "bp_action_count": 71,
-      "weighted_bp_action_count": 48.92249999999997,
+      "bp_action_count": 75,
+      "weighted_bp_action_count": 54.42249999999997,
       "nearest_hero_ids": [
+        114,
         118,
-        544,
-        577,
-        186,
-        534
+        534,
+        171,
+        529
       ]
     },
     {
       "hero_id": 189,
       "hero_name": "鬼谷子",
-      "x": -0.7121731042861938,
-      "y": 0.4752565324306488,
+      "x": -0.7293736934661865,
+      "y": -0.5653910040855408,
       "primary_lane": "roam",
       "damage_types": [
         "magic"
@@ -2353,18 +2353,18 @@
       "bp_action_count": 16,
       "weighted_bp_action_count": 5.294940625000001,
       "nearest_hero_ids": [
-        109,
-        114,
-        529,
         501,
-        115
+        109,
+        115,
+        187,
+        114
       ]
     },
     {
       "hero_id": 190,
       "hero_name": "诸葛亮",
-      "x": -0.8329731225967407,
-      "y": 0.017709881067276,
+      "x": -0.896865963935852,
+      "y": 0.022536253556609154,
       "primary_lane": "mid",
       "damage_types": [
         "magic"
@@ -2390,18 +2390,18 @@
       "bp_action_count": 2,
       "weighted_bp_action_count": 1.2675,
       "nearest_hero_ids": [
-        129,
         524,
-        115,
-        117,
-        154
+        129,
+        154,
+        195,
+        513
       ]
     },
     {
       "hero_id": 191,
       "hero_name": "大乔",
-      "x": 0.035781171172857285,
-      "y": 0.12156360596418381,
+      "x": -0.14964339137077332,
+      "y": -0.33700868487358093,
       "primary_lane": "roam",
       "damage_types": [
         "magic"
@@ -2431,18 +2431,18 @@
       "bp_action_count": 121,
       "weighted_bp_action_count": 45.14651562499999,
       "nearest_hero_ids": [
-        139,
-        558,
-        125,
         118,
-        110
+        139,
+        127,
+        125,
+        115
       ]
     },
     {
       "hero_id": 192,
       "hero_name": "黄忠",
-      "x": -1.083904504776001,
-      "y": -0.227834090590477,
+      "x": -0.9317381381988525,
+      "y": 0.46825191378593445,
       "primary_lane": "farm",
       "damage_types": [
         "physical"
@@ -2469,16 +2469,16 @@
       "nearest_hero_ids": [
         154,
         117,
-        173,
-        132,
-        513
+        513,
+        112,
+        129
       ]
     },
     {
       "hero_id": 193,
       "hero_name": "铠",
-      "x": 0.6812525987625122,
-      "y": -0.3650335669517517,
+      "x": 0.5719088315963745,
+      "y": 0.3067113161087036,
       "primary_lane": "unknown",
       "damage_types": [],
       "feature_known": true,
@@ -2500,23 +2500,23 @@
         "condition__recast",
         "condition__single_target_bonus"
       ],
-      "pick_count": 347,
-      "ban_count": 306,
-      "bp_action_count": 653,
-      "weighted_bp_action_count": 255.97227187500002,
+      "pick_count": 357,
+      "ban_count": 310,
+      "bp_action_count": 667,
+      "weighted_bp_action_count": 272.47227187500005,
       "nearest_hero_ids": [
         502,
         178,
+        126,
         531,
-        542,
-        126
+        517
       ]
     },
     {
       "hero_id": 194,
       "hero_name": "苏烈",
-      "x": 0.7945653200149536,
-      "y": 0.7563572525978088,
+      "x": 0.5594484210014343,
+      "y": -0.8007423281669617,
       "primary_lane": "roam",
       "damage_types": [
         "physical"
@@ -2542,23 +2542,23 @@
         "condition__channel_or_charge",
         "condition__proximity"
       ],
-      "pick_count": 538,
-      "ban_count": 364,
-      "bp_action_count": 902,
-      "weighted_bp_action_count": 512.1621937500021,
+      "pick_count": 556,
+      "ban_count": 376,
+      "bp_action_count": 932,
+      "weighted_bp_action_count": 547.1621937500021,
       "nearest_hero_ids": [
-        171,
         577,
-        159,
-        312,
-        548
+        171,
+        186,
+        550,
+        312
       ]
     },
     {
       "hero_id": 195,
       "hero_name": "百里玄策",
-      "x": -0.7361209988594055,
-      "y": 0.1681782454252243,
+      "x": -0.6616785526275635,
+      "y": -0.1430298537015915,
       "primary_lane": "jungle",
       "damage_types": [
         "physical"
@@ -2590,16 +2590,16 @@
       "nearest_hero_ids": [
         513,
         129,
-        524,
+        117,
         154,
-        117
+        524
       ]
     },
     {
       "hero_id": 196,
       "hero_name": "百里守约",
-      "x": -0.13046546280384064,
-      "y": -0.2962172031402588,
+      "x": 0.0655457004904747,
+      "y": 0.40503498911857605,
       "primary_lane": "farm",
       "damage_types": [
         "physical"
@@ -2612,23 +2612,23 @@
         "mechanic__utility_vision",
         "condition__directional"
       ],
-      "pick_count": 105,
-      "ban_count": 60,
-      "bp_action_count": 165,
-      "weighted_bp_action_count": 100.53195,
+      "pick_count": 113,
+      "ban_count": 67,
+      "bp_action_count": 180,
+      "weighted_bp_action_count": 117.53195,
       "nearest_hero_ids": [
         174,
-        177,
         169,
-        173,
-        584
+        177,
+        584,
+        173
       ]
     },
     {
       "hero_id": 197,
       "hero_name": "弈星",
-      "x": -0.20621247589588165,
-      "y": -0.3308753967285156,
+      "x": -0.18114152550697327,
+      "y": 0.3819151222705841,
       "primary_lane": "mid",
       "damage_types": [
         "magic"
@@ -2652,23 +2652,23 @@
         "condition__proximity",
         "condition__requires_mark"
       ],
-      "pick_count": 36,
+      "pick_count": 37,
       "ban_count": 23,
-      "bp_action_count": 59,
-      "weighted_bp_action_count": 20.136987499999996,
+      "bp_action_count": 60,
+      "weighted_bp_action_count": 21.636987499999996,
       "nearest_hero_ids": [
-        510,
-        134,
         144,
+        149,
+        115,
         523,
-        149
+        564
       ]
     },
     {
       "hero_id": 198,
       "hero_name": "梦奇",
-      "x": 0.19367258250713348,
-      "y": -0.41301098465919495,
+      "x": 0.2961043417453766,
+      "y": 0.2838691174983978,
       "primary_lane": "clash",
       "damage_types": [
         "physical",
@@ -2688,23 +2688,23 @@
         "mechanic__utility_cooldown_reduction",
         "condition__proximity"
       ],
-      "pick_count": 132,
-      "ban_count": 48,
-      "bp_action_count": 180,
-      "weighted_bp_action_count": 93.92009375000004,
+      "pick_count": 135,
+      "ban_count": 53,
+      "bp_action_count": 188,
+      "weighted_bp_action_count": 102.42009375000004,
       "nearest_hero_ids": [
-        502,
         126,
-        193,
-        531,
-        511
+        502,
+        517,
+        537,
+        193
       ]
     },
     {
       "hero_id": 199,
       "hero_name": "公孙离",
-      "x": 0.5216642618179321,
-      "y": 0.0029861233197152615,
+      "x": 0.5516008734703064,
+      "y": -0.0643322691321373,
       "primary_lane": "farm",
       "damage_types": [
         "physical",
@@ -2724,23 +2724,23 @@
         "condition__proximity",
         "condition__requires_mark"
       ],
-      "pick_count": 472,
-      "ban_count": 305,
-      "bp_action_count": 777,
-      "weighted_bp_action_count": 324.164215625001,
+      "pick_count": 479,
+      "ban_count": 308,
+      "bp_action_count": 787,
+      "weighted_bp_action_count": 335.164215625001,
       "nearest_hero_ids": [
         177,
         584,
-        548,
         172,
-        502
+        548,
+        196
       ]
     },
     {
       "hero_id": 312,
       "hero_name": "沈梦溪",
-      "x": 1.062091588973999,
-      "y": 0.07387751340866089,
+      "x": 0.9350364804267883,
+      "y": -0.09516383707523346,
       "primary_lane": "mid",
       "damage_types": [
         "magic"
@@ -2755,23 +2755,23 @@
         "condition__channel_or_charge",
         "condition__directional"
       ],
-      "pick_count": 602,
-      "ban_count": 750,
-      "bp_action_count": 1352,
-      "weighted_bp_action_count": 649.036018750002,
+      "pick_count": 620,
+      "ban_count": 763,
+      "bp_action_count": 1383,
+      "weighted_bp_action_count": 684.036018750002,
       "nearest_hero_ids": [
-        503,
-        536,
-        179,
+        521,
+        519,
         106,
-        537
+        517,
+        503
       ]
     },
     {
       "hero_id": 501,
       "hero_name": "明世隐",
-      "x": -0.7042689323425293,
-      "y": 0.41959744691848755,
+      "x": -0.721811056137085,
+      "y": -0.39406588673591614,
       "primary_lane": "roam",
       "damage_types": [
         "magic",
@@ -2796,17 +2796,17 @@
       "weighted_bp_action_count": 2.5243156250000007,
       "nearest_hero_ids": [
         534,
+        115,
+        149,
         529,
-        513,
-        184,
-        195
+        153
       ]
     },
     {
       "hero_id": 502,
       "hero_name": "裴擒虎",
-      "x": 0.6290439367294312,
-      "y": -0.16464397311210632,
+      "x": 0.6908896565437317,
+      "y": 0.05486411228775978,
       "primary_lane": "jungle",
       "damage_types": [
         "physical",
@@ -2826,23 +2826,23 @@
         "condition__distance_scaling",
         "condition__proximity"
       ],
-      "pick_count": 319,
-      "ban_count": 374,
-      "bp_action_count": 693,
-      "weighted_bp_action_count": 304.06771250000054,
+      "pick_count": 325,
+      "ban_count": 380,
+      "bp_action_count": 705,
+      "weighted_bp_action_count": 317.56771250000054,
       "nearest_hero_ids": [
-        193,
         531,
-        178,
+        193,
         517,
-        581
+        533,
+        126
       ]
     },
     {
       "hero_id": 503,
       "hero_name": "狂铁",
-      "x": 0.9950771331787109,
-      "y": -0.10478866100311279,
+      "x": 0.8731194734573364,
+      "y": 0.16815559566020966,
       "primary_lane": "clash",
       "damage_types": [
         "physical"
@@ -2859,23 +2859,23 @@
         "mechanic__sustain_mana_restore",
         "mechanic__utility_basic_attack_enhancement"
       ],
-      "pick_count": 609,
-      "ban_count": 516,
-      "bp_action_count": 1125,
-      "weighted_bp_action_count": 579.6316718750015,
+      "pick_count": 625,
+      "ban_count": 526,
+      "bp_action_count": 1151,
+      "weighted_bp_action_count": 606.6316718750015,
       "nearest_hero_ids": [
         536,
-        312,
         537,
         128,
-        140
+        312,
+        558
       ]
     },
     {
       "hero_id": 507,
       "hero_name": "李信",
-      "x": -0.7752917408943176,
-      "y": -0.38589420914649963,
+      "x": -0.668133020401001,
+      "y": 0.5681595802307129,
       "primary_lane": "clash",
       "damage_types": [
         "physical"
@@ -2889,22 +2889,22 @@
         "condition__directional"
       ],
       "pick_count": 3,
-      "ban_count": 1,
-      "bp_action_count": 4,
-      "weighted_bp_action_count": 5.0,
+      "ban_count": 2,
+      "bp_action_count": 5,
+      "weighted_bp_action_count": 6.0,
       "nearest_hero_ids": [
-        123,
-        153,
+        144,
+        170,
         154,
-        524,
-        170
+        123,
+        545
       ]
     },
     {
       "hero_id": 508,
       "hero_name": "伽罗",
-      "x": -1.1622182130813599,
-      "y": -0.3361072242259979,
+      "x": -1.0671770572662354,
+      "y": 0.47599712014198303,
       "primary_lane": "farm",
       "damage_types": [
         "physical",
@@ -2931,17 +2931,17 @@
       "weighted_bp_action_count": 9.329453125,
       "nearest_hero_ids": [
         132,
+        129,
         141,
-        154,
         524,
-        129
+        513
       ]
     },
     {
       "hero_id": 509,
       "hero_name": "盾山",
-      "x": 0.9542188048362732,
-      "y": 1.4344196319580078,
+      "x": 0.6927280426025391,
+      "y": -1.4577383995056152,
       "primary_lane": "roam",
       "damage_types": [
         "physical"
@@ -2968,23 +2968,23 @@
         "condition__proximity",
         "condition__recast"
       ],
-      "pick_count": 281,
-      "ban_count": 801,
-      "bp_action_count": 1082,
-      "weighted_bp_action_count": 690.4715843750004,
+      "pick_count": 295,
+      "ban_count": 836,
+      "bp_action_count": 1131,
+      "weighted_bp_action_count": 741.4715843750004,
       "nearest_hero_ids": [
-        186,
+        171,
+        550,
         519,
-        172,
-        188,
+        525,
         194
       ]
     },
     {
       "hero_id": 510,
       "hero_name": "孙策",
-      "x": -0.3336416184902191,
-      "y": -0.33564385771751404,
+      "x": -0.0812232717871666,
+      "y": 0.21084025502204895,
       "primary_lane": "clash",
       "damage_types": [
         "physical"
@@ -3008,18 +3008,18 @@
       "bp_action_count": 78,
       "weighted_bp_action_count": 31.267546874999994,
       "nearest_hero_ids": [
-        134,
-        153,
         125,
-        197,
-        564
+        558,
+        134,
+        564,
+        153
       ]
     },
     {
       "hero_id": 511,
       "hero_name": "猪八戒",
-      "x": 0.3607378602027893,
-      "y": -0.3444046676158905,
+      "x": 0.3355238437652588,
+      "y": 0.3104568421840668,
       "primary_lane": "clash",
       "damage_types": [
         "physical"
@@ -3036,23 +3036,23 @@
         "mechanic__utility_terrain",
         "mechanic__utility_transformation"
       ],
-      "pick_count": 66,
-      "ban_count": 21,
-      "bp_action_count": 87,
-      "weighted_bp_action_count": 60.873731249999985,
+      "pick_count": 70,
+      "ban_count": 22,
+      "bp_action_count": 92,
+      "weighted_bp_action_count": 66.37373124999999,
       "nearest_hero_ids": [
-        126,
-        178,
         538,
-        180,
-        502
+        126,
+        120,
+        558,
+        107
       ]
     },
     {
       "hero_id": 513,
       "hero_name": "上官婉儿",
-      "x": -0.8197999000549316,
-      "y": 0.09626642614603043,
+      "x": -0.7547573447227478,
+      "y": 0.040473468601703644,
       "primary_lane": "mid",
       "damage_types": [
         "magic"
@@ -3075,18 +3075,18 @@
       "bp_action_count": 0,
       "weighted_bp_action_count": 0.0,
       "nearest_hero_ids": [
+        195,
         129,
         154,
-        195,
-        109,
-        524
+        115,
+        109
       ]
     },
     {
       "hero_id": 514,
       "hero_name": "亚连",
-      "x": -0.5209956765174866,
-      "y": -0.42617157101631165,
+      "x": -0.48314815759658813,
+      "y": 0.3384179174900055,
       "primary_lane": "clash",
       "damage_types": [
         "physical",
@@ -3116,18 +3116,18 @@
       "bp_action_count": 24,
       "weighted_bp_action_count": 7.596634375000001,
       "nearest_hero_ids": [
+        115,
         153,
         513,
-        123,
-        524,
-        115
+        528,
+        149
       ]
     },
     {
       "hero_id": 515,
       "hero_name": "嫦娥",
-      "x": 0.23909248411655426,
-      "y": -0.17886796593666077,
+      "x": 0.21126361191272736,
+      "y": 0.3006017208099365,
       "primary_lane": "mid",
       "damage_types": [
         "magic"
@@ -3148,23 +3148,23 @@
         "condition__directional",
         "condition__proximity"
       ],
-      "pick_count": 127,
-      "ban_count": 91,
-      "bp_action_count": 218,
-      "weighted_bp_action_count": 92.67060624999996,
+      "pick_count": 131,
+      "ban_count": 92,
+      "bp_action_count": 223,
+      "weighted_bp_action_count": 98.17060624999996,
       "nearest_hero_ids": [
         157,
-        110,
         176,
-        511,
-        563
+        110,
+        163,
+        511
       ]
     },
     {
       "hero_id": 517,
       "hero_name": "大司命",
-      "x": 0.9681086540222168,
-      "y": -0.2563004195690155,
+      "x": 0.9129095077514648,
+      "y": 0.1400311440229416,
       "primary_lane": "jungle",
       "damage_types": [
         "physical",
@@ -3183,23 +3183,23 @@
         "condition__proximity",
         "condition__requires_mark"
       ],
-      "pick_count": 448,
-      "ban_count": 611,
-      "bp_action_count": 1059,
-      "weighted_bp_action_count": 539.6634531250005,
+      "pick_count": 457,
+      "ban_count": 626,
+      "bp_action_count": 1083,
+      "weighted_bp_action_count": 565.6634531250005,
       "nearest_hero_ids": [
-        533,
         502,
-        537,
+        533,
+        126,
         163,
-        126
+        531
       ]
     },
     {
       "hero_id": 518,
       "hero_name": "马超",
-      "x": 0.6734848022460938,
-      "y": -0.036789972335100174,
+      "x": 0.7107688784599304,
+      "y": 0.2056276500225067,
       "primary_lane": "clash",
       "damage_types": [
         "physical"
@@ -3219,23 +3219,23 @@
         "condition__on_kill_or_assist",
         "condition__proximity"
       ],
-      "pick_count": 300,
-      "ban_count": 263,
-      "bp_action_count": 563,
-      "weighted_bp_action_count": 313.74190000000044,
+      "pick_count": 309,
+      "ban_count": 276,
+      "bp_action_count": 585,
+      "weighted_bp_action_count": 338.74190000000044,
       "nearest_hero_ids": [
+        527,
+        537,
         536,
         140,
-        537,
-        172,
-        519
+        531
       ]
     },
     {
       "hero_id": 519,
       "hero_name": "敖隐",
-      "x": 1.0527836084365845,
-      "y": 0.28410962224006653,
+      "x": 1.0212161540985107,
+      "y": -0.13590139150619507,
       "primary_lane": "farm",
       "damage_types": [
         "physical",
@@ -3258,23 +3258,23 @@
         "condition__proximity",
         "condition__requires_mark"
       ],
-      "pick_count": 481,
-      "ban_count": 496,
-      "bp_action_count": 977,
-      "weighted_bp_action_count": 606.0681875000005,
+      "pick_count": 500,
+      "ban_count": 517,
+      "bp_action_count": 1017,
+      "weighted_bp_action_count": 650.5681875000005,
       "nearest_hero_ids": [
-        548,
-        172,
         312,
-        518,
-        177
+        172,
+        548,
+        140,
+        136
       ]
     },
     {
       "hero_id": 521,
       "hero_name": "海月",
-      "x": 1.0452988147735596,
-      "y": 0.12054693698883057,
+      "x": 0.8893280625343323,
+      "y": -0.2689345180988312,
       "primary_lane": "mid",
       "damage_types": [
         "magic",
@@ -3298,23 +3298,23 @@
         "condition__recast",
         "condition__requires_mark"
       ],
-      "pick_count": 313,
-      "ban_count": 779,
-      "bp_action_count": 1092,
-      "weighted_bp_action_count": 565.4571812500012,
+      "pick_count": 331,
+      "ban_count": 805,
+      "bp_action_count": 1136,
+      "weighted_bp_action_count": 614.4571812500012,
       "nearest_hero_ids": [
         312,
         157,
         140,
-        106,
-        563
+        531,
+        519
       ]
     },
     {
       "hero_id": 522,
       "hero_name": "曜",
-      "x": -0.3497289717197418,
-      "y": -0.33438995480537415,
+      "x": -0.36995208263397217,
+      "y": 0.3985118865966797,
       "primary_lane": "jungle",
       "damage_types": [
         "physical"
@@ -3334,18 +3334,18 @@
       "bp_action_count": 17,
       "weighted_bp_action_count": 5.396381250000001,
       "nearest_hero_ids": [
-        150,
         162,
-        524,
+        153,
         170,
+        150,
         129
       ]
     },
     {
       "hero_id": 523,
       "hero_name": "西施",
-      "x": 0.10482391715049744,
-      "y": -0.22138017416000366,
+      "x": 0.14656753838062286,
+      "y": 0.2712361216545105,
       "primary_lane": "mid",
       "damage_types": [
         "magic"
@@ -3362,22 +3362,22 @@
         "condition__recast"
       ],
       "pick_count": 139,
-      "ban_count": 258,
-      "bp_action_count": 397,
-      "weighted_bp_action_count": 137.54161250000024,
+      "ban_count": 260,
+      "bp_action_count": 399,
+      "weighted_bp_action_count": 139.54161250000024,
       "nearest_hero_ids": [
-        127,
         179,
-        130,
-        197,
+        182,
+        110,
+        127,
         563
       ]
     },
     {
       "hero_id": 524,
       "hero_name": "蒙犽",
-      "x": -0.7630472183227539,
-      "y": -0.08970724046230316,
+      "x": -0.7676567435264587,
+      "y": 0.1140051931142807,
       "primary_lane": "unknown",
       "damage_types": [],
       "feature_known": true,
@@ -3405,16 +3405,16 @@
       "nearest_hero_ids": [
         129,
         513,
-        195,
+        115,
         154,
-        115
+        195
       ]
     },
     {
       "hero_id": 525,
       "hero_name": "鲁班大师",
-      "x": 1.3972080945968628,
-      "y": 0.9727944135665894,
+      "x": 1.180446743965149,
+      "y": -1.0983476638793945,
       "primary_lane": "roam",
       "damage_types": [
         "magic"
@@ -3433,23 +3433,23 @@
         "condition__ally_targeted",
         "condition__delayed_effect"
       ],
-      "pick_count": 325,
-      "ban_count": 1496,
-      "bp_action_count": 1821,
-      "weighted_bp_action_count": 877.1875687500014,
+      "pick_count": 331,
+      "ban_count": 1546,
+      "bp_action_count": 1877,
+      "weighted_bp_action_count": 935.1875687500014,
       "nearest_hero_ids": [
-        312,
+        186,
         519,
-        171,
         178,
-        194
+        312,
+        106
       ]
     },
     {
       "hero_id": 527,
       "hero_name": "蒙恬",
-      "x": 0.42757317423820496,
-      "y": -0.3488890826702118,
+      "x": 0.5115361213684082,
+      "y": 0.33483827114105225,
       "primary_lane": "clash",
       "damage_types": [
         "physical"
@@ -3471,23 +3471,23 @@
         "condition__directional",
         "condition__recast"
       ],
-      "pick_count": 176,
-      "ban_count": 264,
-      "bp_action_count": 440,
-      "weighted_bp_action_count": 213.08311562500023,
+      "pick_count": 183,
+      "ban_count": 272,
+      "bp_action_count": 455,
+      "weighted_bp_action_count": 230.08311562500023,
       "nearest_hero_ids": [
         134,
-        140,
         558,
+        537,
         120,
-        531
+        518
       ]
     },
     {
       "hero_id": 528,
       "hero_name": "澜",
-      "x": -0.42682453989982605,
-      "y": -0.31097450852394104,
+      "x": -0.4502529799938202,
+      "y": 0.1709401160478592,
       "primary_lane": "jungle",
       "damage_types": [
         "physical",
@@ -3516,18 +3516,18 @@
       "bp_action_count": 17,
       "weighted_bp_action_count": 3.302365625,
       "nearest_hero_ids": [
-        150,
         153,
-        109,
-        524,
+        513,
+        115,
+        129,
         522
       ]
     },
     {
       "hero_id": 529,
       "hero_name": "盘古",
-      "x": -0.8553255796432495,
-      "y": 0.3346390426158905,
+      "x": -0.9379933476448059,
+      "y": -0.3418390154838562,
       "primary_lane": "jungle",
       "damage_types": [
         "physical"
@@ -3555,18 +3555,18 @@
       "bp_action_count": 2,
       "weighted_bp_action_count": 0.6010062500000001,
       "nearest_hero_ids": [
-        115,
-        513,
-        524,
-        129,
+        534,
+        195,
+        154,
+        117,
         114
       ]
     },
     {
       "hero_id": 531,
       "hero_name": "镜",
-      "x": 0.7548481822013855,
-      "y": -0.3702302873134613,
+      "x": 0.821763813495636,
+      "y": 0.14534686505794525,
       "primary_lane": "jungle",
       "damage_types": [
         "physical"
@@ -3583,23 +3583,23 @@
         "condition__distance_scaling",
         "condition__requires_mark"
       ],
-      "pick_count": 284,
-      "ban_count": 529,
-      "bp_action_count": 813,
-      "weighted_bp_action_count": 392.7618187500017,
+      "pick_count": 290,
+      "ban_count": 541,
+      "bp_action_count": 831,
+      "weighted_bp_action_count": 412.2618187500017,
       "nearest_hero_ids": [
         502,
-        581,
-        193,
+        140,
+        517,
         178,
-        180
+        537
       ]
     },
     {
       "hero_id": 533,
       "hero_name": "阿古朵",
-      "x": 0.7438528537750244,
-      "y": -0.22241981327533722,
+      "x": 0.7426013350486755,
+      "y": 0.107371486723423,
       "primary_lane": "jungle",
       "damage_types": [
         "physical"
@@ -3615,23 +3615,23 @@
         "mechanic__utility_summon",
         "condition__distance_scaling"
       ],
-      "pick_count": 305,
-      "ban_count": 397,
-      "bp_action_count": 702,
-      "weighted_bp_action_count": 331.1303281250015,
+      "pick_count": 309,
+      "ban_count": 409,
+      "bp_action_count": 718,
+      "weighted_bp_action_count": 348.6303281250015,
       "nearest_hero_ids": [
-        517,
-        531,
         502,
+        517,
         163,
-        140
+        531,
+        126
       ]
     },
     {
       "hero_id": 534,
       "hero_name": "桑启",
-      "x": -0.7758390307426453,
-      "y": 0.3900473415851593,
+      "x": -0.7986619472503662,
+      "y": -0.3671451210975647,
       "primary_lane": "roam",
       "damage_types": [
         "magic"
@@ -3654,17 +3654,17 @@
       "weighted_bp_action_count": 5.212471875000001,
       "nearest_hero_ids": [
         501,
-        184,
         529,
-        118,
-        513
+        184,
+        114,
+        582
       ]
     },
     {
       "hero_id": 536,
       "hero_name": "夏洛特",
-      "x": 0.7912314534187317,
-      "y": -0.2171379029750824,
+      "x": 0.8430668711662292,
+      "y": 0.16806773841381073,
       "primary_lane": "clash",
       "damage_types": [
         "physical"
@@ -3685,23 +3685,23 @@
         "condition__directional",
         "condition__requires_mark"
       ],
-      "pick_count": 577,
-      "ban_count": 353,
-      "bp_action_count": 930,
-      "weighted_bp_action_count": 480.3814312500009,
+      "pick_count": 595,
+      "ban_count": 359,
+      "bp_action_count": 954,
+      "weighted_bp_action_count": 509.3814312500009,
       "nearest_hero_ids": [
         503,
         537,
-        312,
+        128,
         518,
-        128
+        558
       ]
     },
     {
       "hero_id": 537,
       "hero_name": "司空震",
-      "x": 0.8394302129745483,
-      "y": -0.19791582226753235,
+      "x": 0.7123610973358154,
+      "y": 0.25326740741729736,
       "primary_lane": "clash",
       "damage_types": [
         "magic"
@@ -3721,23 +3721,23 @@
         "condition__delayed_effect",
         "condition__proximity"
       ],
-      "pick_count": 359,
-      "ban_count": 368,
-      "bp_action_count": 727,
-      "weighted_bp_action_count": 375.8685718750012,
+      "pick_count": 369,
+      "ban_count": 378,
+      "bp_action_count": 747,
+      "weighted_bp_action_count": 398.8685718750012,
       "nearest_hero_ids": [
-        536,
-        128,
         503,
-        140,
-        558
+        128,
+        558,
+        536,
+        140
       ]
     },
     {
       "hero_id": 538,
       "hero_name": "云缨",
-      "x": 0.20049335062503815,
-      "y": -0.6730291247367859,
+      "x": 0.2651364803314209,
+      "y": 0.49858343601226807,
       "primary_lane": "unknown",
       "damage_types": [],
       "feature_known": true,
@@ -3753,23 +3753,23 @@
         "condition__channel_or_charge",
         "condition__recast"
       ],
-      "pick_count": 151,
-      "ban_count": 86,
-      "bp_action_count": 237,
-      "weighted_bp_action_count": 161.39150937500006,
+      "pick_count": 156,
+      "ban_count": 89,
+      "bp_action_count": 245,
+      "weighted_bp_action_count": 170.39150937500006,
       "nearest_hero_ids": [
         163,
         511,
-        180,
+        522,
         542,
-        130
+        180
       ]
     },
     {
       "hero_id": 540,
       "hero_name": "金蝉",
-      "x": -0.7765138149261475,
-      "y": 0.09700646996498108,
+      "x": -0.7393227219581604,
+      "y": -0.09016517549753189,
       "primary_lane": "mid",
       "damage_types": [
         "magic"
@@ -3795,17 +3795,17 @@
       "weighted_bp_action_count": 11.440000000000001,
       "nearest_hero_ids": [
         114,
-        529,
         115,
-        109,
+        529,
+        195,
         513
       ]
     },
     {
       "hero_id": 542,
       "hero_name": "暃",
-      "x": 0.31765979528427124,
-      "y": -0.45726773142814636,
+      "x": 0.3295603096485138,
+      "y": 0.21499177813529968,
       "primary_lane": "jungle",
       "damage_types": [
         "physical"
@@ -3825,23 +3825,23 @@
         "condition__proximity",
         "condition__requires_mark"
       ],
-      "pick_count": 126,
-      "ban_count": 126,
-      "bp_action_count": 252,
-      "weighted_bp_action_count": 90.09894062500007,
+      "pick_count": 128,
+      "ban_count": 128,
+      "bp_action_count": 256,
+      "weighted_bp_action_count": 94.59894062500007,
       "nearest_hero_ids": [
         163,
-        193,
+        162,
         502,
-        130,
-        531
+        538,
+        130
       ]
     },
     {
       "hero_id": 544,
       "hero_name": "赵怀真",
-      "x": -0.07598230987787247,
-      "y": 0.7214298844337463,
+      "x": -0.055039018392562866,
+      "y": -0.6974308490753174,
       "primary_lane": "clash",
       "damage_types": [
         "physical"
@@ -3860,23 +3860,23 @@
         "condition__channel_or_charge",
         "condition__distance_scaling"
       ],
-      "pick_count": 57,
-      "ban_count": 23,
-      "bp_action_count": 80,
-      "weighted_bp_action_count": 61.049396874999985,
+      "pick_count": 59,
+      "ban_count": 25,
+      "bp_action_count": 84,
+      "weighted_bp_action_count": 66.04939687499999,
       "nearest_hero_ids": [
         108,
+        171,
         105,
-        187,
-        188,
+        113,
         118
       ]
     },
     {
       "hero_id": 545,
       "hero_name": "莱西奥",
-      "x": -0.56751549243927,
-      "y": -0.20305964350700378,
+      "x": -0.33961954712867737,
+      "y": 0.35199376940727234,
       "primary_lane": "farm",
       "damage_types": [
         "physical"
@@ -3894,23 +3894,23 @@
         "condition__ally_targeted",
         "condition__proximity"
       ],
-      "pick_count": 11,
+      "pick_count": 13,
       "ban_count": 1,
-      "bp_action_count": 12,
-      "weighted_bp_action_count": 15.5,
+      "bp_action_count": 14,
+      "weighted_bp_action_count": 18.0,
       "nearest_hero_ids": [
-        524,
-        507,
         132,
+        584,
         196,
-        584
+        150,
+        549
       ]
     },
     {
       "hero_id": 548,
       "hero_name": "戈娅",
-      "x": 1.002426266670227,
-      "y": -0.0931072011590004,
+      "x": 0.9963158369064331,
+      "y": 0.14068594574928284,
       "primary_lane": "farm",
       "damage_types": [
         "physical"
@@ -3929,23 +3929,23 @@
         "condition__delayed_effect",
         "condition__proximity"
       ],
-      "pick_count": 564,
-      "ban_count": 230,
-      "bp_action_count": 794,
-      "weighted_bp_action_count": 470.53377187500087,
+      "pick_count": 582,
+      "ban_count": 237,
+      "bp_action_count": 819,
+      "weighted_bp_action_count": 502.03377187500087,
       "nearest_hero_ids": [
         172,
-        199,
         519,
-        177,
-        584
+        199,
+        155,
+        312
       ]
     },
     {
       "hero_id": 549,
       "hero_name": "心魔六耳",
-      "x": -0.21092084050178528,
-      "y": -0.36341342329978943,
+      "x": -0.0915440246462822,
+      "y": 0.5010782480239868,
       "primary_lane": "unknown",
       "damage_types": [],
       "feature_known": true,
@@ -3965,23 +3965,23 @@
         "condition__directional",
         "condition__recast"
       ],
-      "pick_count": 11,
+      "pick_count": 13,
       "ban_count": 9,
-      "bp_action_count": 20,
-      "weighted_bp_action_count": 21.5,
+      "bp_action_count": 22,
+      "weighted_bp_action_count": 23.5,
       "nearest_hero_ids": [
-        180,
-        538,
         107,
+        538,
         511,
-        146
+        180,
+        170
       ]
     },
     {
       "hero_id": 550,
       "hero_name": "空空儿",
-      "x": 0.4566577672958374,
-      "y": 0.661641538143158,
+      "x": 0.2784922122955322,
+      "y": -0.7594438195228577,
       "primary_lane": "unknown",
       "damage_types": [],
       "feature_known": true,
@@ -3997,23 +3997,23 @@
         "condition__ally_targeted",
         "condition__proximity"
       ],
-      "pick_count": 305,
-      "ban_count": 509,
-      "bp_action_count": 814,
-      "weighted_bp_action_count": 275.16591562500207,
+      "pick_count": 310,
+      "ban_count": 514,
+      "bp_action_count": 824,
+      "weighted_bp_action_count": 286.16591562500207,
       "nearest_hero_ids": [
         186,
-        312,
+        542,
+        577,
         194,
-        563,
-        179
+        199
       ]
     },
     {
       "hero_id": 558,
       "hero_name": "影",
-      "x": 0.24405929446220398,
-      "y": -0.22438786923885345,
+      "x": 0.32039445638656616,
+      "y": 0.20965850353240967,
       "primary_lane": "jungle",
       "damage_types": [
         "physical",
@@ -4035,23 +4035,23 @@
         "condition__recast",
         "condition__requires_mark"
       ],
-      "pick_count": 211,
-      "ban_count": 85,
-      "bp_action_count": 296,
-      "weighted_bp_action_count": 138.13516875000016,
+      "pick_count": 213,
+      "ban_count": 88,
+      "bp_action_count": 301,
+      "weighted_bp_action_count": 144.13516875000016,
       "nearest_hero_ids": [
         134,
         128,
         537,
-        564,
-        527
+        527,
+        510
       ]
     },
     {
       "hero_id": 563,
       "hero_name": "海诺",
-      "x": 0.4465336203575134,
-      "y": -0.25303640961647034,
+      "x": 0.31124910712242126,
+      "y": 0.0002608035574667156,
       "primary_lane": "mid",
       "damage_types": [
         "magic"
@@ -4072,23 +4072,23 @@
         "condition__proximity",
         "condition__requires_mark"
       ],
-      "pick_count": 120,
+      "pick_count": 121,
       "ban_count": 145,
-      "bp_action_count": 265,
-      "weighted_bp_action_count": 85.11415312500012,
+      "bp_action_count": 266,
+      "weighted_bp_action_count": 86.11415312500012,
       "nearest_hero_ids": [
-        179,
         127,
-        110,
-        584,
-        542
+        179,
+        523,
+        182,
+        312
       ]
     },
     {
       "hero_id": 564,
       "hero_name": "姬小满",
-      "x": -0.18392568826675415,
-      "y": -0.3617228865623474,
+      "x": -0.17826084792613983,
+      "y": 0.3970680236816406,
       "primary_lane": "clash",
       "damage_types": [
         "physical"
@@ -4111,18 +4111,18 @@
       "bp_action_count": 126,
       "weighted_bp_action_count": 36.14535312500001,
       "nearest_hero_ids": [
-        558,
         134,
         153,
-        522,
-        182
+        558,
+        149,
+        522
       ]
     },
     {
       "hero_id": 577,
       "hero_name": "少司缘",
-      "x": 0.6793633699417114,
-      "y": 0.7406644821166992,
+      "x": 0.5870222449302673,
+      "y": -0.8363434076309204,
       "primary_lane": "roam",
       "damage_types": [
         "magic"
@@ -4144,23 +4144,23 @@
         "condition__ally_targeted",
         "condition__recast"
       ],
-      "pick_count": 503,
-      "ban_count": 266,
-      "bp_action_count": 769,
-      "weighted_bp_action_count": 409.91582812500076,
+      "pick_count": 519,
+      "ban_count": 270,
+      "bp_action_count": 789,
+      "weighted_bp_action_count": 432.91582812500076,
       "nearest_hero_ids": [
-        159,
-        188,
-        194,
         171,
-        186
+        194,
+        188,
+        550,
+        312
       ]
     },
     {
       "hero_id": 581,
       "hero_name": "元流之子(坦克)",
-      "x": 0.8831936717033386,
-      "y": -0.2165810614824295,
+      "x": 0.646756649017334,
+      "y": 0.18736116588115692,
       "primary_lane": "unknown",
       "damage_types": [],
       "feature_known": true,
@@ -4178,23 +4178,23 @@
         "condition__ally_targeted",
         "condition__proximity"
       ],
-      "pick_count": 329,
-      "ban_count": 376,
-      "bp_action_count": 705,
-      "weighted_bp_action_count": 390.90351562500126,
+      "pick_count": 337,
+      "ban_count": 393,
+      "bp_action_count": 730,
+      "weighted_bp_action_count": 417.40351562500126,
       "nearest_hero_ids": [
-        531,
-        178,
-        502,
         126,
-        533
+        517,
+        178,
+        538,
+        531
       ]
     },
     {
       "hero_id": 582,
       "hero_name": "元流之子(法师)",
-      "x": -0.974973738193512,
-      "y": 0.25939643383026123,
+      "x": -0.9019170999526978,
+      "y": -0.1814231425523758,
       "primary_lane": "unknown",
       "damage_types": [],
       "feature_known": true,
@@ -4218,18 +4218,18 @@
       "bp_action_count": 2,
       "weighted_bp_action_count": 1.3,
       "nearest_hero_ids": [
-        513,
-        141,
+        115,
+        534,
         154,
-        524,
-        129
+        513,
+        109
       ]
     },
     {
       "hero_id": 583,
       "hero_name": "元流之子(刺客)",
-      "x": -0.03271983936429024,
-      "y": 0.14457707107067108,
+      "x": -0.14155982434749603,
+      "y": -0.11425675451755524,
       "primary_lane": "unknown",
       "damage_types": [],
       "feature_known": true,
@@ -4253,18 +4253,18 @@
       "bp_action_count": 9,
       "weighted_bp_action_count": 7.525,
       "nearest_hero_ids": [
-        126,
         170,
         195,
-        522,
-        524
+        524,
+        198,
+        118
       ]
     },
     {
       "hero_id": 584,
       "hero_name": "元流之子(射手)",
-      "x": 0.1975264549255371,
-      "y": -0.14985708892345428,
+      "x": 0.1600693017244339,
+      "y": 0.18158535659313202,
       "primary_lane": "unknown",
       "damage_types": [],
       "feature_known": true,
@@ -4284,23 +4284,23 @@
         "condition__proximity",
         "condition__recast"
       ],
-      "pick_count": 111,
+      "pick_count": 114,
       "ban_count": 80,
-      "bp_action_count": 191,
-      "weighted_bp_action_count": 67.50549062500005,
+      "bp_action_count": 194,
+      "weighted_bp_action_count": 70.50549062500005,
       "nearest_hero_ids": [
         199,
-        563,
-        177,
-        169,
-        174
+        173,
+        196,
+        545,
+        177
       ]
     },
     {
       "hero_id": 585,
       "hero_name": "元流之子(辅助)",
-      "x": -0.3404836654663086,
-      "y": 1.323288083076477,
+      "x": -0.409115195274353,
+      "y": -1.134681224822998,
       "primary_lane": "unknown",
       "damage_types": [],
       "feature_known": true,
@@ -4320,16 +4320,16 @@
         "condition__distance_scaling",
         "condition__proximity"
       ],
-      "pick_count": 52,
-      "ban_count": 257,
-      "bp_action_count": 309,
-      "weighted_bp_action_count": 226.22625,
+      "pick_count": 54,
+      "ban_count": 287,
+      "bp_action_count": 341,
+      "weighted_bp_action_count": 258.22625,
       "nearest_hero_ids": [
-        175,
-        133,
         195,
+        175,
         116,
-        117
+        117,
+        119
       ]
     }
   ]

@@ -109,6 +109,10 @@ export function fetchTeamSynergies({ leagueId, minSelections = 2 }) {
   return staticData(`/assets/data/${encodeURIComponent(leagueId)}/team-synergies.json`);
 }
 
+export function fetchPowerRankings(leagueId, options) {
+  return staticData(`/assets/data/${encodeURIComponent(leagueId)}/rankings.json`, options);
+}
+
 export function fetchDraftModel(leagueId) {
   const params = new URLSearchParams({ league_id: leagueId });
   return request(`/api/simulations/model?${params}`);

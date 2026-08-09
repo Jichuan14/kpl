@@ -74,10 +74,20 @@ Player object:
 * ``match_camp``: Player team's fixed match-level slot.
 * ``position``: Numeric role/position supplied by the API.
 * ``position_desc``: Human-readable role/position supplied by the API.
+* ``performance_data_available``: Whether the API returned usable combat data
+  rather than a historical all-zero placeholder.
+* ``kills``, ``deaths``, ``assists``, ``gold``, ``kda``: Raw match performance.
+* ``damage``: Raw damage dealt/taken totals and API-provided percentage rates.
+* ``mvp_score``, ``is_mvp``, ``is_lose_mvp``, ``participation_rate``:
+  Additional official performance metrics. Values retain the API's raw scale:
+  participation is typically 0-100 (``78.57`` means 78.57%), while damage-rate
+  fields are typically 0-1 (``0.235`` means 23.5%).
 
 Possible ``quality_flags`` values:
 
 * ``missing_player_data``: No player-detail rows exist for the battle.
+* ``missing_player_performance``: Player rows exist, but the API supplied only
+  unavailable/all-zero performance placeholders.
 * ``missing_win_camp``: ``win_camp`` is missing or not 1/2.
 * ``unmapped_bp_camp``: A BP action's color could not be mapped to a team.
 * ``invalid_or_empty_hero_id``: At least one BP action has ``hero_id <= 0``.
@@ -125,6 +135,12 @@ def _has_table(conn, name: str) -> bool:
     )
 
 
+def _table_columns(conn, name: str) -> set[str]:
+    if not _has_table(conn, name):
+        return set()
+    return {row["name"] for row in conn.execute(f'PRAGMA table_info("{name}")')}
+
+
 def _team_from_row(row: Any) -> dict[str, Any]:
     return {
         "team_id": row["team_id"] or "",
@@ -159,8 +175,33 @@ def load_players(conn, battle_id: str) -> list[dict[str, Any]]:
     if not _has_table(conn, "battle_players"):
         return []
 
+    columns = _table_columns(conn, "battle_players")
+    performance_columns = (
+        "performance_data_available",
+        "kill_num",
+        "death_num",
+        "assist_num",
+        "gold",
+        "hurt_total",
+        "hurt_to_hero_total",
+        "be_hurt_total",
+        "be_hurt_by_hero_total",
+        "kda",
+        "mvp_score",
+        "is_mvp",
+        "is_lose_mvp",
+        "participation_rate",
+        "hurt_total_rate",
+        "be_hurt_total_rate",
+        "hurt_to_hero_total_rate",
+        "be_hurt_by_hero_total_rate",
+    )
+    performance_select = ",\n            ".join(
+        name if name in columns else f"0 AS {name}"
+        for name in performance_columns
+    )
     rows = conn.execute(
-        """
+        f"""
         SELECT
             team_id,
             team_name,
@@ -170,7 +211,8 @@ def load_players(conn, battle_id: str) -> list[dict[str, Any]]:
             camp,
             match_camp,
             position,
-            position_desc
+            position_desc,
+            {performance_select}
         FROM battle_players
         WHERE battle_id = ?
         ORDER BY camp, position, player_name
@@ -188,6 +230,32 @@ def load_players(conn, battle_id: str) -> list[dict[str, Any]]:
             "match_camp": int(row["match_camp"] or 0),
             "position": int(row["position"] or 0),
             "position_desc": row["position_desc"] or "",
+            "performance_data_available": bool(
+                row["performance_data_available"]
+            ),
+            "kills": int(row["kill_num"] or 0),
+            "deaths": int(row["death_num"] or 0),
+            "assists": int(row["assist_num"] or 0),
+            "gold": int(row["gold"] or 0),
+            "kda": float(row["kda"] or 0.0),
+            "damage": {
+                "total": int(row["hurt_total"] or 0),
+                "to_heroes": int(row["hurt_to_hero_total"] or 0),
+                "taken": int(row["be_hurt_total"] or 0),
+                "taken_from_heroes": int(row["be_hurt_by_hero_total"] or 0),
+                "total_rate": float(row["hurt_total_rate"] or 0.0),
+                "taken_rate": float(row["be_hurt_total_rate"] or 0.0),
+                "to_heroes_rate": float(
+                    row["hurt_to_hero_total_rate"] or 0.0
+                ),
+                "taken_from_heroes_rate": float(
+                    row["be_hurt_by_hero_total_rate"] or 0.0
+                ),
+            },
+            "mvp_score": float(row["mvp_score"] or 0.0),
+            "is_mvp": bool(row["is_mvp"]),
+            "is_lose_mvp": bool(row["is_lose_mvp"]),
+            "participation_rate": float(row["participation_rate"] or 0.0),
         }
         for row in rows
     ]
@@ -247,6 +315,8 @@ def battle_quality_flags(
 
     if not players:
         flags.append("missing_player_data")
+    elif not any(player["performance_data_available"] for player in players):
+        flags.append("missing_player_performance")
     if int(battle["win_camp"] or 0) not in (1, 2):
         flags.append("missing_win_camp")
     if any(action["camp"] not in camp_teams for action in actions):

@@ -48,6 +48,7 @@ def _publish_seasons(db: Session) -> None:
                 "season": league.season,
                 "status": league.status,
                 "team_synergy_ready": (directory / "team-synergies.json").is_file(),
+                "rankings_ready": (directory / "rankings.json").is_file(),
             }
         )
     _write_json(DATA_ROOT / "seasons.json", rows)
@@ -159,6 +160,21 @@ def publish_league(db: Session, league_id: str) -> dict[str, object]:
         teams = team_synergies(league_id=league_id, min_selections=2, db=db).data
         _write_json(directory / "team-synergies.json", teams)
         published.append("team-synergies.json")
+
+    rankings_path = OUTPUT_ROOT / league_id / "power_rankings.json"
+    if rankings_path.is_file():
+        try:
+            rankings = json.loads(rankings_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise RuntimeError("Power rankings artifact is invalid") from exc
+        rankings["league"] = {
+            "league_id": league.league_id,
+            "league_name": league.league_name,
+            "year": league.year,
+            "season": league.season,
+        }
+        _write_json(directory / "rankings.json", rankings)
+        published.append("rankings.json")
 
     if (OUTPUT_ROOT / league_id / "draft_model.json").is_file():
         model = metadata(league_id)

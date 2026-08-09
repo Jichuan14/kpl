@@ -91,6 +91,21 @@ first with `POST /api/sync/leagues`. Leave `match_limit` out to process all
 available finished matches. Normal syncs are incremental and avoid re-fetching
 complete battles.
 
+Newly downloaded battles persist official player performance values, including
+K/D/A, KDA, gold, damage, participation, and MVP metrics. To backfill battles
+downloaded before this support was added, run the endpoint once with
+`incremental` set to `false` (use `match_limit` for a small validation batch):
+
+```bash
+curl -X POST http://localhost:8000/api/sync/league-bp \
+  -H 'Content-Type: application/json' \
+  -d '{"league_id":"20260003","match_limit":3,"incremental":false,"run_analysis":false}'
+```
+
+`performance_rows_written` reports how many player rows contained usable
+performance data. Historical all-zero API placeholders are retained with
+`performance_data_available = 0`.
+
 ## Application areas
 
 | Route | Purpose |
@@ -98,6 +113,7 @@ complete battles.
 | `/` | Multi-season Draft Atlas relationship explorer |
 | `/simulator` | Live draft board, recommendations, and Draft Coach |
 | `/teams` | Team-specific synergy patterns and draft tendencies |
+| `/rankings` | Time-decayed team Elo and per-hero player rankings |
 | `/feature-space` | Learned hero representation for the selected season |
 | `/methodology` | Definitions, caveats, and calculation explanations |
 | `/management` | Local data sync, analysis, and asset publishing |
@@ -116,6 +132,7 @@ analysis/exports/{league_id}/
 analysis/outputs/{league_id}/
   *_stats.jsonl
   *_draft_model.json
+  power_rankings.json
   team_*.jsonl
 
 analysis/published/data/
@@ -123,12 +140,18 @@ analysis/published/data/
 ```
 
 The derived statistics include ban responses, pick synergies, counter-picks,
-counter-bans, opening-priority meta heroes, and team-specific combinations.
+counter-bans, opening-priority meta heroes, team-specific combinations, and
+cross-season power rankings. Rankings use a 180-day evidence half-life: team
+scores blend opponent-adjusted Elo with a decayed Bayesian win rate, while
+per-hero player scores blend role-normalized KDA and performance metrics with
+small-sample shrinkage.
 Candidate rates use legal opportunities as their denominator, with smoothing
 and confidence intervals so sparse observations remain visible as sparse.
 
 For manual runs, script descriptions and commands live in
-[analysis/README.md](analysis/README.md). The pipeline endpoints are:
+[analysis/README.md](analysis/README.md). A complete map of the JSON and JSONL
+files used by the site is in [ARTIFACTS.md](ARTIFACTS.md). The pipeline
+endpoints are:
 
 | Method | Endpoint | Purpose |
 | --- | --- | --- |

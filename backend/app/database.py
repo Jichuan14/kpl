@@ -1,6 +1,6 @@
 from collections.abc import Generator
 
-from sqlalchemy import create_engine
+from sqlalchemy import Engine, create_engine, inspect
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.config import get_settings
@@ -16,6 +16,54 @@ class Base(DeclarativeBase):
     pass
 
 
+# ``create_all`` creates missing tables but deliberately does not add columns to
+# an existing table. These additive SQLite migrations keep local databases made
+# by older versions usable without deleting or rewriting any rows.
+BATTLE_PLAYER_PERFORMANCE_COLUMNS = {
+    "performance_data_available": "INTEGER NOT NULL DEFAULT 0",
+    "kill_num": "INTEGER NOT NULL DEFAULT 0",
+    "death_num": "INTEGER NOT NULL DEFAULT 0",
+    "assist_num": "INTEGER NOT NULL DEFAULT 0",
+    "gold": "INTEGER NOT NULL DEFAULT 0",
+    "hurt_total": "BIGINT NOT NULL DEFAULT 0",
+    "hurt_to_hero_total": "BIGINT NOT NULL DEFAULT 0",
+    "be_hurt_total": "BIGINT NOT NULL DEFAULT 0",
+    "be_hurt_by_hero_total": "BIGINT NOT NULL DEFAULT 0",
+    "kda": "FLOAT NOT NULL DEFAULT 0",
+    "mvp_score": "FLOAT NOT NULL DEFAULT 0",
+    "is_mvp": "INTEGER NOT NULL DEFAULT 0",
+    "is_lose_mvp": "INTEGER NOT NULL DEFAULT 0",
+    "participation_rate": "FLOAT NOT NULL DEFAULT 0",
+    "hurt_total_rate": "FLOAT NOT NULL DEFAULT 0",
+    "be_hurt_total_rate": "FLOAT NOT NULL DEFAULT 0",
+    "hurt_to_hero_total_rate": "FLOAT NOT NULL DEFAULT 0",
+    "be_hurt_by_hero_total_rate": "FLOAT NOT NULL DEFAULT 0",
+}
+
+
+def ensure_schema_compatibility(target_engine: Engine = engine) -> list[str]:
+    """Apply safe, additive compatibility migrations and return added columns."""
+    if target_engine.dialect.name != "sqlite":
+        return []
+    if not inspect(target_engine).has_table("battle_players"):
+        return []
+
+    existing = {
+        column["name"]
+        for column in inspect(target_engine).get_columns("battle_players")
+    }
+    added: list[str] = []
+    with target_engine.begin() as connection:
+        for name, declaration in BATTLE_PLAYER_PERFORMANCE_COLUMNS.items():
+            if name in existing:
+                continue
+            connection.exec_driver_sql(
+                f'ALTER TABLE battle_players ADD COLUMN "{name}" {declaration}'
+            )
+            added.append(name)
+    return added
+
+
 def get_db() -> Generator[Session, None, None]:
     db = SessionLocal()
     try:
@@ -28,3 +76,4 @@ def init_db() -> None:
     from app import models  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
+    ensure_schema_compatibility(engine)

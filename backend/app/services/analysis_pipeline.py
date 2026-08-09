@@ -13,6 +13,7 @@ PipelineStep = Literal[
     "meta",
     "team_synergy",
     "team_profiles",
+    "power_rankings",
     "draft_model",
     "learnable_draft_model",
     "all",
@@ -48,6 +49,7 @@ class AnalysisPipeline:
                 "meta",
                 "team_synergy",
                 "team_profiles",
+                "power_rankings",
                 "draft_model",
                 "learnable_draft_model",
             ]
@@ -167,6 +169,15 @@ class AnalysisPipeline:
                 str(self.matches_path),
                 "--output-dir",
                 str(self.output_dir),
+            ]
+        if step == "power_rankings":
+            return [
+                python,
+                str(ANALYSIS_DIR / "compute_power_rankings.py"),
+                "--league-id",
+                self.league_id,
+                "--output",
+                str(self.output_dir / "power_rankings.json"),
             ]
         if step == "draft_model":
             # Each season uses a rolling window of itself plus its four most

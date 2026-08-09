@@ -32,6 +32,20 @@ logger = logging.getLogger(__name__)
 FINISHED_MATCH_STATUS = 2
 
 
+def _as_int(value: Any) -> int:
+    try:
+        return int(float(value or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _as_float(value: Any) -> float:
+    try:
+        return float(value or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
 class SyncService:
     def __init__(self, db: Session, settings: Settings | None = None):
         self.db = db
@@ -127,6 +141,7 @@ class SyncService:
         battles_synced = 0
         bp_rows = 0
         battle_player_rows = 0
+        performance_rows = 0
         team_ids: set[str] = set()
         player_keys: set[tuple[str, str]] = set()
         detail_errors = 0
@@ -135,6 +150,7 @@ class SyncService:
             battles_synced += result["battles"]
             bp_rows += result["bp_rows"]
             battle_player_rows += result["battle_player_rows"]
+            performance_rows += result["performance_rows"]
             team_ids.update(result["team_ids"])
             player_keys.update(result["player_keys"])
             detail_errors += result["detail_errors"]
@@ -156,6 +172,7 @@ class SyncService:
             "battles_upserted": battles_synced,
             "bp_rows_written": bp_rows,
             "battle_player_rows_written": battle_player_rows,
+            "performance_rows_written": performance_rows,
             "teams_seen": len(team_ids),
             "players_seen": len(player_keys),
             "heroes_upserted": heroes_upserted,
@@ -237,6 +254,7 @@ class SyncService:
                 "battles": 0,
                 "bp_rows": 0,
                 "battle_player_rows": 0,
+                "performance_rows": 0,
                 "team_ids": set(),
                 "player_keys": set(),
                 "detail_errors": 1,
@@ -249,6 +267,7 @@ class SyncService:
         battle_count = 0
         bp_total = 0
         battle_player_total = 0
+        performance_rows = 0
         team_ids: set[str] = set()
         player_keys: set[tuple[str, str]] = set()
         detail_errors = 0
@@ -294,6 +313,7 @@ class SyncService:
             )
             bp_total += result["bp_rows"]
             battle_player_total += result["battle_player_rows"]
+            performance_rows += result["performance_rows"]
             team_ids.update(result["team_ids"])
             player_keys.update(result["player_keys"])
             self.db.flush()
@@ -303,6 +323,7 @@ class SyncService:
             "battles": battle_count,
             "bp_rows": bp_total,
             "battle_player_rows": battle_player_total,
+            "performance_rows": performance_rows,
             "team_ids": team_ids,
             "player_keys": player_keys,
             "detail_errors": detail_errors,
@@ -377,12 +398,33 @@ class SyncService:
         seen_rows: set[tuple[str, int, int]] = set()
         camp_flip = compute_camp_flip(data, match.camp1_team_id)
         if isinstance(player_nodes, list) and player_nodes:
-            self.db.execute(
-                delete(BattlePlayer).where(
-                    BattlePlayer.battle_id == battle_id
+            incoming_has_performance = any(
+                isinstance(node, dict)
+                and bool(
+                    self._player_performance_fields(node)[
+                        "performance_data_available"
+                    ]
                 )
+                for node in player_nodes
             )
-            for node in player_nodes:
+            existing_has_performance = self.db.scalar(
+                select(BattlePlayer.id)
+                .where(
+                    BattlePlayer.battle_id == battle_id,
+                    BattlePlayer.performance_data_available == 1,
+                )
+                .limit(1)
+            ) is not None
+            preserve_existing_players = (
+                existing_has_performance and not incoming_has_performance
+            )
+            if not preserve_existing_players:
+                self.db.execute(
+                    delete(BattlePlayer).where(
+                        BattlePlayer.battle_id == battle_id
+                    )
+                )
+            for node in ([] if preserve_existing_players else player_nodes):
                 if not isinstance(node, dict):
                     continue
                 team_id = str(node.get("team_id") or "")
@@ -422,6 +464,7 @@ class SyncService:
                         "match_camp": to_match_camp(api_camp, camp_flip),
                         "position": int(node.get("position") or 0),
                         "position_desc": node.get("position_desc") or "",
+                        **self._player_performance_fields(node),
                     }
                 )
 
@@ -449,9 +492,60 @@ class SyncService:
         return {
             "bp_rows": bp_rows,
             "battle_player_rows": battle_player_rows,
+            "performance_rows": sum(
+                int(row["performance_data_available"]) for row in pending_players
+            ),
             "team_ids": set(team_data),
             "player_keys": player_keys,
         }
+
+    @staticmethod
+    def _player_performance_fields(node: dict[str, Any]) -> dict[str, int | float]:
+        """Extract raw official performance values from one player node.
+
+        Some historical responses contain the keys but fill every combat value
+        with zero. Match the reference kpl-agent behavior and mark those rows as
+        unavailable rather than treating placeholder zeroes as real performance.
+        """
+        fields: dict[str, int | float] = {
+            "kill_num": _as_int(node.get("kill_num")),
+            "death_num": _as_int(node.get("death_num")),
+            "assist_num": _as_int(node.get("assist_num")),
+            "gold": _as_int(node.get("gold")),
+            "hurt_total": _as_int(node.get("hurt_total")),
+            "hurt_to_hero_total": _as_int(node.get("hurt_to_hero_total")),
+            "be_hurt_total": _as_int(node.get("be_hurt_total")),
+            "be_hurt_by_hero_total": _as_int(node.get("be_hurt_by_hero_total")),
+            "kda": _as_float(node.get("kda")),
+            "mvp_score": _as_float(node.get("mvp_score")),
+            "is_mvp": _as_int(node.get("is_mvp")),
+            "is_lose_mvp": _as_int(node.get("is_lose_mvp")),
+            "participation_rate": _as_float(node.get("participation_rate")),
+            "hurt_total_rate": _as_float(node.get("hurt_total_rate")),
+            "be_hurt_total_rate": _as_float(node.get("be_hurt_total_rate")),
+            "hurt_to_hero_total_rate": _as_float(
+                node.get("hurt_to_hero_total_rate")
+            ),
+            "be_hurt_by_hero_total_rate": _as_float(
+                node.get("be_hurt_by_hero_total_rate")
+            ),
+        }
+        combat_total = sum(
+            int(fields[key])
+            for key in (
+                "kill_num",
+                "death_num",
+                "assist_num",
+                "hurt_total",
+                "hurt_to_hero_total",
+                "be_hurt_total",
+                "be_hurt_by_hero_total",
+            )
+        )
+        fields["performance_data_available"] = int(
+            combat_total > 0 or fields["kda"] > 0 or fields["mvp_score"] > 0
+        )
+        return fields
 
     def _upsert_team(
         self,

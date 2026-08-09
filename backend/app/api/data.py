@@ -321,6 +321,25 @@ def data_status(
         except (OSError, ValueError, json.JSONDecodeError):
             learnable_draft_model["records"] = 0
 
+    power_rankings = artifact(
+        league_output_dir / "power_rankings.json",
+        "power_rankings",
+        "Team and player-hero power rankings",
+    )
+    power_rankings_path = league_output_dir / "power_rankings.json"
+    power_rankings["ready"] = bool(
+        match_export_path.is_file()
+        and power_rankings_path.is_file()
+        and power_rankings_path.stat().st_mtime >= match_export_path.stat().st_mtime
+    )
+    if power_rankings["exists"]:
+        try:
+            with power_rankings_path.open(encoding="utf-8") as source:
+                summary = json.load(source).get("summary") or {}
+            power_rankings["records"] = int(summary.get("player_hero_rows") or 0)
+        except (OSError, ValueError, json.JSONDecodeError):
+            power_rankings["records"] = 0
+
     # The public site reads only these generated JSON files.  Keep this scan
     # separate from the analysis artifacts so the management page can show the
     # precise point at which a completed analysis has (or has not) been made
@@ -334,12 +353,14 @@ def data_status(
             "Team synergies",
         ),
         artifact(published_dir / "draft-model.json", "draft_model", "Draft model"),
+        artifact(published_dir / "rankings.json", "power_rankings", "Power rankings"),
     ]
     frontend_sources = [
         [league_output_dir / filename for _, filename in STAT_ARTIFACTS]
         + [meta_path],
         [team_synergy_path],
         [draft_model_path],
+        [power_rankings_path],
     ]
     for public_file, sources in zip(frontend_assets, frontend_sources, strict=True):
         newest_source = max(
@@ -350,6 +371,7 @@ def data_status(
             "patterns": "overview.json",
             "team_synergies": "team-synergies.json",
             "draft_model": "draft-model.json",
+            "power_rankings": "rankings.json",
         }[public_file["key"]]
         public_file["ready"] = bool(
             newest_source is not None
@@ -362,6 +384,7 @@ def data_status(
         and meta["ready"]
         and team_synergy["ready"]
         and team_profiles_ready
+        and power_rankings["ready"]
         and draft_model["ready"]
         and learnable_draft_model["ready"]
     )
@@ -423,6 +446,12 @@ def data_status(
             ),
         },
         {
+            "key": "power_rankings",
+            "label": "Decayed team and hero rankings",
+            "ready": power_rankings["ready"],
+            "detail": f'{power_rankings["records"]:,} player-hero rows',
+        },
+        {
             "key": "draft_model",
             "label": "Draft probability model",
             "ready": draft_model["ready"],
@@ -460,6 +489,7 @@ def data_status(
                 "meta": meta,
                 "team_synergy": team_synergy,
                 "team_profiles": team_profiles,
+                "power_rankings": power_rankings,
                 "draft_model": draft_model,
                 "learnable_draft_model": learnable_draft_model,
             },
