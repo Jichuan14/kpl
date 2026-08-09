@@ -113,6 +113,7 @@ performance data. Historical all-zero API placeholders are retained with
 | `/` | Multi-season Draft Atlas relationship explorer |
 | `/simulator` | Live draft board, recommendations, and Draft Coach |
 | `/teams` | Team-specific synergy patterns and draft tendencies |
+| `/rankings` | Time-decayed team Elo and per-hero player rankings |
 | `/feature-space` | Learned hero representation for the selected season |
 | `/methodology` | Definitions, caveats, and calculation explanations |
 | `/management` | Local data sync, analysis, and asset publishing |
@@ -131,6 +132,7 @@ analysis/exports/{league_id}/
 analysis/outputs/{league_id}/
   *_stats.jsonl
   *_draft_model.json
+  power_rankings.json
   team_*.jsonl
 
 analysis/published/data/
@@ -138,12 +140,18 @@ analysis/published/data/
 ```
 
 The derived statistics include ban responses, pick synergies, counter-picks,
-counter-bans, opening-priority meta heroes, and team-specific combinations.
+counter-bans, opening-priority meta heroes, team-specific combinations, and
+cross-season power rankings. Rankings use a 180-day evidence half-life: team
+scores blend opponent-adjusted Elo with a decayed Bayesian win rate, while
+per-hero player scores blend role-normalized KDA and performance metrics with
+small-sample shrinkage.
 Candidate rates use legal opportunities as their denominator, with smoothing
 and confidence intervals so sparse observations remain visible as sparse.
 
 For manual runs, script descriptions and commands live in
-[analysis/README.md](analysis/README.md). The pipeline endpoints are:
+[analysis/README.md](analysis/README.md). A complete map of the JSON and JSONL
+files used by the site is in [ARTIFACTS.md](ARTIFACTS.md). The pipeline
+endpoints are:
 
 | Method | Endpoint | Purpose |
 | --- | --- | --- |

@@ -78,6 +78,7 @@ class AnalysisRunRequest(BaseModel):
         "meta",
         "team_synergy",
         "team_profiles",
+        "power_rankings",
         "draft_model",
         "learnable_draft_model",
         "all",

@@ -5,6 +5,7 @@ const DraftSimulatorPage = defineAsyncComponent(() => import("./DraftSimulatorPa
 const TeamSynergyPage = defineAsyncComponent(() => import("./TeamSynergyPage.vue"));
 const VisualizationPage = defineAsyncComponent(() => import("./VisualizationPage.vue"));
 const HeroFeatureSpacePage = defineAsyncComponent(() => import("./HeroFeatureSpacePage.vue"));
+const RankingsPage = defineAsyncComponent(() => import("./RankingsPage.vue"));
 import {
   fetchDataStatus,
   fetchCoachUsage,
@@ -57,8 +58,9 @@ const isMethodology = computed(() => routePath.value.startsWith("/methodology"))
 const isTeams = computed(() => routePath.value.startsWith("/teams"));
 const isSimulator = computed(() => routePath.value.startsWith("/simulator"));
 const isFeatureSpace = computed(() => routePath.value.startsWith("/feature-space"));
+const isRankings = computed(() => routePath.value.startsWith("/rankings"));
 const isLandingPage = computed(
-  () => !isManagement.value && !isMethodology.value && !isTeams.value && !isSimulator.value && !isFeatureSpace.value
+  () => !isManagement.value && !isMethodology.value && !isTeams.value && !isSimulator.value && !isFeatureSpace.value && !isRankings.value
 );
 
 function dismissProjectNotice() {
@@ -114,6 +116,7 @@ const artifacts = computed(() => {
     meta,
     team_synergy: teamSynergy,
     team_profiles: teamProfiles = [],
+    power_rankings: powerRankings,
     draft_model: draftModel,
     learnable_draft_model: learnableDraftModel,
   } = dataStatus.value.artifacts;
@@ -123,6 +126,7 @@ const artifacts = computed(() => {
     ...(meta ? [meta] : []),
     ...(teamSynergy ? [teamSynergy] : []),
     ...teamProfiles,
+    ...(powerRankings ? [powerRankings] : []),
     ...(draftModel ? [draftModel] : []),
     ...(learnableDraftModel ? [learnableDraftModel] : []),
   ];
@@ -499,7 +503,7 @@ watch(selectedYear, () => {
       <div class="primary-tabs" aria-label="Analysis views">
         <a
           href="/"
-          :class="{ active: !isManagement && !isMethodology && !isTeams && !isSimulator && !isFeatureSpace }"
+          :class="{ active: !isManagement && !isMethodology && !isTeams && !isSimulator && !isFeatureSpace && !isRankings }"
           @click.prevent="navigate('/')"
         >
           <span>Explore</span>
@@ -528,6 +532,14 @@ watch(selectedYear, () => {
         >
           <span>Explore</span>
           <strong>Hero space</strong>
+        </a>
+        <a
+          href="/rankings"
+          :class="{ active: isRankings }"
+          @click.prevent="navigate('/rankings')"
+        >
+          <span>Rank</span>
+          <strong>Power board</strong>
         </a>
       </div>
       <div class="utility-links">
@@ -897,6 +909,7 @@ watch(selectedYear, () => {
   <TeamSynergyPage v-else-if="isTeams" />
   <DraftSimulatorPage v-else-if="isSimulator" />
   <HeroFeatureSpacePage v-else-if="isFeatureSpace" />
+  <RankingsPage v-else-if="isRankings" />
   <MethodologyPage v-else-if="isMethodology" />
   <VisualizationPage v-else />
 
