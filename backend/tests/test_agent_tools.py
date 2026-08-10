@@ -8,6 +8,7 @@ from pydantic import ValidationError
 from app.agent import available_tool_definitions, invoke_tool
 from app.agent.tool_registry import TOOLS, UnknownAgentToolError
 from app.agent.tools.draft import (
+    FIXED_ROLLOUTS,
     SimulateFutureDraftArguments,
     simulate_future_draft,
 )
@@ -69,6 +70,8 @@ class AgentToolRegistryTest(unittest.TestCase):
         player_schema = functions["get_player_hero_pool"]["parameters"]
         self.assertIn("player_name", player_schema["required"])
         self.assertNotIn("team_name", player_schema["required"])
+        simulation_schema = functions["simulate_future_draft"]["parameters"]
+        self.assertNotIn("rollouts", simulation_schema["properties"])
 
     def test_dispatch_validates_and_calls_fast_prediction(self) -> None:
         expected = {
@@ -127,7 +130,7 @@ class AgentToolRegistryTest(unittest.TestCase):
                 {"hero_id": 105, "hero_name": "Hero E", "probability": 0.6}
             ],
             "simulation": {
-                "rollouts": 200,
+                "rollouts": FIXED_ROLLOUTS,
                 "actions_simulated": 2,
                 "next_actions": {
                     "3": [
@@ -169,7 +172,6 @@ class AgentToolRegistryTest(unittest.TestCase):
         arguments = SimulateFutureDraftArguments(
             **raw_arguments,
             horizon=2,
-            rollouts=200,
         )
 
         with (
@@ -187,11 +189,19 @@ class AgentToolRegistryTest(unittest.TestCase):
         simulation.assert_called_once_with(
             "20260002",
             arguments.draft_state(),
-            200,
+            FIXED_ROLLOUTS,
             None,
             model_type="stats",
             max_actions=2,
         )
+
+    def test_future_draft_tool_rejects_a_model_supplied_rollout_count(self) -> None:
+        arguments = self.arguments()
+        arguments.pop("limit")
+        arguments["rollouts"] = 1000
+
+        with self.assertRaises(ValidationError):
+            SimulateFutureDraftArguments(**arguments)
 
     def test_dispatch_rejects_invalid_arguments(self) -> None:
         arguments = self.arguments()

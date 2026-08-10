@@ -4,7 +4,12 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, PositiveInt
 
-from app.services.draft_simulator import load_model, predict_next_action, simulate
+from app.services.draft_simulator import (
+    FIXED_ROLLOUTS,
+    load_model,
+    predict_next_action,
+    simulate,
+)
 
 HeroId = Annotated[int, Field(gt=0)]
 
@@ -66,7 +71,6 @@ class SimulateFutureDraftArguments(DraftStateArguments):
     """Inputs for bounded marginal rollouts over upcoming BP actions."""
 
     horizon: int = Field(default=3, ge=1, le=20)
-    rollouts: int = Field(default=200, ge=100, le=1000)
     choices_per_action: int = Field(default=5, ge=1, le=8)
     seed: int | None = None
 
@@ -90,7 +94,7 @@ def simulate_future_draft(
     result = simulate(
         arguments.league_id,
         arguments.draft_state(),
-        arguments.rollouts,
+        FIXED_ROLLOUTS,
         arguments.seed,
         model_type=arguments.model_type,
         max_actions=arguments.horizon,
@@ -120,7 +124,7 @@ def simulate_future_draft(
         "model_generated_at": result["model_generated_at"],
         "model_type": result["model_type"],
         "model_label": result["model_label"],
-        "rollouts": arguments.rollouts,
+        "rollouts": FIXED_ROLLOUTS,
         "requested_horizon": arguments.horizon,
         "actions_simulated": len(future_actions),
         "next_step": result["next_step"],

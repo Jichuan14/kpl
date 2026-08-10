@@ -26,6 +26,7 @@ from app.database import get_db
 from app.config import get_settings
 from app.schemas import ApiResponse, CoachLimitsUpdate
 from app.services.coach_rate_limit import CoachRateLimiter
+from app.services.request_identity import client_key
 from app.services.season_teams import validate_season_team_pair
 
 logger = logging.getLogger(__name__)
@@ -50,15 +51,10 @@ rate_limiter = _new_rate_limiter()
 
 def _client_key(request: Request) -> str:
     """Use proxy-supplied IPs only when deployment explicitly opts in."""
-    settings = get_settings()
-    if settings.coach_trust_proxy_headers:
-        cloudflare_ip = request.headers.get("CF-Connecting-IP")
-        if cloudflare_ip:
-            return cloudflare_ip.strip()
-        forwarded_for = request.headers.get("X-Forwarded-For")
-        if forwarded_for:
-            return forwarded_for.split(",", 1)[0].strip()
-    return request.client.host if request.client else "unknown"
+    return client_key(
+        request,
+        trust_proxy_headers=get_settings().coach_trust_proxy_headers,
+    )
 
 
 def _http_error(

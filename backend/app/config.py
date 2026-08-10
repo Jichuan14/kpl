@@ -34,6 +34,13 @@ class Settings(BaseSettings):
     coach_ip_max_active_requests: int = 1
     coach_server_max_active_requests: int = 4
     coach_trust_proxy_headers: bool = False
+    simulation_ip_requests_per_minute: int = 30
+    simulation_ip_requests_per_day: int = 500
+    simulation_server_requests_per_minute: int = 60
+    simulation_server_requests_per_day: int = 5_000
+    simulation_ip_max_active_requests: int = 1
+    simulation_server_max_active_requests: int = 2
+    simulation_trust_proxy_headers: bool = False
     # Dedicated credential for the read-only macOS visitor widget.  It is
     # deliberately separate from management Basic Auth and must never be put
     # in frontend code.
@@ -86,6 +93,12 @@ class Settings(BaseSettings):
         "coach_server_requests_per_day",
         "coach_ip_max_active_requests",
         "coach_server_max_active_requests",
+        "simulation_ip_requests_per_minute",
+        "simulation_ip_requests_per_day",
+        "simulation_server_requests_per_minute",
+        "simulation_server_requests_per_day",
+        "simulation_ip_max_active_requests",
+        "simulation_server_max_active_requests",
     )
     @classmethod
     def positive_kimi_limits(cls, value: int) -> int:

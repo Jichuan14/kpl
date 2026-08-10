@@ -21,6 +21,11 @@ _TEAM_TENDENCY_CACHE: dict[
 ] = {}
 LEGACY_SPECIALTY_FEATURES_PATH = ANALYSIS_DIR / "hero_specialty_vectors_thermometer.json"
 DRAFT_FEATURES_PATH = ANALYSIS_DIR / "hero_draft_feature_vectors.json"
+# Public requests and AI tool calls use this fixed, lowest supported rollout
+# count.  Keep the low-level ``simulate`` function parameterized for offline
+# analysis and deterministic unit tests, but do not expose that control at an
+# HTTP or model-tool boundary.
+FIXED_ROLLOUTS = 100
 
 
 def model_path(league_id: str) -> Path:

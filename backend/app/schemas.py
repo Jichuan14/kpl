@@ -94,6 +94,10 @@ class AnalysisRunRequest(BaseModel):
 
 
 class DraftSimulationRequest(BaseModel):
+    # Reject, rather than silently ignore, client attempts to supply a
+    # compute-affecting field such as ``rollouts``.
+    model_config = {"extra": "forbid"}
+
     league_id: str = Field(min_length=1, max_length=32)
     model_type: Literal["stats", "learnable"] = "stats"
     blue_team_id: str = Field(min_length=1, max_length=32)
@@ -108,7 +112,6 @@ class DraftSimulationRequest(BaseModel):
     blue_used_previous_battles: list[int] = Field(default_factory=list)
     red_used_previous_battles: list[int] = Field(default_factory=list)
     legal_hero_ids: list[int] | None = None
-    rollouts: int = Field(default=100, ge=100, le=5000)
     seed: int | None = None
 
     @model_validator(mode="after")

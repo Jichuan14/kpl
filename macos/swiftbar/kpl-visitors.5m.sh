@@ -53,7 +53,7 @@ case "$unique_visitors:$page_views" in
     ;;
 esac
 
-printf '%s\n' "KPL: $unique_visitors | color=#3fb950"
+printf '%s\n' "KPL: $unique_visitors | color=#bc8cff"
 printf '%s\n' "---"
 printf '%s\n' "Today: $unique_visitors unique visitors"
 printf '%s\n' "Today: $page_views page views"

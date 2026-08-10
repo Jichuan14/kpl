@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 DRAFT_TOOL_OPTIONS: dict[str, frozenset[str]] = {
     "predict_next_draft_action": frozenset({"limit"}),
     "simulate_future_draft": frozenset(
-        {"horizon", "rollouts", "choices_per_action", "seed"}
+        {"horizon", "choices_per_action", "seed"}
     ),
 }
 

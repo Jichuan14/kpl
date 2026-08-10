@@ -26,7 +26,6 @@ const loading = ref(false);
 const simulating = ref(false);
 const error = ref("");
 const search = ref("");
-const rollouts = ref(100);
 const modelType = ref("learnable");
 const bpOrder = ref(1);
 const board = ref(emptyBoard());
@@ -336,7 +335,6 @@ async function forecast() {
       ...board.value,
       blue_used_previous_battles: globalUsed.value[teamsBySide.value.blue],
       red_used_previous_battles: globalUsed.value[teamsBySide.value.red],
-      rollouts: rollouts.value,
     });
   } catch (err) {
     result.value = null;
@@ -368,7 +366,6 @@ async function chooseHero(heroId) {
       action: currentStep.value.action,
       side: currentStep.value.side,
       selected_hero_id: Number(heroId),
-      rollouts: 100,
     }).then((payload) => {
       if (commentaryEnabled.value && requestNumber === commentaryRequestNumber) {
         commentary.value = payload;
@@ -565,15 +562,6 @@ watch(selectedTeamIds, forecast, { deep: true });
           <small>{{ selectedSeason?.league_name || leagueId }}</small>
         </div>
         <div class="simulator-actions">
-          <label>
-            <span>Rollouts</span>
-            <select v-model.number="rollouts" @change="forecast">
-              <option :value="100">100 · fast</option>
-              <option :value="500">500</option>
-              <option :value="1000">1,000</option>
-              <option :value="2500">2,500</option>
-            </select>
-          </label>
           <button type="button" :disabled="!history.length || simulating" @click="undo">Undo</button>
           <button type="button" :disabled="simulating" @click="reset">Reset</button>
         </div>
