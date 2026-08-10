@@ -1,6 +1,6 @@
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import BigInteger, DateTime, Float, Integer, String, UniqueConstraint, func
+from sqlalchemy import BigInteger, Date, DateTime, Float, Integer, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -220,3 +220,30 @@ class HeroBpStats(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()
     )
+
+
+class VisitorDailyVisitor(Base):
+    """A one-way anonymous visitor marker, retained only at daily granularity."""
+
+    __tablename__ = "visitor_daily_visitors"
+    __table_args__ = (
+        UniqueConstraint("day", "visitor_hash", name="uk_visitor_daily_visitor"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    day: Mapped[date] = mapped_column(Date, index=True)
+    visitor_hash: Mapped[str] = mapped_column(String(64), index=True)
+
+
+class VisitorDailyPage(Base):
+    """Aggregate public page views without retaining individual visit events."""
+
+    __tablename__ = "visitor_daily_pages"
+    __table_args__ = (
+        UniqueConstraint("day", "page_path", name="uk_visitor_daily_page"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    day: Mapped[date] = mapped_column(Date, index=True)
+    page_path: Mapped[str] = mapped_column(String(120))
+    page_views: Mapped[int] = mapped_column(Integer, default=0)

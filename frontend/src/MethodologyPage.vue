@@ -119,9 +119,21 @@ function selectSection(sectionId) {
   activeSection.value = sectionId;
 }
 
+function scrollToHashSection() {
+  const sectionId = decodeURIComponent(window.location.hash.slice(1));
+  if (!guideSections.some((section) => section.id === sectionId)) return;
+  document.getElementById(sectionId)?.scrollIntoView({ block: "start" });
+  activeSection.value = sectionId;
+}
+
 onMounted(async () => {
+  // The rankings page links here with #rankings. This component is lazy-loaded,
+  // so browsers may resolve the hash before its target has entered the DOM.
+  await nextTick();
+  scrollToHashSection();
   await loadModel();
   await nextTick();
+  scrollToHashSection();
   window.addEventListener("scroll", scheduleScrollSpy, { passive: true });
   window.addEventListener("resize", scheduleScrollSpy);
   updateActiveSection();

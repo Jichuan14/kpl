@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 
 from app.api import (
+    analytics,
     bp,
     coach,
     data,
@@ -40,6 +41,7 @@ app.include_router(pipeline.router)
 app.include_router(visualization.router)
 app.include_router(simulation.router)
 app.include_router(coach.router)
+app.include_router(analytics.router)
 
 
 @app.on_event("startup")

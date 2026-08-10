@@ -155,6 +155,17 @@ export function updateCoachLimits(limits) {
   });
 }
 
+export function trackVisitor({ visitorId, pagePath }) {
+  return request("/api/analytics/visits", {
+    method: "POST",
+    body: JSON.stringify({ visitor_id: visitorId, page_path: pagePath }),
+  });
+}
+
+export function fetchVisitorStats() {
+  return request("/api/analytics/summary");
+}
+
 export function syncLeagues() {
   return request("/api/sync/leagues", { method: "POST" });
 }

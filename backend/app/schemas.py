@@ -1,4 +1,5 @@
 from typing import Literal
+from uuid import UUID
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -18,6 +19,13 @@ class CoachLimitsUpdate(BaseModel):
     server_requests_per_day: int = Field(ge=1, le=10_000_000)
     ip_max_active_requests: int = Field(ge=1, le=1_000)
     server_max_active_requests: int = Field(ge=1, le=10_000)
+
+
+class VisitorTrackRequest(BaseModel):
+    """A browser-local anonymous ID and the public route it viewed."""
+
+    visitor_id: UUID
+    page_path: str = Field(min_length=1, max_length=120, pattern=r"^/[^?#]*$")
 
 
 class LeagueOut(BaseModel):

@@ -9,12 +9,14 @@ const RankingsPage = defineAsyncComponent(() => import("./RankingsPage.vue"));
 import {
   fetchDataStatus,
   fetchCoachUsage,
+  fetchVisitorStats,
   updateCoachLimits,
   fetchLeagues,
   publishFrontendAssets,
   runAnalysisStep,
   syncLeagueBp,
   syncLeagues,
+  trackVisitor,
 } from "./api";
 import { selectAvailableLeague, selectedLeagueId } from "./selectedLeague";
 import { language } from "./i18n";
@@ -25,6 +27,7 @@ const leagueId = selectedLeagueId;
 const selectedYear = ref("");
 const dataStatus = ref(null);
 const coachUsage = ref(null);
+const visitorAnalytics = ref(null);
 const coachLimits = ref(null);
 const savingCoachLimits = ref(false);
 const loading = ref(false);
@@ -40,6 +43,7 @@ const apiConnected = ref(false);
 const rightsContactEmail = "jichuan1625@gmail.com";
 const firstVisitKey = "draft-atlas-notice-seen";
 const welcomePromptKey = "draft-atlas-welcome-prompt-seen";
+const visitorIdKey = "draft-atlas-visitor-id";
 const showProjectNotice = ref(
   window.localStorage.getItem(firstVisitKey) !== "true"
 );
@@ -51,6 +55,7 @@ let syncTimer = null;
 let processingTimer = null;
 let startupFallbackTimer = null;
 let coachUsageTimer = null;
+let visitorAnalyticsTimer = null;
 const routePath = ref(window.location.pathname);
 
 const isManagement = computed(() => routePath.value.startsWith("/management"));
@@ -180,6 +185,38 @@ async function loadCoachUsage() {
   }
 }
 
+async function loadVisitorAnalytics() {
+  try {
+    visitorAnalytics.value = await fetchVisitorStats();
+  } catch {
+    // The card remains unavailable until the analytics API is deployed.
+    visitorAnalytics.value = null;
+  }
+}
+
+function anonymousVisitorId() {
+  try {
+    const stored = window.localStorage.getItem(visitorIdKey);
+    if (stored) return stored;
+    const id = window.crypto.randomUUID();
+    window.localStorage.setItem(visitorIdKey, id);
+    return id;
+  } catch {
+    // Privacy-restricted browsers still contribute a single anonymous view.
+    return window.crypto.randomUUID();
+  }
+}
+
+function trackCurrentPublicPage() {
+  if (isManagement.value) return;
+  trackVisitor({
+    visitorId: anonymousVisitorId(),
+    pagePath: window.location.pathname,
+  }).catch(() => {
+    // Tracking should never interrupt the public experience.
+  });
+}
+
 async function saveCoachLimits() {
   if (!coachLimits.value || savingCoachLimits.value) return;
   savingCoachLimits.value = true;
@@ -199,10 +236,22 @@ function startCoachUsageMonitor() {
   coachUsageTimer = window.setInterval(loadCoachUsage, 15_000);
 }
 
+function startVisitorAnalyticsMonitor() {
+  if (visitorAnalyticsTimer) return;
+  loadVisitorAnalytics();
+  visitorAnalyticsTimer = window.setInterval(loadVisitorAnalytics, 30_000);
+}
+
 function stopCoachUsageMonitor() {
   if (!coachUsageTimer) return;
   window.clearInterval(coachUsageTimer);
   coachUsageTimer = null;
+}
+
+function stopVisitorAnalyticsMonitor() {
+  if (!visitorAnalyticsTimer) return;
+  window.clearInterval(visitorAnalyticsTimer);
+  visitorAnalyticsTimer = null;
 }
 
 async function refreshLeagueCatalog() {
@@ -400,7 +449,7 @@ function dateTime(value) {
 
 async function loadManagement() {
   try {
-    await Promise.all([loadLeagues(), loadCoachUsage()]);
+    await Promise.all([loadLeagues(), loadCoachUsage(), loadVisitorAnalytics()]);
     await loadStatus();
   } catch (err) {
     error.value = err.message || "Could not connect to the local API.";
@@ -414,8 +463,11 @@ function handlePopState() {
   if (isManagement.value) {
     if (!leagues.value.length) loadManagement();
     startCoachUsageMonitor();
+    startVisitorAnalyticsMonitor();
   } else {
     stopCoachUsageMonitor();
+    stopVisitorAnalyticsMonitor();
+    trackCurrentPublicPage();
   }
 }
 
@@ -427,8 +479,11 @@ function navigate(path) {
   if (isManagement.value) {
     if (!leagues.value.length) loadManagement();
     startCoachUsageMonitor();
+    startVisitorAnalyticsMonitor();
   } else {
     stopCoachUsageMonitor();
+    stopVisitorAnalyticsMonitor();
+    trackCurrentPublicPage();
   }
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
@@ -438,6 +493,9 @@ onMounted(() => {
   if (isManagement.value) {
     loadManagement();
     startCoachUsageMonitor();
+    startVisitorAnalyticsMonitor();
+  } else {
+    trackCurrentPublicPage();
   }
   startupFallbackTimer = window.setTimeout(finishStartupLoading, 12000);
 });
@@ -446,6 +504,7 @@ onBeforeUnmount(() => {
   window.removeEventListener("popstate", handlePopState);
   if (startupFallbackTimer) window.clearTimeout(startupFallbackTimer);
   stopCoachUsageMonitor();
+  stopVisitorAnalyticsMonitor();
 });
 
 watch(leagueId, () => {
@@ -696,6 +755,25 @@ watch(selectedYear, () => {
           <label><span>Server active requests</span><input v-model.number="coachLimits.server_max_active_requests" type="number" min="1" required></label>
           <div class="coach-limit-submit"><small>Changes apply immediately and reset after a server restart.</small><button class="button primary" type="submit" :disabled="savingCoachLimits">{{ savingCoachLimits ? "Saving…" : "Save AI Coach limits" }}</button></div>
         </form>
+    </section>
+
+    <section v-if="visitorAnalytics" class="panel visitor-analytics-panel">
+      <div class="panel-title">
+        <div>
+          <p class="kicker">Site analytics</p>
+          <h2>Visitor activity</h2>
+        </div>
+        <button class="button ghost compact" type="button" @click="loadVisitorAnalytics">Refresh</button>
+      </div>
+      <p class="panel-intro">
+        Unique visitors use an anonymous browser ID hashed before storage. The analytics database keeps no IP addresses or raw IDs.
+      </p>
+      <div class="monitor-grid">
+        <div><span>Visitors · today</span><strong>{{ number(visitorAnalytics.today.unique_visitors) }}</strong><small>{{ number(visitorAnalytics.today.page_views) }} page views</small></div>
+        <div><span>Visitors · last 7 days</span><strong>{{ number(visitorAnalytics.last_7_days.unique_visitors) }}</strong><small>{{ number(visitorAnalytics.last_7_days.page_views) }} page views</small></div>
+        <div><span>Visitors · last 30 days</span><strong>{{ number(visitorAnalytics.last_30_days.unique_visitors) }}</strong><small>{{ number(visitorAnalytics.last_30_days.page_views) }} page views</small></div>
+        <div><span>Visitors · all time</span><strong>{{ number(visitorAnalytics.all_time.unique_visitors) }}</strong><small>{{ number(visitorAnalytics.all_time.page_views) }} page views</small></div>
+      </div>
     </section>
 
     <template v-if="dataStatus">
@@ -1490,12 +1568,14 @@ select {
 
 .button.compact { min-height: 34px; padding: .4rem .65rem; font-size: .68rem; }
 
-.coach-monitor-panel { margin-top: 1.15rem; margin-bottom: 1.15rem; padding: 1.15rem; }
+.coach-monitor-panel,
+.visitor-analytics-panel { margin-top: 1.15rem; margin-bottom: 1.15rem; padding: 1.15rem; }
 .monitor-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: hidden; border: 1px solid var(--line); background: rgba(255,255,255,.48); }
 .monitor-grid > div { display: grid; gap: .32rem; min-height: 88px; padding: .85rem; border-right: 1px solid var(--line); }
 .monitor-grid > div:last-child { border-right: 0; }
 .monitor-grid span { color: var(--ink-soft); font-size: .62rem; line-height: 1.35; }
 .monitor-grid strong { color: var(--accent-deep); font: 700 1.22rem var(--display); letter-spacing: -.03em; }
+.monitor-grid small { color: var(--ink-soft); font-size: .67rem; }
 .monitor-note { margin: .75rem 0 0; color: var(--ink-soft); font-size: .67rem; line-height: 1.55; }
 .coach-limit-form { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:.75rem; margin-top:1rem; padding-top:1rem; border-top:1px solid var(--line); }
 .coach-limit-form label { display:grid; gap:.35rem; min-width:0; color:var(--ink-soft); font-size:.61rem; }
