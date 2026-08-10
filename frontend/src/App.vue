@@ -10,6 +10,7 @@ import {
   fetchDataStatus,
   fetchCoachUsage,
   fetchVisitorStats,
+  fetchVisualizationSeasons,
   updateCoachLimits,
   fetchLeagues,
   publishFrontendAssets,
@@ -23,6 +24,7 @@ import { language } from "./i18n";
 import { finishStartupLoading, startupLoading } from "./startupLoader";
 
 const leagues = ref([]);
+const availableSeasons = ref([]);
 const leagueId = selectedLeagueId;
 const selectedYear = ref("");
 const dataStatus = ref(null);
@@ -50,7 +52,7 @@ const showProjectNotice = ref(
 const showWelcomePrompt = ref(
   window.localStorage.getItem(welcomePromptKey) !== "true"
 );
-const mobileNavigationOpen = ref(false);
+const utilityMenu = ref(null);
 let syncTimer = null;
 let processingTimer = null;
 let startupFallbackTimer = null;
@@ -146,6 +148,15 @@ async function loadLeagues() {
     (league) => league.league_id === leagueId.value
   );
   selectedYear.value = String(initial?.year || "");
+}
+
+async function loadAvailableSeasons() {
+  try {
+    availableSeasons.value = (await fetchVisualizationSeasons()) || [];
+    selectAvailableLeague(availableSeasons.value);
+  } catch {
+    availableSeasons.value = [];
+  }
 }
 
 async function loadStatus() {
@@ -471,8 +482,14 @@ function handlePopState() {
   }
 }
 
+function closeUtilityMenu(event) {
+  if (utilityMenu.value && !utilityMenu.value.contains(event.target)) {
+    utilityMenu.value.open = false;
+  }
+}
+
 function navigate(path) {
-  mobileNavigationOpen.value = false;
+  if (utilityMenu.value) utilityMenu.value.open = false;
   if (window.location.pathname === path) return;
   window.history.pushState({}, "", path);
   routePath.value = path;
@@ -490,6 +507,8 @@ function navigate(path) {
 
 onMounted(() => {
   window.addEventListener("popstate", handlePopState);
+  window.addEventListener("click", closeUtilityMenu);
+  loadAvailableSeasons();
   if (isManagement.value) {
     loadManagement();
     startCoachUsageMonitor();
@@ -502,6 +521,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener("popstate", handlePopState);
+  window.removeEventListener("click", closeUtilityMenu);
   if (startupFallbackTimer) window.clearTimeout(startupFallbackTimer);
   stopCoachUsageMonitor();
   stopVisitorAnalyticsMonitor();
@@ -548,17 +568,7 @@ watch(selectedYear, () => {
       <img src="/assets/brand/draft-atlas-icon.png" alt="" aria-hidden="true" />
       <span class="site-brand-name">Draft <b>Atlas</b></span>
     </a>
-    <button
-      class="navigation-toggle"
-      type="button"
-      :aria-expanded="mobileNavigationOpen"
-      aria-controls="site-navigation-links"
-      @click="mobileNavigationOpen = !mobileNavigationOpen"
-    >
-      <span>{{ mobileNavigationOpen ? "Close" : "Menu" }}</span>
-      <i aria-hidden="true"></i>
-    </button>
-    <div id="site-navigation-links" class="navigation-links" :class="{ 'mobile-open': mobileNavigationOpen }">
+    <div class="navigation-links">
       <div class="primary-tabs" aria-label="Analysis views">
         <a
           href="/"
@@ -601,22 +611,40 @@ watch(selectedYear, () => {
           <strong>Power board</strong>
         </a>
       </div>
-      <div class="utility-links">
-        <a
-          href="/methodology"
-          :class="{ active: isMethodology }"
-          @click.prevent="navigate('/methodology')"
-        >
-          How it works
-        </a>
-        <label class="language-switcher">
-          <span>Language</span>
-          <select v-model="language" aria-label="Language">
-            <option value="zh-CN" data-i18n-ignore>{{ language === "en" ? "Chinese" : "中文" }}</option>
-            <option value="en">English</option>
-          </select>
-        </label>
-      </div>
+      <details ref="utilityMenu" class="utility-menu">
+        <summary>More</summary>
+        <div id="site-navigation-links" class="utility-links">
+          <p class="utility-menu-title">Workspace options</p>
+          <label class="utility-control season-switcher">
+            <span>Season</span>
+            <select v-model="leagueId" aria-label="Season" :disabled="!availableSeasons.length">
+              <option v-if="!availableSeasons.length" value="">Loading analyzed seasons…</option>
+              <option
+                v-for="league in availableSeasons"
+                :key="league.league_id"
+                :value="league.league_id"
+              >
+                {{ league.year }} · {{ league.league_name }} · S{{ league.season }}
+              </option>
+            </select>
+          </label>
+          <label class="utility-control language-switcher">
+            <span>Language</span>
+            <select v-model="language" aria-label="Language">
+              <option value="zh-CN" data-i18n-ignore>{{ language === "en" ? "Chinese" : "中文" }}</option>
+              <option value="en">English</option>
+            </select>
+          </label>
+          <a
+            class="utility-menu-link"
+            href="/methodology"
+            :class="{ active: isMethodology }"
+            @click.prevent="navigate('/methodology')"
+          >
+            How it works <span aria-hidden="true">→</span>
+          </a>
+        </div>
+      </details>
     </div>
   </nav>
 
@@ -1183,8 +1211,6 @@ watch(selectedYear, () => {
   gap: 1rem;
 }
 
-.navigation-toggle { display: none; }
-
 .primary-tabs {
   display: flex;
   gap: 0.25rem;
@@ -1234,41 +1260,112 @@ watch(selectedYear, () => {
   color: #fff;
 }
 
-.utility-links {
-  display: flex;
+.utility-menu {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.utility-menu summary {
+  display: inline-flex;
+  min-height: 44px;
   align-items: center;
-  gap: 0.75rem;
-}
-
-.utility-links a {
-  padding: 0.4rem 0;
-  border-bottom: 1px solid transparent;
-  font-size: 0.68rem;
-  letter-spacing: 0.03em;
-}
-
-.utility-links a:hover,
-.utility-links a.active {
-  border-color: var(--accent);
-  color: var(--ink);
-}
-
-.language-switcher {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  color: var(--ink-soft);
-  font-size: 0.62rem;
-  letter-spacing: 0.04em;
-}
-
-.language-switcher select {
-  min-height: 30px;
+  gap: 0.45rem;
+  padding: 0.45rem 0.65rem;
   border: 1px solid var(--line);
-  border-radius: 0.25rem;
-  background: rgba(255, 255, 255, 0.68);
+  border-radius: 0.35rem;
+  background: rgba(255,255,255,.72);
+  color: var(--ink);
+  cursor: pointer;
+  font: 700 .65rem var(--mono);
+  letter-spacing: .08em;
+  list-style: none;
+  text-transform: uppercase;
+}
+
+.utility-menu summary::-webkit-details-marker { display: none; }
+.utility-menu summary::after { content:"+"; color:var(--accent-deep); font-size:1rem; line-height:1; }
+.utility-menu[open] summary::after { content:"−"; }
+
+.utility-menu:not([open]) .utility-links { display: none; }
+
+.utility-menu[open] .utility-links {
+  position: absolute;
+  z-index: 70;
+  top: calc(100% + .45rem);
+  right: 0;
+  display: grid;
+  width: min(21rem, calc(100vw - 1rem));
+  gap: .45rem;
+  padding: .6rem;
+  border: 1px solid var(--line);
+  border-radius: .45rem;
+  background: rgba(243,246,244,.96);
+  box-shadow: 0 .75rem 1.5rem rgba(16,42,46,.12);
+  backdrop-filter: blur(18px);
+}
+
+.utility-menu-title {
+  margin: .05rem .15rem .1rem;
+  color: var(--accent-deep);
+  font-size: .56rem;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.utility-control {
+  display: grid;
+  gap: .35rem;
+  padding: .6rem;
+  border: 1px solid var(--line);
+  border-radius: .35rem;
+  background: rgba(255,255,255,.7);
+}
+
+.utility-control > span {
+  color: var(--ink-soft);
+  font-size: .56rem;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.utility-control select {
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  padding: 0 .6rem;
+  border: 1px solid var(--line);
+  border-radius: .25rem;
+  background: rgba(255,255,255,.92);
   color: var(--ink);
   font: inherit;
+}
+
+.utility-control select:disabled { cursor: wait; color: var(--ink-soft); }
+
+.utility-menu-link {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: space-between;
+  padding: .45rem .6rem;
+  border-radius: .3rem;
+  color: var(--ink-soft);
+  font-size: .68rem;
+  letter-spacing: .03em;
+  text-decoration: none;
+}
+
+.utility-menu-link span { color: var(--accent-deep); font-size: 1rem; }
+.utility-menu-link:hover,
+.utility-menu-link.active { background:rgba(15,138,107,.08); color:var(--ink); }
+
+/* Public pages use the shared season selector in the More menu. */
+:deep(.season-control),
+:deep(.season-picker),
+:deep(.simulator-season) {
+  display: none !important;
 }
 
 .site-footnote {
@@ -1951,6 +2048,10 @@ select {
     width: 100%;
   }
 
+  .utility-menu {
+    align-self: flex-end;
+  }
+
   .primary-tabs a {
     min-width: 0;
     flex: 1;
@@ -2004,15 +2105,15 @@ select {
 }
 
 @media (max-width: 640px) {
+  :global(body) {
+    padding-bottom: calc(5.25rem + env(safe-area-inset-bottom));
+  }
+
   .site-navigation {
     position: relative;
     gap: .65rem;
     padding: .75rem 0;
   }
-
-  .navigation-toggle { display:inline-flex; position:absolute; top:.75rem; right:0; min-height:44px; align-items:center; gap:.45rem; padding:.45rem .65rem; border:1px solid var(--line); border-radius:.35rem; background:rgba(255,255,255,.72); color:var(--ink); font:700 .65rem var(--mono); letter-spacing:.08em; text-transform:uppercase; }
-  .navigation-toggle i, .navigation-toggle i::before { display:block; width:1rem; height:2px; border-radius:999px; background:currentColor; content:""; }
-  .navigation-toggle i::before { transform:translateY(-5px); box-shadow:0 10px 0 currentColor; }
 
   .site-brand {
     min-height: 44px;
@@ -2025,49 +2126,47 @@ select {
   }
 
   .navigation-links {
-    display: none;
-    gap: .5rem;
+    display: contents;
   }
-
-  .navigation-links.mobile-open { display: flex; }
 
   .primary-tabs {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: .3rem;
-    padding: .3rem;
+    position: fixed;
+    z-index: 60;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: .12rem;
+    padding: .35rem .2rem calc(.35rem + env(safe-area-inset-bottom));
+    border: 0;
+    border-top: 1px solid var(--line);
+    border-radius: 0;
+    background: rgba(243, 246, 244, .94);
+    box-shadow: 0 -.6rem 1.5rem rgba(16, 42, 46, .1);
+    backdrop-filter: blur(18px);
   }
 
   .primary-tabs a {
-    min-height: 62px;
-    padding: .5rem .55rem;
+    min-width: 0;
+    min-height: 52px;
+    align-content: center;
+    padding: .3rem .12rem;
+    text-align: center;
   }
+
+  .primary-tabs a span { display: none; }
 
   .primary-tabs a strong {
-    font-size: .82rem;
+    font-size: .62rem;
+    line-height: 1.2;
   }
 
-  .utility-links {
-    gap: .55rem;
-  }
-
-  .utility-links a {
-    min-height: 44px;
-    display: inline-flex;
-    align-items: center;
-  }
-
-  .language-switcher {
-    margin-left: auto;
-  }
-
-  .language-switcher span {
-    display: none;
-  }
-
-  .language-switcher select {
-    min-height: 44px;
-    padding: 0 .5rem;
+  .utility-menu {
+    position: absolute;
+    z-index: 61;
+    top: .75rem;
+    right: 0;
   }
 
   .page {

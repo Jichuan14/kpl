@@ -20,6 +20,7 @@ const error = ref("");
 const metaHistory = ref([]);
 const selectedMetaHeroId = ref("");
 const hoveredMetaPoint = ref(null);
+const metaHeroesExpanded = ref(false);
 
 const relation = ref("counter_pick");
 const responseScope = ref("all");
@@ -48,10 +49,6 @@ const metricOptions = [
   { value: "win_rate", label: "Best battle win rate" },
 ];
 
-const currentSeason = computed(() =>
-  seasons.value.find((season) => season.league_id === leagueId.value)
-);
-
 const currentRelation = computed(
   () =>
     relationOptions.find((option) => option.value === relation.value) ||
@@ -65,6 +62,18 @@ const topMetaHeroes = computed(() =>
     .filter((hero) => hero.early_priority_count > 0)
     .slice(0, 12)
 );
+
+const metaHeroToggleLabel = computed(() => {
+  const additionalHeroes = topMetaHeroes.value.length - 5;
+  if (language.value === "zh-CN") {
+    return metaHeroesExpanded.value
+      ? "收起英雄列表"
+      : `展开其余 ${additionalHeroes} 位英雄`;
+  }
+  return metaHeroesExpanded.value
+    ? "Show fewer heroes"
+    : `Show ${additionalHeroes} more heroes`;
+});
 
 const metaHeroOptions = computed(() => {
   const heroes = new Map();
@@ -337,27 +346,17 @@ onBeforeUnmount(() => {
           and ban responses.
         </p>
       </div>
-      <label class="season-control">
-        <span>Competition</span>
-        <select v-model="leagueId">
-          <option v-if="!seasons.length" value="">No analyzed seasons</option>
-          <option
-            v-for="season in seasons"
-            :key="season.league_id"
-            :value="season.league_id"
-          >
-            {{ season.year }} · {{ season.league_name }} · S{{ season.season }}
-          </option>
-        </select>
-        <small v-if="currentSeason">Dataset {{ currentSeason.league_id }}</small>
-      </label>
     </section>
 
     <p v-if="error" class="visual-message error">{{ error }}</p>
     <p v-else-if="loading" class="visual-message">Loading season data…</p>
 
     <template v-if="payload && !loading">
-      <section v-if="topMetaHeroes.length" class="meta-section">
+      <section
+        v-if="topMetaHeroes.length"
+        class="meta-section"
+        :class="{ 'meta-heroes-expanded': metaHeroesExpanded }"
+      >
         <div class="meta-heading">
           <div>
             <p class="visual-eyebrow">Opening draft priority</p>
@@ -423,6 +422,15 @@ onBeforeUnmount(() => {
             </strong>
           </article>
         </div>
+        <button
+          v-if="topMetaHeroes.length > 5"
+          class="meta-more-toggle"
+          type="button"
+          :aria-expanded="metaHeroesExpanded"
+          @click="metaHeroesExpanded = !metaHeroesExpanded"
+        >
+          {{ metaHeroToggleLabel }}
+        </button>
       </section>
 
       <section v-if="metaHeroOptions.length" class="meta-evolution">
@@ -569,7 +577,7 @@ onBeforeUnmount(() => {
             <option value="red">Red</option>
           </select>
         </label>
-        <label>
+        <label class="rank-by-filter">
           <span>Rank by</span>
           <select v-model="metric">
             <option
@@ -608,7 +616,18 @@ onBeforeUnmount(() => {
               <p class="visual-eyebrow">Ranked patterns</p>
               <h2>{{ currentRelation.label }}</h2>
             </div>
-            <span>{{ metricOptions.find((item) => item.value === metric)?.label }}</span>
+            <span class="desktop-rank-label">{{ metricOptions.find((item) => item.value === metric)?.label }}</span>
+            <label class="mobile-rank-filter">
+              <select v-model="metric" aria-label="Rank hero pairs by">
+                <option
+                  v-for="option in metricOptions"
+                  :key="option.value"
+                  :value="option.value"
+                >
+                  {{ option.label }}
+                </option>
+              </select>
+            </label>
           </div>
 
           <div v-if="shownRows.length" class="pattern-bars">
@@ -765,13 +784,6 @@ onBeforeUnmount(() => {
   font-size: 0.76rem;
 }
 
-.season-control {
-  display: grid;
-  min-width: 330px;
-  gap: 0.4rem;
-}
-
-.season-control span,
 .filter-panel label > span {
   color: var(--ink-soft);
   font-size: 0.66rem;
@@ -779,7 +791,6 @@ onBeforeUnmount(() => {
   text-transform: uppercase;
 }
 
-.season-control select,
 .filter-panel select,
 .filter-panel input {
   min-height: 44px;
@@ -788,11 +799,6 @@ onBeforeUnmount(() => {
   background: rgba(255, 255, 255, 0.9);
   color: var(--ink);
   font: inherit;
-}
-
-.season-control small {
-  color: var(--ink-soft);
-  font-size: 0.68rem;
 }
 
 .meta-section {
@@ -865,6 +871,8 @@ onBeforeUnmount(() => {
   border: 1px solid var(--line);
   background: var(--line);
 }
+
+.meta-more-toggle { display: none; }
 
 .meta-hero {
   display: grid;
@@ -1026,6 +1034,7 @@ onBeforeUnmount(() => {
   position: relative;
   width: 32px;
   height: 32px;
+  min-height: 32px;
   flex: 0 0 auto;
   overflow: hidden;
   padding: 0;
@@ -1293,6 +1302,8 @@ onBeforeUnmount(() => {
   font-size: 0.68rem;
 }
 
+.mobile-rank-filter { display: none; }
+
 .pattern-bars {
   margin-top: 1rem;
 }
@@ -1498,12 +1509,12 @@ th {
     padding: 1.4rem;
   }
 
-  .season-control {
-    min-width: 0;
+  .relation-tabs {
+    display: none;
   }
 
-  .relation-tabs {
-    grid-template-columns: repeat(2, 1fr);
+  .filter-panel {
+    display: none;
   }
 
   .meta-heading {
@@ -1530,18 +1541,49 @@ th {
     grid-template-columns: 1fr;
   }
 
-  .filter-panel {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .meta-grid .meta-hero:nth-child(n + 6) {
+    display: none;
   }
 
-  .filter-panel label,
-  .filter-panel select,
-  .filter-panel input {
+  .meta-section.meta-heroes-expanded .meta-grid .meta-hero:nth-child(n + 6) {
+    display: grid;
+  }
+
+  .meta-more-toggle {
+    display: flex;
+    width: 100%;
+    min-height: 44px;
+    align-items: center;
+    justify-content: center;
+    margin-top: .75rem;
+    border: 1px solid var(--line);
+    border-radius: .3rem;
+    background: rgba(15,138,107,.08);
+    color: var(--accent-deep);
+    font: 700 .66rem var(--mono);
+    letter-spacing: .05em;
+  }
+
+  .card-heading .desktop-rank-label {
+    display: none;
+  }
+
+  .mobile-rank-filter {
+    display: block;
     min-width: 0;
   }
 
-  .filter-panel .search-control {
-    grid-column: span 2;
+  .mobile-rank-filter select {
+    width: 100%;
+    min-height: 40px;
+    max-width: 10.75rem;
+    padding: 0 .5rem;
+    border: 1px solid var(--line);
+    border-radius: .25rem;
+    background: rgba(255,255,255,.9);
+    color: var(--ink);
+    font: inherit;
+    font-size: .65rem;
   }
 
   .pattern-bar {

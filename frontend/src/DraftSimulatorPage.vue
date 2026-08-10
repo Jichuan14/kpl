@@ -30,7 +30,7 @@ const modelType = ref("learnable");
 const bpOrder = ref(1);
 const board = ref(emptyBoard());
 const history = ref([]);
-const globalMode = ref("single");
+const globalMode = ref("match");
 const seriesGame = ref(1);
 const bestOf = ref(5);
 const TEAM_A = "team-a";
@@ -43,6 +43,8 @@ const seriesWins = ref({ [TEAM_A]: 0, [TEAM_B]: 0 });
 const winnerSide = ref(null);
 const nextBlueTeam = ref(null);
 const pickerTarget = ref("draft");
+const coachOpen = ref(false);
+const usedHeroesModalSide = ref(null);
 
 function emptyBoard() {
   return {
@@ -147,10 +149,10 @@ const teamsReady = computed(
 );
 
 const boardGroups = computed(() => [
-  { key: "blue_bans", title: `${t("Blue bans")} · ${teamName(teamsBySide.value.blue)}`, tone: "blue" },
-  { key: "blue_picks", title: `${t("Blue picks")} · ${teamName(teamsBySide.value.blue)}`, tone: "blue" },
-  { key: "red_bans", title: `${t("Red bans")} · ${teamName(teamsBySide.value.red)}`, tone: "red" },
-  { key: "red_picks", title: `${t("Red picks")} · ${teamName(teamsBySide.value.red)}`, tone: "red" },
+  { key: "blue_bans", title: `${t("Blue bans")} · ${teamName(teamsBySide.value.blue)}`, mobileTitle: t("Blue bans"), tone: "blue" },
+  { key: "blue_picks", title: `${t("Blue picks")} · ${teamName(teamsBySide.value.blue)}`, mobileTitle: t("Blue picks"), tone: "blue" },
+  { key: "red_bans", title: `${t("Red bans")} · ${teamName(teamsBySide.value.red)}`, mobileTitle: t("Red bans"), tone: "red" },
+  { key: "red_picks", title: `${t("Red picks")} · ${teamName(teamsBySide.value.red)}`, mobileTitle: t("Red picks"), tone: "red" },
 ]);
 
 const coachDraftState = computed(() => {
@@ -276,7 +278,7 @@ async function loadModel() {
   board.value = emptyBoard();
   history.value = [];
   bpOrder.value = 1;
-  globalMode.value = "single";
+  globalMode.value = "match";
   seriesGame.value = 1;
   bestOf.value = 5;
   resetSeriesTeams();
@@ -555,18 +557,6 @@ watch(selectedTeamIds, forecast, { deep: true });
         </div>
       </section>
 
-      <section class="simulator-status">
-        <div>
-          <span>Next action</span>
-          <strong data-i18n-ignore>{{ currentLabel }}</strong>
-          <small>{{ selectedSeason?.league_name || leagueId }}</small>
-        </div>
-        <div class="simulator-actions">
-          <button type="button" :disabled="!history.length || simulating" @click="undo">Undo</button>
-          <button type="button" :disabled="simulating" @click="reset">Reset</button>
-        </div>
-      </section>
-
       <section class="global-bp-panel">
         <div>
           <p class="simulator-eyebrow">Match format</p>
@@ -576,35 +566,59 @@ watch(selectedTeamIds, forecast, { deep: true });
           </p>
         </div>
         <div class="global-actions">
-          <button type="button" :class="{ active: globalMode === 'single' }" :disabled="!teamsReady" @click="clearGlobalBp">Single game</button>
-          <button type="button" :class="{ active: globalMode === 'match' }" :disabled="!teamsReady" @click="startGlobalBp">Start Global BP</button>
-          <button type="button" :class="{ active: globalMode === 'custom' }" :disabled="!teamsReady" @click="customizeGlobalBp">Customize used heroes</button>
-          <TeamCombobox
-            v-model="selectedTeamIds[TEAM_A]"
-            :label="t('Blue in game 1')"
-            :teams="seasonTeams"
-            :excluded-id="selectedTeamIds[TEAM_B]"
-            :disabled="loading || history.length > 0 || seriesGame > 1"
-          />
-          <TeamCombobox
-            v-model="selectedTeamIds[TEAM_B]"
-            :label="t('Red in game 1')"
-            :teams="seasonTeams"
-            :excluded-id="selectedTeamIds[TEAM_A]"
-            :disabled="loading || history.length > 0 || seriesGame > 1"
-          />
-          <label class="series-format">
-            <span>Series</span>
-            <select v-model.number="bestOf" :disabled="globalMode === 'single'">
-              <option :value="5">BO5</option>
-              <option :value="7">BO7</option>
-            </select>
-          </label>
+          <div class="global-mode-row">
+            <button type="button" :class="{ active: globalMode === 'single' }" :disabled="!teamsReady" @click="clearGlobalBp">Single game</button>
+            <button type="button" :class="{ active: globalMode === 'match' }" :disabled="!teamsReady" @click="startGlobalBp">Start Global BP</button>
+            <button type="button" :class="{ active: globalMode === 'custom' }" :disabled="!teamsReady" @click="customizeGlobalBp">Customize used heroes</button>
+            <label class="series-format">
+              <span>Series</span>
+              <select v-model.number="bestOf" :disabled="globalMode === 'single'">
+                <option :value="5">BO5</option>
+                <option :value="7">BO7</option>
+              </select>
+            </label>
+          </div>
+          <div class="global-team-row">
+            <TeamCombobox
+              v-model="selectedTeamIds[TEAM_A]"
+              :label="t('Blue in game 1')"
+              :teams="seasonTeams"
+              :excluded-id="selectedTeamIds[TEAM_B]"
+              :disabled="loading || history.length > 0 || seriesGame > 1"
+            />
+            <TeamCombobox
+              v-model="selectedTeamIds[TEAM_B]"
+              :label="t('Red in game 1')"
+              :teams="seasonTeams"
+              :excluded-id="selectedTeamIds[TEAM_A]"
+              :disabled="loading || history.length > 0 || seriesGame > 1"
+            />
+            <button
+              type="button"
+              class="commentary-toggle"
+              :class="{ active: commentaryEnabled }"
+              :aria-pressed="commentaryEnabled"
+              @click="commentaryEnabled = !commentaryEnabled"
+            >
+              <strong>AI 解说</strong>
+              <small>{{ commentaryEnabled ? '已开启 · 每步调用 Kimi' : '未开启' }}</small>
+            </button>
+          </div>
         </div>
         <p v-if="!teamsReady" class="team-required">
           Search and select two teams from this season to start the simulation and give the coach its Blue/Red context.
         </p>
         <div v-if="globalMode !== 'single'" class="global-used">
+          <div class="mobile-used-hero-buttons">
+            <button type="button" class="blue" @click="usedHeroesModalSide = 'blue'">
+              <span>{{ sideLabel('blue') }}</span>
+              <small>{{ globalUsed[teamsBySide.blue].length }} {{ t('used earlier') }}</small>
+            </button>
+            <button type="button" class="red" @click="usedHeroesModalSide = 'red'">
+              <span>{{ sideLabel('red') }}</span>
+              <small>{{ globalUsed[teamsBySide.red].length }} {{ t('used earlier') }}</small>
+            </button>
+          </div>
           <div v-for="side in ['blue', 'red']" :key="side" class="used-team" :class="side">
             <span data-i18n-ignore>{{ sideUsedLabel(side) }}</span>
             <button
@@ -644,6 +658,47 @@ watch(selectedTeamIds, forecast, { deep: true });
           </div>
           <small v-else data-i18n-ignore>{{ seriesStatusLabel() }}</small>
         </div>
+        <button
+          v-if="usedHeroesModalSide"
+          class="mobile-used-scrim"
+          type="button"
+          aria-label="Close used heroes"
+          @click="usedHeroesModalSide = null"
+        ></button>
+        <aside v-if="usedHeroesModalSide" class="mobile-used-hero-modal" role="dialog" aria-modal="true">
+          <header>
+            <div>
+              <p class="simulator-eyebrow">Already used</p>
+              <h2 data-i18n-ignore>{{ sideUsedLabel(usedHeroesModalSide) }}</h2>
+            </div>
+            <button type="button" aria-label="Close used heroes" @click="usedHeroesModalSide = null">×</button>
+          </header>
+          <div class="mobile-used-hero-list">
+            <button
+              v-for="heroId in globalUsed[teamsBySide[usedHeroesModalSide]]"
+              :key="`modal-${usedHeroesModalSide}-${heroId}`"
+              type="button"
+              :title="`Remove ${heroName(heroId)}`"
+              @click="removeGlobalHero(usedHeroesModalSide, heroId)"
+            >
+              <img :src="heroIcon(heroId)" :alt="heroName(heroId)" />
+              <span>{{ heroName(heroId) }}</span>
+            </button>
+            <p v-if="!globalUsed[teamsBySide[usedHeroesModalSide]].length">None selected</p>
+          </div>
+        </aside>
+      </section>
+
+      <section class="simulator-status">
+        <div>
+          <span>Next action</span>
+          <strong data-i18n-ignore>{{ currentLabel }}</strong>
+          <small>{{ selectedSeason?.league_name || leagueId }}</small>
+        </div>
+        <div class="simulator-actions">
+          <button type="button" :disabled="!history.length || simulating" @click="undo">Undo</button>
+          <button type="button" :disabled="simulating" @click="reset">Reset</button>
+        </div>
       </section>
 
       <div class="simulator-workspace">
@@ -654,9 +709,12 @@ watch(selectedTeamIds, forecast, { deep: true });
                 v-for="group in boardGroups"
                 :key="group.key"
                 class="draft-group"
-                :class="group.tone"
+                :class="[group.tone, group.key]"
               >
-                <p data-i18n-ignore>{{ group.title }}</p>
+                <p data-i18n-ignore>
+                  <span class="desktop-group-title">{{ group.title }}</span>
+                  <span class="mobile-group-title">{{ group.mobileTitle }}</span>
+                </p>
                 <div class="draft-slots">
                   <button
                     v-for="heroId in board[group.key]"
@@ -712,16 +770,6 @@ watch(selectedTeamIds, forecast, { deep: true });
                 <p class="simulator-eyebrow">{{ pickerTarget === 'draft' ? 'Add the next action' : 'Global BP setup' }}</p>
                 <h2 data-i18n-ignore>{{ pickerTitle }}</h2>
               </div>
-              <button
-                type="button"
-                class="commentary-toggle"
-                :class="{ active: commentaryEnabled }"
-                :aria-pressed="commentaryEnabled"
-                @click="commentaryEnabled = !commentaryEnabled"
-              >
-                <strong>AI 解说</strong>
-                <small>{{ commentaryEnabled ? '已开启 · 每步调用 Kimi' : '未开启' }}</small>
-              </button>
               <input v-model="search" type="search" placeholder="Find a hero…" :disabled="!teamsReady || (pickerTarget === 'draft' && !currentStep)" />
             </div>
             <div v-if="globalMode !== 'single'" class="picker-targets">
@@ -746,13 +794,30 @@ watch(selectedTeamIds, forecast, { deep: true });
           </section>
         </div>
 
-        <aside class="coach-rail" aria-label="Draft Coach conversation">
+        <button
+          v-if="coachOpen"
+          class="coach-scrim"
+          type="button"
+          aria-label="Close AI Coach"
+          @click="coachOpen = false"
+        ></button>
+        <aside class="coach-rail" :class="{ 'coach-open': coachOpen }" aria-label="Draft Coach conversation">
+          <button class="mobile-coach-close" type="button" aria-label="Close AI Coach" @click="coachOpen = false">×</button>
           <DraftCoachPanel
             :league-id="leagueId"
             :season-name="selectedSeason?.league_name || leagueId"
             :draft-state="coachDraftState"
           />
         </aside>
+        <button
+          class="mobile-coach-toggle"
+          type="button"
+          aria-label="Open AI Coach"
+          @click="coachOpen = true"
+        >
+          <span aria-hidden="true">✦</span>
+          <strong>AI</strong>
+        </button>
       </div>
     </template>
   </main>
@@ -778,10 +843,14 @@ watch(selectedTeamIds, forecast, { deep: true });
 .simulator-actions { display: flex; align-items: end; gap: .5rem; }.simulator-actions label { display: grid; gap: .3rem; }
 .simulator-actions button, .hero-options button, .draft-slots button { border: 1px solid var(--line); background: rgba(255,255,255,.86); color: var(--ink); font: inherit; cursor: pointer; }
 .simulator-actions button { min-height: 42px; padding: .55rem .75rem; }.simulator-actions button:disabled, .hero-options button:disabled, .draft-slots button:disabled { cursor: default; opacity: .45; }
-.global-bp-panel { display:grid; grid-template-columns:minmax(14rem, 1fr) auto; gap:1rem 1.5rem; margin-top:.75rem; padding:1rem 1.15rem; border:1px solid var(--line); background:rgba(255,255,255,.72); }.global-bp-panel h2 { margin:0; font:700 1.35rem var(--display); letter-spacing:-.04em; }.global-bp-panel > div:first-child > p:last-child { max-width:38rem; margin:.4rem 0 0; color:var(--ink-soft); font-size:.72rem; }.global-actions, .picker-targets { display:flex; flex-wrap:wrap; gap:.45rem; align-items:center; }.global-actions button, .picker-targets button, .next-battle { min-height:36px; padding:.45rem .6rem; border:1px solid var(--line); background:rgba(255,255,255,.86); color:var(--ink-soft); font:inherit; font-size:.67rem; cursor:pointer; }.global-actions button.active, .picker-targets button.active, .series-choice button.active { border-color:var(--accent-deep); background:var(--ink); color:#fff; }.series-format, .team-name { display:grid; gap:.12rem; color:var(--ink-soft); font-size:.58rem; letter-spacing:.08em; text-transform:uppercase; }.series-format select, .team-name input { min-height:30px; border:1px solid var(--line); background:rgba(255,255,255,.86); color:var(--ink); font:inherit; font-size:.67rem; }.team-name input { width:9rem; padding:0 .45rem; text-transform:none; letter-spacing:normal; }.global-used { display:grid; grid-template-columns:1fr 1fr auto; gap:.8rem; grid-column:1 / -1; padding-top:.8rem; border-top:1px solid var(--line); }.global-used > .used-team { display:flex; align-items:center; flex-wrap:wrap; gap:.35rem; }.global-used > .used-team > span { width:100%; color:var(--ink-soft); font-size:.62rem; letter-spacing:.08em; text-transform:uppercase; }.global-used > .used-team button { width:2rem; height:2rem; padding:0; border:1px solid var(--line); background:#fff; cursor:pointer; }.global-used img { width:100%; height:100%; object-fit:cover; }.global-used small { align-self:center; color:var(--ink-soft); font-size:.66rem; }.global-used > .next-battle { align-self:end; min-height:36px; width:auto; height:auto; padding:.45rem .6rem; border-color:var(--accent-deep); background:var(--accent); color:#fff; white-space:nowrap; }.series-progress { display:grid; gap:.45rem; min-width:13rem; }.series-progress > span { font-size:.67rem; }.series-choice { display:flex; gap:.35rem; }.series-choice button, .series-progress > button { min-height:30px; padding:.35rem .5rem; border:1px solid rgba(255,255,255,.6); background:rgba(255,255,255,.18); color:#fff; font:inherit; font-size:.67rem; cursor:pointer; }.series-progress > button:disabled { cursor:not-allowed; opacity:.55; }.global-used > .next-battle:disabled { cursor:not-allowed; opacity:.5; }
+.global-bp-panel { display:grid; grid-template-columns:minmax(14rem, 1fr) auto; gap:1rem 1.5rem; margin-top:.75rem; padding:1rem 1.15rem; border:1px solid var(--line); background:rgba(255,255,255,.72); }.global-bp-panel h2 { margin:0; font:700 1.35rem var(--display); letter-spacing:-.04em; }.global-bp-panel > div:first-child > p:last-child { max-width:38rem; margin:.4rem 0 0; color:var(--ink-soft); font-size:.72rem; }.global-actions, .picker-targets { display:flex; flex-wrap:wrap; gap:.45rem; align-items:center; }.global-actions button, .picker-targets button, .next-battle { min-height:36px; padding:.45rem .6rem; border:1px solid var(--line); background:rgba(255,255,255,.86); color:var(--ink-soft); font:inherit; font-size:.67rem; cursor:pointer; }.global-actions button.active, .picker-targets button.active, .series-choice button.active { border-color:var(--accent-deep); background:var(--ink); color:#fff; }.series-format, .team-name { display:grid; gap:.12rem; color:var(--ink-soft); font-size:.58rem; letter-spacing:.08em; text-transform:uppercase; }.series-format select, .team-name input { min-height:30px; border:1px solid var(--line); background:rgba(255,255,255,.86); color:var(--ink); font:inherit; font-size:.67rem; }.team-name input { width:9rem; padding:0 .45rem; text-transform:none; letter-spacing:normal; }.global-used { display:grid; grid-template-columns:1fr 1fr auto; gap:.8rem; grid-column:1 / -1; padding-top:.8rem; border-top:1px solid var(--line); }.global-used > .used-team { display:flex; align-items:center; flex-wrap:wrap; gap:.35rem; }.global-used > .used-team > span { width:100%; color:var(--ink-soft); font-size:.62rem; letter-spacing:.08em; text-transform:uppercase; }.global-used > .used-team button { width:2rem; height:2rem; padding:0; border:1px solid var(--line); background:#fff; cursor:pointer; }.global-used img { width:100%; height:100%; object-fit:cover; }.global-used small { align-self:center; color:var(--ink-soft); font-size:.66rem; }.global-used > .next-battle { align-self:stretch; display:grid; gap:.45rem; min-width:13rem; padding:.65rem .7rem; border:1px solid var(--line); background:rgba(255,255,255,.9); color:var(--ink); white-space:normal; }.series-progress { display:grid; gap:.45rem; min-width:13rem; }.series-progress > small { color:var(--ink-soft); font-size:.58rem; line-height:1.4; }.series-progress > strong { padding:.42rem .5rem; border-left:3px solid var(--accent); background:rgba(232,191,108,.18); color:var(--ink); font:700 .7rem var(--mono); }.series-progress > span { font-size:.67rem; }.series-choice { display:flex; gap:.35rem; }.series-choice button { min-height:30px; padding:.35rem .5rem; border:1px solid var(--line); background:#fff; color:var(--ink-soft); font:inherit; font-size:.67rem; cursor:pointer; }.series-progress > button { min-height:32px; padding:.4rem .55rem; border:1px solid var(--accent-deep); background:var(--accent-deep); color:#fff; font:700 .65rem var(--mono); cursor:pointer; }.series-progress > button:disabled { cursor:not-allowed; opacity:.55; }.global-used > .next-battle:disabled { cursor:not-allowed; opacity:.5; }
+.global-mode-row, .global-team-row { display:contents; }
+.mobile-used-hero-buttons, .mobile-used-scrim, .mobile-used-hero-modal { display:none; }
 .global-actions button:disabled { cursor:not-allowed; opacity:.45; }
 .team-required { grid-column:1 / -1; margin:0; padding:.65rem .75rem; border:1px solid #d9b663; background:#fff8e7; color:var(--ink-soft); font-size:.68rem; }
 .simulator-workspace { display:grid; grid-template-columns:minmax(0, 1fr) minmax(340px, 390px); gap:.85rem; align-items:start; margin-top:.75rem; }.simulator-main-column { min-width:0; }.coach-rail { position:sticky; top:1rem; min-width:0; }.simulator-layout { align-items: stretch; margin-top:0; gap:.75rem; }.draft-board { display: grid; flex: 1; min-width:0; grid-template-columns: repeat(2, minmax(0,1fr)); gap: .75rem; }
+.mobile-group-title { display:none; }
+.mobile-coach-toggle,.mobile-coach-close,.coach-scrim{display:none}
 .draft-group, .forecast-panel, .hero-picker { border: 1px solid var(--line); background: rgba(255,255,255,.76); }.draft-group { min-height: 160px; padding: 1rem; }.draft-group > p { margin: 0 0 .8rem; font-size: .67rem; letter-spacing: .1em; text-transform: uppercase; }.draft-group.blue > p { color: #286999; }.draft-group.red > p { color: #a84b4b; }
 .draft-slots { display:grid; grid-template-columns:repeat(5, minmax(0, 1fr)); gap:.35rem; }.draft-slots button, .draft-slots span { display:grid; place-items:center; width:100%; max-width:4rem; aspect-ratio:1; padding:0; font-size:.7rem; text-align:left; }.draft-slots button img { width:100%; height:100%; object-fit:cover; }.draft-slots span { border: 1px dashed var(--line); color: var(--ink-soft); }
 .forecast-panel { width: min(31%, 320px); min-width:250px; padding: 1rem; }.forecast-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }.forecast-heading h2 { font-size: 1.5rem; }.forecast-heading > span, .forecast-heading small { color: var(--ink-soft); font-size: .68rem; }
@@ -791,5 +860,53 @@ watch(selectedTeamIds, forecast, { deep: true });
 .hero-picker { margin-top: .75rem; padding: 1rem; }.picker-heading { display:flex; align-items:end; justify-content:space-between; gap:1rem; }.picker-heading h2 { font-size:1.4rem; }.picker-heading input { width:min(100%, 260px); }.picker-targets { margin-top:.85rem; }.hero-options { display:grid; grid-template-columns:repeat(auto-fill, minmax(3.6rem, 1fr)); gap:.45rem; margin-top:1rem; max-height:360px; overflow:auto; }.hero-options button { position:relative; display:grid; place-items:center; aspect-ratio:1; padding:0; overflow:hidden; }.hero-options button img { width:100%; height:100%; object-fit:cover; }.hero-options button small { position:absolute; right:0; bottom:0; padding:.14rem .2rem; background:rgba(16,42,46,.84); color:#fff; font-size:.56rem; }.hero-options button:hover:not(:disabled), .draft-slots button:not(:disabled):hover { border-color: var(--accent); color: var(--accent-deep); }
 @media (max-width: 1000px) { .simulator-workspace { grid-template-columns:1fr; }.coach-rail { position:static; }.coach-rail { grid-row:1; }.simulator-main-column { grid-row:2; } }
 @media (max-width: 860px) { .simulator-hero, .simulator-status, .simulator-layout { flex-direction:column; align-items:stretch; }.simulator-season, .forecast-panel { width:100%; }.forecast-panel { min-width:0; }.model-choice { grid-template-columns:1fr; }.simulator-actions { justify-content:space-between; }.draft-board { grid-template-columns:1fr; }.global-bp-panel { grid-template-columns:1fr; }.global-used { grid-template-columns:1fr; }.next-battle { justify-self:start; } }
-@media (max-width: 620px) { .simulator-page { width:calc(100% - 1rem); padding-top:1.25rem; }.simulator-status { gap:1rem; }.simulator-actions { flex-wrap:wrap; }.picker-heading { align-items:stretch; flex-direction:column; }.picker-heading input { width:100%; }.hero-options { grid-template-columns:repeat(auto-fill, minmax(3.25rem, 1fr)); } }
+@media (max-width:620px) {
+  .forecast-panel { display:none; }
+  .global-used > .used-team { display:none; }
+  .mobile-used-hero-buttons { display:grid; grid-template-columns:1fr 1fr; grid-column:1 / -1; gap:.45rem; }
+  .mobile-used-hero-buttons button { display:grid; gap:.12rem; min-height:3rem; padding:.45rem .55rem; border:1px solid var(--line); background:rgba(255,255,255,.9); color:var(--ink); text-align:left; }
+  .mobile-used-hero-buttons button.blue { border-left:3px solid #286999; }
+  .mobile-used-hero-buttons button.red { border-left:3px solid #a84b4b; }
+  .mobile-used-hero-buttons span { font:700 .68rem var(--mono); }
+  .mobile-used-hero-buttons small { color:var(--ink-soft); font-size:.54rem; }
+  .mobile-used-scrim { position:fixed; z-index:100; inset:0; display:block; width:100%; height:100%; margin:0; padding:0; border:0; background:rgba(16,42,46,.32); }
+  .mobile-used-hero-modal { position:fixed; z-index:101; right:.75rem; bottom:calc(5.25rem + env(safe-area-inset-bottom)); left:.75rem; display:grid; max-height:min(28rem, 60dvh); overflow:auto; border:1px solid var(--line); border-radius:.8rem; background:#fff; box-shadow:0 1rem 3rem rgba(16,42,46,.28); }
+  .mobile-used-hero-modal header { display:flex; align-items:start; justify-content:space-between; gap:.75rem; padding:.8rem; border-bottom:1px solid var(--line); }
+  .mobile-used-hero-modal h2 { margin:.12rem 0 0; font:700 1rem var(--display); }
+  .mobile-used-hero-modal header button { display:grid; width:2rem; height:2rem; min-height:2rem; place-items:center; padding:0; border:1px solid var(--line); border-radius:50%; background:#fff; color:var(--ink); font:400 1.2rem/1 var(--display); }
+  .mobile-used-hero-list { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:.4rem; padding:.8rem; }
+  .mobile-used-hero-list button { display:grid; justify-items:center; gap:.2rem; min-width:0; padding:.25rem; border:1px solid var(--line); background:#fff; color:var(--ink); font-size:.5rem; text-align:center; }
+  .mobile-used-hero-list img { width:2.5rem; max-width:100%; aspect-ratio:1; object-fit:cover; }
+  .mobile-used-hero-list span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .mobile-used-hero-list > p { grid-column:1 / -1; margin:.4rem 0; color:var(--ink-soft); font-size:.66rem; text-align:center; }
+  .global-actions { display:grid; width:100%; gap:.55rem; }
+  .global-mode-row { display:flex; align-items:end; gap:.3rem; min-width:0; }
+  .global-mode-row > button { min-height:32px; padding:.34rem .38rem; font-size:.56rem; white-space:nowrap; }
+  .global-mode-row .series-format { flex:0 0 auto; font-size:.48rem; }
+  .global-mode-row .series-format select { min-height:32px; padding:0 .18rem; font-size:.58rem; }
+  .global-team-row { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto; align-items:end; gap:.35rem; min-width:0; }
+  .global-team-row :deep(.team-combobox) { min-width:0; }
+  .global-team-row .commentary-toggle { min-width:4.6rem; min-height:32px; padding:.3rem .35rem; }
+  .global-team-row .commentary-toggle strong { font-size:.62rem; }
+  .global-team-row .commentary-toggle small { display:none; }
+  .draft-board {
+    grid-template-columns:repeat(2, minmax(0, 1fr));
+    grid-template-areas:"blue-bans red-bans" "blue-picks red-picks";
+    gap:1px;
+    border:1px solid var(--line);
+    background:var(--line);
+  }
+  .draft-group { min-height:0; padding:.55rem; border:0; background:rgba(255,255,255,.82); }
+  .draft-group.blue_bans { grid-area:blue-bans; }
+  .draft-group.red_bans { grid-area:red-bans; }
+  .draft-group.blue_picks { grid-area:blue-picks; }
+  .draft-group.red_picks { grid-area:red-picks; }
+  .draft-group > p { margin:0 0 .4rem; overflow:hidden; font-size:.52rem; letter-spacing:.07em; text-overflow:ellipsis; white-space:nowrap; }
+  .desktop-group-title { display:none; }
+  .mobile-group-title { display:inline; }
+  .draft-slots { gap:.16rem; }
+  .draft-slots button, .draft-slots span { max-width:none; font-size:.55rem; }
+}
+@media (max-width: 620px) { .simulator-page { width:calc(100% - 1rem); padding-top:1.25rem; }.simulator-status { gap:1rem; }.simulator-actions { flex-wrap:wrap; }.picker-heading { align-items:stretch; flex-direction:column; }.picker-heading input { width:100%; }.hero-options { grid-template-columns:repeat(auto-fill, minmax(3.25rem, 1fr)); }.coach-rail{display:none}.coach-rail.coach-open{position:fixed;z-index:91;right:.75rem;bottom:calc(5.25rem + env(safe-area-inset-bottom));left:.75rem;display:block;overflow:hidden;border:1px solid var(--line);border-radius:.8rem;background:#fff;box-shadow:0 1rem 3rem rgba(16,42,46,.28)}.coach-rail.coach-open :deep(.coach-panel){height:auto;min-height:0;max-height:none;grid-template-rows:auto minmax(150px,auto) auto auto;border:0;box-shadow:none}.coach-rail.coach-open :deep(.coach-header){padding:.72rem .8rem}.coach-rail.coach-open :deep(.coach-thread){min-height:150px;max-height:42dvh;padding:.75rem}.coach-rail.coach-open :deep(.coach-form){padding:.65rem .7rem .45rem}.coach-rail.coach-open :deep(.coach-disclaimer){padding:0 .7rem .45rem}.coach-scrim{position:fixed;z-index:90;inset:0;display:block;width:100%;height:100%;border:0;background:rgba(16,42,46,.28)}.mobile-coach-toggle{position:fixed;z-index:80;right:1rem;bottom:calc(6rem + env(safe-area-inset-bottom));display:grid;width:3.5rem;height:3.5rem;place-items:center;border:1px solid rgba(255,255,255,.7);border-radius:50%;background:var(--ink);color:#fff;box-shadow:0 .6rem 1.4rem rgba(16,42,46,.28);font-family:var(--mono)}.mobile-coach-toggle span{position:absolute;top:.38rem;right:.5rem;color:#8fe0c8;font-size:.8rem}.mobile-coach-toggle strong{font-size:.7rem;letter-spacing:.08em}.coach-open~.mobile-coach-toggle{display:none}.mobile-coach-close{position:absolute;z-index:2;top:.5rem;right:.5rem;display:grid;width:2.25rem;height:2.25rem;place-items:center;margin:0;padding:0;border:1px solid var(--line);border-radius:50%;background:rgba(255,255,255,.94);color:var(--ink);box-shadow:0 .2rem .5rem rgba(16,42,46,.12);font:400 1.35rem/1 var(--display)} }
+@media (max-width: 620px) { .coach-rail.coach-open{top:auto;height:75dvh;max-height:75dvh;border-radius:1rem}.coach-rail.coach-open :deep(.coach-panel){height:100% !important;min-height:0 !important;max-height:none !important;grid-template-rows:auto minmax(0,1fr) auto auto !important}.coach-rail.coach-open :deep(.coach-thread){min-height:0 !important;max-height:none !important} }
 </style>
