@@ -4,17 +4,21 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta, timezone
 from hashlib import sha256
+import hmac
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import func, select
 from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.database import get_db
 from app.models import VisitorDailyPage, VisitorDailyVisitor
 from app.schemas import ApiResponse, VisitorTrackRequest
 
 router = APIRouter(prefix="/api/analytics", tags=["analytics"])
+widget_bearer = HTTPBearer(auto_error=False)
 
 
 def _visitor_metrics(db: Session, since: date | None = None) -> dict[str, int]:
@@ -27,6 +31,32 @@ def _visitor_metrics(db: Session, since: date | None = None) -> dict[str, int]:
         "unique_visitors": int(db.scalar(visitor_query) or 0),
         "page_views": int(db.scalar(page_query) or 0),
     }
+
+
+def require_widget_token(
+    credentials: HTTPAuthorizationCredentials | None = Depends(widget_bearer),
+) -> None:
+    """Authorize only the locally configured, read-only SwiftBar widget."""
+    configured_token = get_settings().analytics_widget_token
+    if configured_token is None:
+        # Do not expose configuration details to callers.
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Visitor widget is unavailable",
+        )
+
+    supplied_token = credentials.credentials if credentials else ""
+    expected_token = configured_token.get_secret_value()
+    if (
+        credentials is None
+        or credentials.scheme.lower() != "bearer"
+        or not hmac.compare_digest(supplied_token, expected_token)
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Widget authorization required",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
 
 @router.post("/visits")
@@ -66,4 +96,19 @@ def visitor_summary(db: Session = Depends(get_db)) -> ApiResponse:
             "last_30_days": _visitor_metrics(db, today - timedelta(days=29)),
             "all_time": _visitor_metrics(db),
         },
+    )
+
+
+@router.get("/widget")
+def widget_visitor_summary(
+    response: Response,
+    _: None = Depends(require_widget_token),
+    db: Session = Depends(get_db),
+) -> ApiResponse:
+    """Return the minimum aggregate needed by the authenticated Mac widget."""
+    response.headers["Cache-Control"] = "no-store"
+    today = datetime.now(timezone.utc).date()
+    return ApiResponse(
+        message="visitor widget metrics retrieved",
+        data={"today": _visitor_metrics(db, today)},
     )

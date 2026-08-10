@@ -24,6 +24,11 @@ instances against the same database file or put the database on NFS/OSS.
    chmod 600 .env.production deploy/.htpasswd
    ```
 
+   To enable the optional SwiftBar visitor widget, generate a separate token
+   with `openssl rand -hex 32` and set it as `ANALYTICS_WIDGET_TOKEN` in
+   `.env.production`. The corresponding Mac setup is documented in
+   [`macos/swiftbar/README.md`](../macos/swiftbar/README.md).
+
 4. If you have an existing SQLite file, copy it to
    `backend/data/kpl_bp.db` before the first start. Otherwise the API creates
    an empty database and you can populate it through `/management`.

@@ -34,6 +34,10 @@ class Settings(BaseSettings):
     coach_ip_max_active_requests: int = 1
     coach_server_max_active_requests: int = 4
     coach_trust_proxy_headers: bool = False
+    # Dedicated credential for the read-only macOS visitor widget.  It is
+    # deliberately separate from management Basic Auth and must never be put
+    # in frontend code.
+    analytics_widget_token: SecretStr | None = None
 
     @field_validator("database_url")
     @classmethod
@@ -54,6 +58,22 @@ class Settings(BaseSettings):
     def valid_kimi_timeout(cls, value: float) -> float:
         if not 1 <= value <= 180:
             raise ValueError("KIMI_TIMEOUT_SECONDS must be between 1 and 180")
+        return value
+
+    @field_validator("analytics_widget_token", mode="before")
+    @classmethod
+    def blank_analytics_widget_token_is_disabled(cls, value: object) -> object:
+        # Environment files commonly represent an optional secret as an empty
+        # assignment. Treat that as disabled instead of blocking app startup.
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
+    @field_validator("analytics_widget_token")
+    @classmethod
+    def valid_analytics_widget_token(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is not None and len(value.get_secret_value()) < 32:
+            raise ValueError("ANALYTICS_WIDGET_TOKEN must be at least 32 characters")
         return value
 
     @field_validator(

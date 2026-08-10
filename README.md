@@ -163,6 +163,13 @@ endpoints are:
 
 The interactive API reference at `/docs` is the authoritative request schema.
 
+## macOS visitor widget
+
+An optional, read-only SwiftBar menu-bar plugin displays today's unique
+visitors and page views. It uses a dedicated Bearer token stored in the macOS
+Keychain; setup and token-rotation instructions are in
+[`macos/swiftbar/README.md`](macos/swiftbar/README.md).
+
 ## Optional: enable Draft Coach
 
 Draft Coach is disabled unless `MOONSHOT_API_KEY` is configured in the ignored
