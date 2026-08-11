@@ -290,11 +290,10 @@ async function loadModel() {
     ]);
     model.value = draftModel;
     seasonTeams.value = teams;
-    modelType.value = draftModel.available_models?.some(
-      (candidate) => candidate.id === "learnable" && candidate.available
-    )
-      ? "learnable"
-      : "stats";
+    const defaultModel = draftModel.available_models?.find(
+      (candidate) => candidate.id === draftModel.default_model_type && candidate.available
+    );
+    modelType.value = defaultModel?.id || "stats";
     const wolves =
       teams.find((team) => String(team.team_id) === "10001") ||
       teams.find((team) => String(team.team_name).includes("狼队"));

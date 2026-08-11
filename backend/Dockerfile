@@ -7,7 +7,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 COPY backend/requirements.txt /app/backend/requirements.txt
+COPY backend/requirements-training.txt /app/backend/requirements-training.txt
 RUN pip install --no-cache-dir -r /app/backend/requirements.txt
+RUN pip install --no-cache-dir \
+    --index-url https://download.pytorch.org/whl/cpu \
+    -r /app/backend/requirements-training.txt
 
 COPY backend /app/backend
 COPY analysis /app/analysis

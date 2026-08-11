@@ -213,6 +213,18 @@ class AgentToolRegistryTest(unittest.TestCase):
 
         self.assertIn("agent_tool_invalid_arguments", logs.output[0])
 
+    def test_draft_tool_accepts_sequence_model(self) -> None:
+        arguments = self.arguments()
+        arguments["model_type"] = "sequence"
+        with patch(
+            "app.agent.tools.draft.predict_next_action",
+            return_value={"model_type": "sequence"},
+        ) as prediction:
+            result = invoke_tool("predict_next_draft_action", arguments)
+
+        self.assertEqual(result["model_type"], "sequence")
+        self.assertEqual(prediction.call_args.kwargs["model_type"], "sequence")
+
     def test_dispatch_rejects_unknown_tools(self) -> None:
         with self.assertLogs("app.agent.tool_registry", level="WARNING") as logs:
             with self.assertRaisesRegex(UnknownAgentToolError, "Unknown agent tool"):

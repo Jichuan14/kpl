@@ -126,6 +126,7 @@ const artifacts = computed(() => {
     power_rankings: powerRankings,
     draft_model: draftModel,
     learnable_draft_model: learnableDraftModel,
+    sequence_draft_model: sequenceDraftModel,
   } = dataStatus.value.artifacts;
   return [
     ...exports,
@@ -136,6 +137,7 @@ const artifacts = computed(() => {
     ...(powerRankings ? [powerRankings] : []),
     ...(draftModel ? [draftModel] : []),
     ...(learnableDraftModel ? [learnableDraftModel] : []),
+    ...(sequenceDraftModel ? [sequenceDraftModel] : []),
   ];
 });
 
