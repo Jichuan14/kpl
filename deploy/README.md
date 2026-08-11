@@ -40,6 +40,11 @@ instances against the same database file or put the database on NFS/OSS.
    curl --fail http://127.0.0.1/health
    ```
 
+The API image is Python-based and includes the CPU-only PyTorch package used by
+the private management pipeline. A full update retrains both draft models and
+exports the chronological model to a NumPy-compatible JSON artifact; public
+inference does not import PyTorch.
+
 Caddy accepts public traffic on ports 80 and 443, automatically obtains and
 renews HTTPS certificates for `kpllab.xyz` and `www.kpllab.xyz`, and proxies
 requests to the internal Nginx frontend. Nginx proxies API requests internally

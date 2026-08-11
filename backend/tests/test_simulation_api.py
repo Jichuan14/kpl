@@ -59,6 +59,35 @@ class SimulationApiTest(unittest.TestCase):
 
         self.assertEqual(response.status_code, 422)
 
+    def test_simulator_accepts_sequence_model(self) -> None:
+        limiter = CoachRateLimiter(
+            per_ip_per_minute=10,
+            per_ip_per_day=10,
+            server_per_minute=10,
+            server_per_day=100,
+            max_active_per_ip=1,
+            max_active_server=2,
+        )
+        payload = {**self.payload(), "model_type": "sequence"}
+        with (
+            patch("app.api.simulation.simulation_rate_limiter", limiter),
+            patch(
+                "app.api.simulation.validate_season_team_pair",
+                return_value={
+                    "blue": {"team_name": "Blue Club"},
+                    "red": {"team_name": "Red Club"},
+                },
+            ),
+            patch(
+                "app.api.simulation.simulate", return_value={"model_type": "sequence"}
+            ) as simulate,
+        ):
+            response = self.client.post("/api/simulations/draft", json=payload)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["data"]["model_type"], "sequence")
+        self.assertEqual(simulate.call_args.kwargs["model_type"], "sequence")
+
 
 if __name__ == "__main__":
     unittest.main()

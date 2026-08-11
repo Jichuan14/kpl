@@ -16,6 +16,7 @@ PipelineStep = Literal[
     "power_rankings",
     "draft_model",
     "learnable_draft_model",
+    "sequence_draft_model",
     "all",
 ]
 
@@ -52,6 +53,7 @@ class AnalysisPipeline:
                 "power_rankings",
                 "draft_model",
                 "learnable_draft_model",
+                "sequence_draft_model",
             ]
             if step == "all"
             else [step]
@@ -69,7 +71,7 @@ class AnalysisPipeline:
         self.export_dir.mkdir(parents=True, exist_ok=True)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         commands = [self._command(step)]
-        if step == "learnable_draft_model":
+        if step in {"learnable_draft_model", "sequence_draft_model"}:
             commands.insert(
                 0,
                 [
@@ -80,14 +82,20 @@ class AnalysisPipeline:
         started = time.monotonic()
         outputs: list[str] = []
         for command in commands:
-            process = subprocess.run(
-                command,
-                cwd=REPO_ROOT,
-                capture_output=True,
-                text=True,
-                timeout=300,
-                check=False,
-            )
+            timeout_seconds = 900 if step == "sequence_draft_model" else 300
+            try:
+                process = subprocess.run(
+                    command,
+                    cwd=REPO_ROOT,
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout_seconds,
+                    check=False,
+                )
+            except subprocess.TimeoutExpired as exc:
+                raise RuntimeError(
+                    f"{step} timed out after {timeout_seconds} seconds"
+                ) from exc
             if process.returncode != 0:
                 detail = (
                     process.stderr or process.stdout or "unknown error"
@@ -192,6 +200,13 @@ class AnalysisPipeline:
             return [
                 python,
                 str(ANALYSIS_DIR / "train_learnable_draft_choice_model.py"),
+                "--league-id",
+                self.league_id,
+            ]
+        if step == "sequence_draft_model":
+            return [
+                python,
+                str(ANALYSIS_DIR / "train_sequence_draft_choice_model.py"),
                 "--league-id",
                 self.league_id,
             ]

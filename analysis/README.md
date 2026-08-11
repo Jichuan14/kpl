@@ -223,6 +223,43 @@ The backend uses these learned team embeddings directly for the `learnable`
 model. It does not apply `team_action_tendencies.jsonl` afterward; that artifact
 continues to calibrate only the statistical model.
 
+### Train the chronological bag + GRU web model
+
+The sequence model is trained with PyTorch and exported as a schema-v3 JSON
+artifact. The live backend uses its existing NumPy dependency for inference;
+PyTorch is installed in the deployed API image only so the private management
+pipeline can retrain the artifact.
+
+From a Python environment containing PyTorch, run:
+
+```bash
+python analysis/train_sequence_draft_choice_model.py --league-id 20260003
+```
+
+This command trains the frozen bag baseline and GRU residual with chronological
+validation and holdout windows, then atomically writes:
+
+```text
+analysis/outputs/20260003/sequence_draft_choice_model.json
+```
+
+To export an already trained checkpoint without retraining:
+
+```bash
+python analysis/export_sequence_draft_choice_model.py \
+  --league-id 20260003 \
+  --checkpoint /path/to/hybrid_bag_gru.pt \
+  --experiment-results /path/to/results.json
+```
+
+The web simulator exposes this artifact as the `sequence` model. The current
+`learnable` model remains the default until the sequence artifact has passed a
+future holdout and production rollout benchmark.
+
+The management pipeline exposes training as the `sequence_draft_model` step.
+The `all`/full-update flow runs it after the existing learnable model, so
+refreshed BP decisions automatically produce a fresh sequence artifact.
+
 ### Build hero tactical roles for commentary
 
 This sidecar describes what a hero does in a lineup rather than treating every

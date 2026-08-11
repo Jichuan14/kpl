@@ -42,7 +42,7 @@ class Phase1EvalCase(BaseModel):
     expect_no_tools: bool = False
     expected_answer_terms: list[list[str]] = Field(default_factory=list)
     requires_board: bool = False
-    model_type: Literal["stats", "learnable"] = "stats"
+    model_type: Literal["stats", "learnable", "sequence"] = "stats"
     max_answer_chars: int = Field(default=1000, ge=100, le=5000)
 
 

@@ -1,4 +1,7 @@
+import json
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from app.services import draft_simulator
@@ -27,6 +30,79 @@ def model_fixture() -> dict:
 
 
 class PredictNextActionTest(unittest.TestCase):
+    def test_sequence_loader_rejects_a_bad_parameter_checksum(self) -> None:
+        artifact = {
+            "schema_version": 3,
+            "model_type": "frozen_bag_gru_residual_choice",
+            "target_season": "league-1",
+            "parameters_sha256": "not-the-real-checksum",
+            "parameters": {},
+        }
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = Path(temporary_directory) / "sequence.json"
+            path.write_text(json.dumps(artifact), encoding="utf-8")
+            draft_simulator._SEQUENCE_CACHE.clear()
+            with patch.object(
+                draft_simulator, "sequence_model_path", return_value=path
+            ):
+                with self.assertRaisesRegex(ValueError, "checksum"):
+                    draft_simulator.load_sequence_model("league-1")
+
+    def test_sequence_history_reconstructs_the_canonical_prefix(self) -> None:
+        base_model = {
+            "draft_sequence": [
+                {"bp_order": 1, "side": "blue", "action": "ban"},
+                {"bp_order": 2, "side": "red", "action": "ban"},
+                {"bp_order": 3, "side": "blue", "action": "pick"},
+                {"bp_order": 4, "side": "red", "action": "pick"},
+            ]
+        }
+        sequence_model = {"_hero_to_index": {101: 0, 102: 1, 103: 2}}
+        state = {
+            "blue_bans": [101],
+            "red_bans": [102],
+            "blue_picks": [103],
+            "red_picks": [],
+        }
+
+        heroes, actions, sides, relations, positions = (
+            draft_simulator._sequence_history(
+                base_model,
+                sequence_model,
+                state,
+                base_model["draft_sequence"][3],
+            )
+        )
+
+        self.assertEqual(heroes.tolist(), [0, 1, 2])
+        self.assertEqual(actions.tolist(), [2, 2, 1])
+        self.assertEqual(sides.tolist(), [1, 2, 1])
+        self.assertEqual(relations.tolist(), [4, 3, 2])
+        self.assertEqual(positions.tolist(), [1, 2, 3])
+
+    def test_sequence_history_rejects_missing_or_future_selections(self) -> None:
+        base_model = {
+            "draft_sequence": [
+                {"bp_order": 1, "side": "blue", "action": "ban"},
+                {"bp_order": 2, "side": "red", "action": "ban"},
+            ]
+        }
+        sequence_model = {"_hero_to_index": {101: 0, 102: 1}}
+        with self.assertRaisesRegex(ValueError, "missing the hero"):
+            draft_simulator._sequence_history(
+                base_model,
+                sequence_model,
+                {"blue_bans": [], "red_bans": []},
+                base_model["draft_sequence"][1],
+            )
+        with self.assertRaisesRegex(ValueError, "after its bp_order"):
+            draft_simulator._sequence_history(
+                base_model,
+                sequence_model,
+                {"blue_bans": [101, 102], "red_bans": []},
+                base_model["draft_sequence"][1],
+            )
+
     def test_learnable_model_uses_acting_team_embedding(self) -> None:
         base_model = {
             "hero_ids": [101, 102],

@@ -2,16 +2,26 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import random
 from pathlib import Path
 from typing import Any
 
+import numpy as np
+
 from app.services.analysis_pipeline import ANALYSIS_DIR, OUTPUT_ROOT
+from app.services.sequence_model_runtime import (
+    ACTION_INDEX,
+    SIDE_INDEX,
+    prepare_sequence_parameters,
+    sequence_logits,
+)
 
 _CACHE: dict[Path, tuple[int, dict[str, Any]]] = {}
 _LEARNABLE_CACHE: dict[Path, tuple[int, dict[str, Any]]] = {}
+_SEQUENCE_CACHE: dict[Path, tuple[int, dict[str, Any]]] = {}
 _TEAM_TENDENCY_CACHE: dict[
     Path,
     tuple[
@@ -38,6 +48,12 @@ def learnable_model_path(league_id: str) -> Path:
     if not league_id or not all(character.isalnum() or character in "-_" for character in league_id):
         raise ValueError("Invalid league id")
     return OUTPUT_ROOT / league_id / "learnable_draft_choice_model.json"
+
+
+def sequence_model_path(league_id: str) -> Path:
+    if not league_id or not all(character.isalnum() or character in "-_" for character in league_id):
+        raise ValueError("Invalid league id")
+    return OUTPUT_ROOT / league_id / "sequence_draft_choice_model.json"
 
 
 def feature_space_path(league_id: str) -> Path:
@@ -219,6 +235,70 @@ def load_learnable_model(league_id: str) -> dict[str, Any]:
     return model
 
 
+def load_sequence_model(league_id: str) -> dict[str, Any]:
+    """Load and prepare the schema-v3 bag-plus-GRU artifact for NumPy inference."""
+    path = sequence_model_path(league_id)
+    if not path.is_file():
+        raise FileNotFoundError(f"No sequence draft model has been generated for {league_id}")
+    modified = path.stat().st_mtime_ns
+    cached = _SEQUENCE_CACHE.get(path)
+    if cached and cached[0] == modified:
+        return cached[1]
+    with path.open(encoding="utf-8") as source:
+        model = json.load(source)
+    if (
+        model.get("schema_version") != 3
+        or model.get("model_type") != "frozen_bag_gru_residual_choice"
+    ):
+        raise ValueError("Unsupported sequence draft model version")
+    if str(model.get("target_season")) != league_id:
+        raise ValueError("Sequence draft model target season does not match the requested league")
+    parameter_hash = hashlib.sha256(
+        json.dumps(
+            model.get("parameters", {}),
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
+    if parameter_hash != model.get("parameters_sha256"):
+        raise ValueError("Sequence draft model parameter checksum is invalid")
+
+    features_path = feature_artifact_path(model)
+    if not features_path.is_file():
+        raise FileNotFoundError(f"Sequence feature vectors are missing: {features_path}")
+    with features_path.open(encoding="utf-8") as source:
+        feature_artifact = json.load(source)
+    expected_feature_names = [*feature_artifact.get("feature_names", []), "feature_known"]
+    if model.get("feature_names") != expected_feature_names:
+        raise ValueError("Sequence model feature schema does not match the current vectors")
+
+    hero_ids = [int(hero_id) for hero_id in model.get("hero_ids", [])]
+    team_ids = [str(team_id) for team_id in model.get("team_ids", [])]
+    if not hero_ids or len(set(hero_ids)) != len(hero_ids):
+        raise ValueError("Sequence draft model has an invalid hero vocabulary")
+    if not team_ids or len(set(team_ids)) != len(team_ids):
+        raise ValueError("Sequence draft model has an invalid team vocabulary")
+    hero_to_index = {hero_id: index for index, hero_id in enumerate(hero_ids)}
+    team_to_index = {team_id: index + 1 for index, team_id in enumerate(team_ids)}
+    feature_width = len(expected_feature_names)
+    features_by_id = {
+        int(row["hero_id"]): [*row["vector"], float(row.get("feature_known", True))]
+        for row in feature_artifact.get("rows", [])
+        if row.get("hero_id") is not None
+    }
+    feature_matrix = np.asarray(
+        [features_by_id.get(hero_id, [0.0] * feature_width) for hero_id in hero_ids],
+        dtype=np.float32,
+    )
+    model["_hero_ids"] = hero_ids
+    model["_hero_to_index"] = hero_to_index
+    model["_team_to_index"] = team_to_index
+    model["_prepared"] = prepare_sequence_parameters(model, feature_matrix)
+    _SEQUENCE_CACHE[path] = (modified, model)
+    return model
+
+
 def learned_feature_space(league_id: str) -> dict[str, Any]:
     """Return the notebook-exported 2-D learned candidate representation."""
     path = feature_space_path(league_id)
@@ -258,6 +338,10 @@ def metadata(league_id: str) -> dict[str, Any]:
             or LEGACY_SPECIALTY_FEATURES_PATH.is_file()
         )
     )
+    sequence_ready = (
+        sequence_model_path(league_id).is_file()
+        and DRAFT_FEATURES_PATH.is_file()
+    )
     return {
         "league_id": league_id,
         "generated_at": model["generated_at"],
@@ -273,7 +357,9 @@ def metadata(league_id: str) -> dict[str, Any]:
             for hero_id in model["hero_ids"]
         ],
         "draft_sequence": model["draft_sequence"],
-        "default_model_type": "learnable" if learnable_ready else "stats",
+        "default_model_type": (
+            "learnable" if learnable_ready else "sequence" if sequence_ready else "stats"
+        ),
         "available_models": [
             {
                 "id": "stats",
@@ -287,6 +373,14 @@ def metadata(league_id: str) -> dict[str, Any]:
                 "available": learnable_ready,
                 "description": (
                     "Learned team, opponent, specialty, hero, and draft-context embeddings."
+                ),
+            },
+            {
+                "id": "sequence",
+                "label": "Chronological bag + GRU",
+                "available": sequence_ready,
+                "description": (
+                    "A frozen bag model plus a chronological GRU correction."
                 ),
             },
         ],
@@ -557,12 +651,162 @@ def _predict_learnable(
     return sorted(rows, key=lambda row: row["probability"], reverse=True)
 
 
+def _sequence_history(
+    base_model: dict[str, Any],
+    sequence_model: dict[str, Any],
+    state: dict[str, Any],
+    step: dict[str, Any],
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Reconstruct the strict token order from the canonical draft prefix."""
+    next_order = int(step["bp_order"])
+    lists = {
+        (side, action): [
+            int(hero_id)
+            for hero_id in state.get(
+                f"{side}_{'picks' if action == 'pick' else 'bans'}", []
+            )
+        ]
+        for side in ("blue", "red")
+        for action in ("pick", "ban")
+    }
+    cursors = {key: 0 for key in lists}
+    heroes: list[int] = []
+    actions: list[int] = []
+    sides: list[int] = []
+    relations: list[int] = []
+    positions: list[int] = []
+    hero_to_index = sequence_model["_hero_to_index"]
+    next_side = str(step["side"])
+    for historical_step in base_model["draft_sequence"]:
+        position = int(historical_step["bp_order"])
+        if position >= next_order:
+            break
+        side = str(historical_step["side"])
+        action = str(historical_step["action"])
+        key = (side, action)
+        cursor = cursors[key]
+        if cursor >= len(lists[key]):
+            raise ValueError(
+                f"Draft state is missing the hero selected at bp_order={position}"
+            )
+        hero_id = lists[key][cursor]
+        cursors[key] += 1
+        try:
+            hero_index = hero_to_index[hero_id]
+        except KeyError as exc:
+            raise ValueError(
+                f"Sequence model has no history embedding for hero_id={hero_id}"
+            ) from exc
+        heroes.append(hero_index)
+        actions.append(ACTION_INDEX[action])
+        sides.append(SIDE_INDEX[side])
+        is_own = side == next_side
+        relations.append(
+            1 if action == "pick" and is_own
+            else 2 if action == "pick"
+            else 3 if is_own
+            else 4
+        )
+        positions.append(position)
+    excess = [
+        f"{side}_{action}"
+        for (side, action), values in lists.items()
+        if cursors[(side, action)] != len(values)
+    ]
+    if excess:
+        raise ValueError(
+            "Draft state contains selections after its bp_order: " + ", ".join(excess)
+        )
+    return tuple(
+        np.asarray(values, dtype=np.int64)
+        for values in (heroes, actions, sides, relations, positions)
+    )
+
+
+def _predict_sequence(
+    base_model: dict[str, Any],
+    sequence_model: dict[str, Any],
+    state: dict[str, Any],
+    step: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Score legal heroes with the NumPy bag-plus-GRU runtime."""
+    (
+        history_heroes,
+        history_actions,
+        history_sides,
+        history_relations,
+        history_positions,
+    ) = _sequence_history(base_model, sequence_model, state, step)
+    hero_ids = sequence_model["_hero_ids"]
+    hero_to_index = sequence_model["_hero_to_index"]
+    legal_hero_ids = [
+        hero_id
+        for hero_id in _legal_heroes(base_model, state, step)
+        if hero_id in hero_to_index
+    ]
+    if not legal_hero_ids:
+        return []
+    legal_indices = np.asarray(
+        [hero_to_index[hero_id] for hero_id in legal_hero_ids], dtype=np.int64
+    )
+    legal_mask = np.zeros(len(hero_ids), dtype=np.bool_)
+    legal_mask[legal_indices] = True
+    side = str(step["side"])
+    opponent_side = "red" if side == "blue" else "blue"
+    team_to_index = sequence_model["_team_to_index"]
+    acting_team_id = str(state.get(f"{side}_team_id") or "")
+    opponent_team_id = str(state.get(f"{opponent_side}_team_id") or "")
+    acting_team = team_to_index.get(acting_team_id, 0)
+    opponent_team = team_to_index.get(opponent_team_id, 0)
+    logits = sequence_logits(
+        sequence_model["_prepared"],
+        history_heroes=history_heroes,
+        history_actions=history_actions,
+        history_sides=history_sides,
+        history_relations=history_relations,
+        history_positions=history_positions,
+        next_action=ACTION_INDEX[str(step["action"])],
+        next_side=SIDE_INDEX[side],
+        next_position=int(step["bp_order"]),
+        next_team_slot=int(step["team_action_type_number"]),
+        acting_team=acting_team,
+        opponent_team=opponent_team,
+        legal_mask=legal_mask,
+    )
+    candidate_logits = logits[legal_indices]
+    weights = np.exp(candidate_logits - candidate_logits.max())
+    probabilities = weights / weights.sum()
+    team_metadata = {
+        "team_context_level": "sequence_embeddings",
+        "team_context_decisions": int(
+            sequence_model.get("team_training_decisions", {}).get(
+                acting_team_id, 0
+            )
+        ),
+        "acting_team_known": acting_team > 0,
+        "opponent_team_known": opponent_team > 0,
+    }
+    rows = [
+        {
+            "hero_id": hero_id,
+            "hero_name": base_model["hero_names"].get(str(hero_id), str(hero_id)),
+            "probability": float(probability),
+            **team_metadata,
+        }
+        for hero_id, probability in zip(legal_hero_ids, probabilities, strict=True)
+    ]
+    return sorted(rows, key=lambda row: row["probability"], reverse=True)
+
+
 def _predict(
     model: dict[str, Any],
     state: dict[str, Any],
     step: dict[str, Any],
     learnable_model: dict[str, Any] | None = None,
+    sequence_model: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
+    if sequence_model is not None:
+        return _predict_sequence(model, sequence_model, state, step)
     if learnable_model is not None:
         return _predict_learnable(model, learnable_model, state, step)
     return _apply_team_tendency(model, state, step, _predict_stats(model, state, step))
@@ -714,6 +958,18 @@ def _prediction_context(
     }
 
 
+def _model_label(model_type: str, team_context: dict[str, Any] | None) -> str:
+    labels = {
+        "stats": "Statistical model",
+        "learnable": "Team-aware learnable hybrid",
+        "sequence": "Chronological bag + GRU",
+    }
+    label = labels[model_type]
+    return label + (
+        " + team context" if team_context and model_type == "stats" else ""
+    )
+
+
 def _apply(state: dict[str, Any], step: dict[str, Any], hero_id: int) -> None:
     field = f"{step['side']}_{'picks' if step['action'] == 'pick' else 'bans'}"
     state.setdefault(field, []).append(hero_id)
@@ -730,6 +986,7 @@ def _prepare_prediction(
 ) -> tuple[
     dict[str, Any],
     dict[str, Any] | None,
+    dict[str, Any] | None,
     list[dict[str, Any]],
     int,
     dict[str, Any],
@@ -737,10 +994,13 @@ def _prepare_prediction(
 ]:
     """Validate one draft state and calculate its next-action distribution."""
     model = load_model(league_id)
-    if model_type not in {"stats", "learnable"}:
+    if model_type not in {"stats", "learnable", "sequence"}:
         raise ValueError(f"Unsupported draft model type: {model_type}")
     learnable_model = (
         load_learnable_model(league_id) if model_type == "learnable" else None
+    )
+    sequence_model = (
+        load_sequence_model(league_id) if model_type == "sequence" else None
     )
     for side in ("blue", "red"):
         picks = [int(hero_id) for hero_id in state.get(f"{side}_picks", [])]
@@ -773,12 +1033,15 @@ def _prepare_prediction(
     if start_index is None:
         raise ValueError(f"bp_order={start_order} is not in the model sequence")
     next_step = sequence[start_index]
-    next_probabilities = _predict(model, state, next_step, learnable_model)
+    next_probabilities = _predict(
+        model, state, next_step, learnable_model, sequence_model
+    )
     if not next_probabilities:
         raise ValueError("No legal heroes remain")
     return (
         model,
         learnable_model,
+        sequence_model,
         sequence,
         start_index,
         next_step,
@@ -796,27 +1059,25 @@ def predict_next_action(
     """Return the next legal BP distribution without running future rollouts."""
     if limit < 1:
         raise ValueError("limit must be at least 1")
-    model, _, _, _, next_step, probabilities = _prepare_prediction(
+    (
+        model,
+        learnable_model,
+        sequence_model,
+        _,
+        _,
+        next_step,
+        probabilities,
+    ) = _prepare_prediction(
         league_id,
         state,
         model_type,
     )
     team_context = _prediction_context(state, next_step, probabilities)
+    active_model = sequence_model or learnable_model or model
     return {
-        "model_generated_at": model["generated_at"],
+        "model_generated_at": active_model.get("generated_at", model["generated_at"]),
         "model_type": model_type,
-        "model_label": (
-            (
-                "Team-aware learnable hybrid"
-                if model_type == "learnable"
-                else "Statistical model"
-            )
-            + (
-                " + team context"
-                if team_context and model_type == "stats"
-                else ""
-            )
-        ),
+        "model_label": _model_label(model_type, team_context),
         "team_context": team_context,
         "next_step": next_step,
         "candidate_count": len(probabilities),
@@ -838,6 +1099,7 @@ def simulate(
     (
         model,
         learnable_model,
+        sequence_model,
         sequence,
         start_index,
         next_step,
@@ -856,7 +1118,9 @@ def simulate(
             probabilities = (
                 next_probabilities
                 if index == 0
-                else _predict(model, current, step, learnable_model)
+                else _predict(
+                    model, current, step, learnable_model, sequence_model
+                )
             )
             if not probabilities:
                 break
@@ -880,21 +1144,11 @@ def simulate(
         ]
 
     team_context = _prediction_context(state, next_step, next_probabilities)
+    active_model = sequence_model or learnable_model or model
     return {
-        "model_generated_at": model["generated_at"],
+        "model_generated_at": active_model.get("generated_at", model["generated_at"]),
         "model_type": model_type,
-        "model_label": (
-            (
-                "Team-aware learnable hybrid"
-                if model_type == "learnable"
-                else "Statistical model"
-            )
-            + (
-                " + team context"
-                if team_context and model_type == "stats"
-                else ""
-            )
-        ),
+        "model_label": _model_label(model_type, team_context),
         "team_context": team_context,
         "next_step": next_step,
         "next_action_probabilities": next_probabilities,

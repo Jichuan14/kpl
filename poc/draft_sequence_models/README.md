@@ -12,8 +12,9 @@ This isolated proof of concept compares six PyTorch conditional-choice models:
 - `hybrid_app_lag_gru`: a selected, frozen current-app checkpoint plus a
   normalized lag-aware GRU residual controlled by a state-dependent gate.
 
-The POC reads the existing `analysis/exports` and hero-feature artifact. It does
-not modify the production trainer, model artifacts, backend, or frontend.
+The historical POC commands and tests now use compatibility wrappers around the
+maintained model definitions in `analysis/sequence_training`. POC commands
+continue to write only beneath this directory's `artifacts/` folder.
 
 ## Run
 

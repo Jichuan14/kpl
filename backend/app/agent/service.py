@@ -63,7 +63,7 @@ class CoachDraftState(BaseModel):
 
     model_config = {"extra": "forbid"}
 
-    model_type: Literal["stats", "learnable"] = "stats"
+    model_type: Literal["stats", "learnable", "sequence"] = "stats"
     blue_team_id: str = Field(min_length=1, max_length=32)
     blue_team_name: str = Field(min_length=1, max_length=64)
     red_team_id: str = Field(min_length=1, max_length=32)

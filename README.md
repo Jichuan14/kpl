@@ -51,12 +51,16 @@ cd backend
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+pip install --index-url https://download.pytorch.org/whl/cpu \
+  -r requirements-training.txt
 cp .env.example .env
 uvicorn app.main:app --reload --port 8000
 ```
 
 The API is available at [http://localhost:8000/docs](http://localhost:8000/docs).
 It creates `backend/data/kpl_bp.db` on first start.
+PyTorch is needed only when the private management pipeline retrains the
+chronological model; normal inference remains NumPy-only.
 
 ### 2. Start the web app
 
@@ -132,6 +136,7 @@ analysis/exports/{league_id}/
 analysis/outputs/{league_id}/
   *_stats.jsonl
   *_draft_model.json
+  sequence_draft_choice_model.json
   power_rankings.json
   team_*.jsonl
 

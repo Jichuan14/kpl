@@ -321,6 +321,30 @@ def data_status(
         except (OSError, ValueError, json.JSONDecodeError):
             learnable_draft_model["records"] = 0
 
+    sequence_draft_model = artifact(
+        league_output_dir / "sequence_draft_choice_model.json",
+        "sequence_draft_model",
+        "Chronological bag + GRU draft model",
+    )
+    sequence_draft_model_path = (
+        league_output_dir / "sequence_draft_choice_model.json"
+    )
+    sequence_draft_model["ready"] = bool(
+        decision_mtime is not None
+        and sequence_draft_model_path.is_file()
+        and sequence_draft_model_path.stat().st_mtime >= decision_mtime
+    )
+    if sequence_draft_model["exists"]:
+        try:
+            with sequence_draft_model_path.open(encoding="utf-8") as source:
+                sequence_draft_model["records"] = int(
+                    json.load(source).get("training", {}).get(
+                        "training_decisions", 0
+                    )
+                )
+        except (OSError, ValueError, json.JSONDecodeError):
+            sequence_draft_model["records"] = 0
+
     power_rankings = artifact(
         league_output_dir / "power_rankings.json",
         "power_rankings",
@@ -387,6 +411,7 @@ def data_status(
         and power_rankings["ready"]
         and draft_model["ready"]
         and learnable_draft_model["ready"]
+        and sequence_draft_model["ready"]
     )
     pipeline = [
         {
@@ -463,6 +488,12 @@ def data_status(
             "ready": learnable_draft_model["ready"],
             "detail": f'{learnable_draft_model["records"]:,} training decisions',
         },
+        {
+            "key": "sequence_draft_model",
+            "label": "Chronological bag + GRU draft model",
+            "ready": sequence_draft_model["ready"],
+            "detail": f'{sequence_draft_model["records"]:,} training decisions',
+        },
     ]
 
     return ApiResponse(
@@ -492,6 +523,7 @@ def data_status(
                 "power_rankings": power_rankings,
                 "draft_model": draft_model,
                 "learnable_draft_model": learnable_draft_model,
+                "sequence_draft_model": sequence_draft_model,
             },
             "frontend_assets": frontend_assets,
             "analysis_ready": analysis_ready,

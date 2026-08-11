@@ -44,6 +44,7 @@ pipeline API.
 | `analysis/outputs/{league_id}/draft_model.json` | `build_draft_model.py` (`draft_model`) | Draft Simulator and published draft-model metadata |
 | `analysis/outputs/{league_id}/learnable_draft_choice_model.json` | `train_learnable_draft_choice_model.py` (`learnable_draft_model`) | Learned scoring in Draft Simulator and model-status API |
 | `analysis/outputs/{league_id}/learned_hero_feature_space.json` | `train_learnable_draft_choice_model.py` (`learnable_draft_model`) | Feature Space page and model-status API |
+| `analysis/outputs/{league_id}/sequence_draft_choice_model.json` | `train_sequence_draft_choice_model.py` (`sequence_draft_model`) | NumPy chronological bag + GRU scoring in Draft Simulator and Draft Coach |
 
 ## Browser-published assets
 
@@ -92,4 +93,3 @@ the repository workspace, but they are not loaded by a live website page.
   tracked model snapshots, are exceptions.
 - Do not edit a published JSON file as the source of a fix. Change its producer
   or source artifact, rerun analysis, and publish again.
-
