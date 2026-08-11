@@ -26,7 +26,7 @@ const loading = ref(false);
 const simulating = ref(false);
 const error = ref("");
 const search = ref("");
-const modelType = ref("learnable");
+const modelType = ref("sequence");
 const bpOrder = ref(1);
 const board = ref(emptyBoard());
 const history = ref([]);
@@ -274,7 +274,7 @@ async function loadModel() {
   model.value = null;
   seasonTeams.value = [];
   selectedTeamIds.value = { [TEAM_A]: "", [TEAM_B]: "" };
-  modelType.value = "learnable";
+  modelType.value = "sequence";
   board.value = emptyBoard();
   history.value = [];
   bpOrder.value = 1;

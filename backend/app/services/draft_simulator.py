@@ -358,7 +358,7 @@ def metadata(league_id: str) -> dict[str, Any]:
         ],
         "draft_sequence": model["draft_sequence"],
         "default_model_type": (
-            "learnable" if learnable_ready else "sequence" if sequence_ready else "stats"
+            "sequence" if sequence_ready else "learnable" if learnable_ready else "stats"
         ),
         "available_models": [
             {
