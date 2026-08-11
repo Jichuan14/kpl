@@ -1,707 +1,768 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { fetchDraftModel } from "./api";
-import { heroAsset } from "./heroAssets";
-import { language, t } from "./i18n";
 import { selectedLeagueId } from "./selectedLeague";
 import { finishStartupLoading } from "./startupLoader";
 
+const activeSection = ref("relations");
 const model = ref(null);
-const activeSection = ref("system-map");
+const demoStep = ref(0);
+const demoPlaying = ref(false);
+let demoTimer = null;
 
-const guideSections = [
-  { id: "system-map", number: "01", label: "System map" },
-  { id: "training", number: "02", label: "Training data" },
-  { id: "prediction", number: "03", label: "One prediction" },
-  { id: "team-aware", number: "04", label: "Team awareness" },
-  { id: "outputs", number: "05", label: "Simulator & coach" },
-  { id: "rankings", number: "06", label: "Power rankings" },
+const demoActions = [
+  { id: "a", label: "对方 Pick A", relation: "对方 Pick" },
+  { id: "b", label: "我方 Pick B", relation: "己方 Pick" },
+  { id: "c", label: "对方 Pick C", relation: "对方 Pick" },
 ];
 
-const exampleHeroes = {
-  lubanMaster: { id: 525, name: "鲁班大师" },
-  gongsunLi: { id: 199, name: "公孙离" },
-  dunshan: { id: 509, name: "盾山" },
-  goya: { id: 548, name: "戈娅" },
-  zhaoYun: { id: 107, name: "赵云" },
-  xiahouDun: { id: 126, name: "夏侯惇" },
-};
-
-const teamProbabilityExamples = [
-  {
-    team: "Wolves",
-    pick: [
-      { hero: exampleHeroes.zhaoYun, probability: 28 },
-      { hero: exampleHeroes.xiahouDun, probability: 19 },
-      { hero: exampleHeroes.goya, probability: 14 },
-    ],
-    ban: [
-      { hero: exampleHeroes.lubanMaster, probability: 32 },
-      { hero: exampleHeroes.dunshan, probability: 23 },
-      { hero: exampleHeroes.goya, probability: 14 },
-    ],
-  },
-  {
-    team: "AG",
-    pick: [
-      { hero: exampleHeroes.goya, probability: 27 },
-      { hero: exampleHeroes.zhaoYun, probability: 15 },
-      { hero: exampleHeroes.xiahouDun, probability: 12 },
-    ],
-    ban: [
-      { hero: exampleHeroes.dunshan, probability: 30 },
-      { hero: exampleHeroes.lubanMaster, probability: 21 },
-      { hero: exampleHeroes.goya, probability: 13 },
-    ],
-  },
+const vectorCells = [0, 1, 2, 3, 4, 5, 6, 7];
+const candidateScores = [
+  { hero: "英雄 X", bag: 74, gru: 18, final: 78 },
+  { hero: "英雄 Y", bag: 61, gru: -8, final: 59 },
+  { hero: "英雄 Z", bag: 49, gru: 24, final: 55 },
 ];
 
-const activeSectionIndex = computed(() =>
-  Math.max(0, guideSections.findIndex((section) => section.id === activeSection.value))
-);
-const activeSectionMeta = computed(() => guideSections[activeSectionIndex.value]);
-const sectionProgress = computed(
-  () => `${((activeSectionIndex.value + 1) / guideSections.length) * 100}%`
-);
+const demoStages = [
+  "输入当前已发生的三手 BP。下一手轮到我方操作。",
+  "Bag 分支读取全部历史动作，并聚合为当前局面的基线表示。",
+  "GRU 先读入第一手：对方 Pick A，形成 h₁。",
+  "GRU 再读入第二手：我方 Pick B，形成 h₂。",
+  "GRU 最后读入第三手：对方 Pick C，形成 h₃。",
+  "两个 query 分别为所有当前合法英雄计算分数。",
+  "Bag 分数加上缩放后的 GRU 顺序修正，得到最终排序。",
+];
 
-const learnableModel = computed(() =>
-  model.value?.available_models?.find((candidate) => candidate.id === "learnable")
-);
-const heroCount = computed(() => model.value?.heroes?.length || 0);
-const draftSlotCount = computed(() => model.value?.draft_sequence?.length || 0);
+const demoStageText = computed(() => demoStages[demoStep.value]);
 
-function number(value) {
-  return Number(value || 0).toLocaleString(language.value);
+function setDemoStep(step) {
+  demoStep.value = Math.max(0, Math.min(step, demoStages.length - 1));
+  if (demoStep.value === demoStages.length - 1) stopDemo();
+}
+
+function stopDemo() {
+  demoPlaying.value = false;
+  if (demoTimer) window.clearInterval(demoTimer);
+  demoTimer = null;
+}
+
+function toggleDemo() {
+  if (demoPlaying.value) {
+    stopDemo();
+    return;
+  }
+  if (demoStep.value === demoStages.length - 1) demoStep.value = 0;
+  demoPlaying.value = true;
+  demoTimer = window.setInterval(() => {
+    if (demoStep.value >= demoStages.length - 1) stopDemo();
+    else demoStep.value += 1;
+  }, 1200);
+}
+
+const sections = [
+  ["relations", "1. 四种英雄关系统计"],
+  ["bag", "2. Bag 基线分支"],
+  ["gru", "3. GRU 顺序分支"],
+  ["scoring", "4. 候选英雄打分"],
+  ["fusion", "5. 两个分支如何合并"],
+  ["training", "6. 训练、评估与线上推理"],
+];
+
+function scrollToSection(id) {
+  document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function updateActiveSection() {
+  const current = sections
+    .map(([id]) => document.getElementById(id))
+    .filter(Boolean)
+    .filter((element) => element.getBoundingClientRect().top <= 150)
+    .at(-1);
+  if (current) activeSection.value = current.id;
 }
 
 async function loadModel() {
-  if (!selectedLeagueId.value) return;
   try {
     model.value = await fetchDraftModel(selectedLeagueId.value);
   } catch {
     model.value = null;
+  } finally {
+    finishStartupLoading();
   }
-}
-
-let scrollFrame = null;
-
-function updateActiveSection() {
-  scrollFrame = null;
-  const pageBottom = window.scrollY + window.innerHeight;
-  const documentBottom = document.documentElement.scrollHeight;
-
-  if (pageBottom >= documentBottom - 8) {
-    activeSection.value = guideSections.at(-1).id;
-    return;
-  }
-
-  const readingLine = Math.min(window.innerHeight * 0.3, 240);
-  let currentSection = guideSections[0].id;
-
-  for (const section of guideSections) {
-    const element = document.getElementById(section.id);
-    if (element && element.getBoundingClientRect().top <= readingLine) {
-      currentSection = section.id;
-    }
-  }
-
-  activeSection.value = currentSection;
-}
-
-function scheduleScrollSpy() {
-  if (scrollFrame === null) {
-    scrollFrame = window.requestAnimationFrame(updateActiveSection);
-  }
-}
-
-function selectSection(sectionId) {
-  activeSection.value = sectionId;
-}
-
-function scrollToHashSection() {
-  const sectionId = decodeURIComponent(window.location.hash.slice(1));
-  if (!guideSections.some((section) => section.id === sectionId)) return;
-  document.getElementById(sectionId)?.scrollIntoView({ block: "start" });
-  activeSection.value = sectionId;
 }
 
 onMounted(async () => {
-  // The rankings page links here with #rankings. This component is lazy-loaded,
-  // so browsers may resolve the hash before its target has entered the DOM.
-  await nextTick();
-  scrollToHashSection();
   await loadModel();
   await nextTick();
-  scrollToHashSection();
-  window.addEventListener("scroll", scheduleScrollSpy, { passive: true });
-  window.addEventListener("resize", scheduleScrollSpy);
+  const hash = window.location.hash.slice(1);
+  if (hash) scrollToSection(hash === "rankings" ? "training" : hash);
+  window.addEventListener("scroll", updateActiveSection, { passive: true });
   updateActiveSection();
-  finishStartupLoading();
 });
 
 onBeforeUnmount(() => {
-  window.removeEventListener("scroll", scheduleScrollSpy);
-  window.removeEventListener("resize", scheduleScrollSpy);
-  if (scrollFrame !== null) window.cancelAnimationFrame(scrollFrame);
+  window.removeEventListener("scroll", updateActiveSection);
+  stopDemo();
 });
-
-watch(activeSection, async (sectionId) => {
-  if (window.innerWidth > 820) return;
-  await nextTick();
-  document
-    .querySelector(`.guide-rail a[data-section-id="${sectionId}"]`)
-    ?.scrollIntoView({ block: "nearest", inline: "center" });
-});
-
-watch(selectedLeagueId, loadModel);
 </script>
 
 <template>
-  <main class="method-page">
-    <header class="method-hero">
-      <div class="hero-copy">
-        <p class="eyebrow"><span>Model field guide</span><b data-i18n-ignore> · {{ selectedLeagueId }}</b></p>
-        <h1>Evidence in.<br /><span>Next move out.</span></h1>
-        <p class="hero-intro">
-          Follow one KPL draft decision from historical match data to a
-          team-aware probability—and see exactly where the AI coach enters the
-          system.
-        </p>
-        <div class="hero-actions">
-          <a class="primary-action" href="#system-map">Trace the system</a>
-          <a class="secondary-action" href="/simulator">Open the simulator ↗</a>
-        </div>
-      </div>
+  <main class="methodology-page">
+    <header class="page-header">
+      <p class="eyebrow">方法说明</p>
+      <h1>BP 下一手预测：统计关系与 GRU 模型</h1>
+      <p>
+        本页说明网站目前使用的 BP 预测方法。线上预测使用的是 Bag + GRU 模型：Bag 分支判断当前局面，GRU 分支补充严格的 BP 顺序信息。
+      </p>
+      <p v-if="model?.sequenceModel?.available" class="model-note">
+        当前线上模型：{{ model.sequenceModel.name }}；隐藏维度 {{ model.sequenceModel.hiddenDim }}；残差系数 α = {{ Number(model.sequenceModel.residualAlpha).toFixed(4) }}。
+      </p>
 
-      <div class="model-terminal" aria-label="Current model summary">
-        <div class="terminal-head">
-          <span>Current model</span>
-          <i :class="{ ready: learnableModel?.available }"></i>
-          <strong>{{ learnableModel?.available ? "Ready" : "Unavailable" }}</strong>
+      <div class="process-demo" aria-label="Bag 加 GRU 预测过程演示">
+        <div class="demo-heading">
+          <p class="demo-title">过程演示</p>
+          <span>示意计算，不代表当前局面的真实预测数值</span>
         </div>
-        <div class="terminal-body">
-          <p><span>SEASON</span><strong>{{ selectedLeagueId || "—" }}</strong></p>
-          <p><span>ENGINE</span><strong>Team-aware learnable</strong></p>
-          <p><span>TRAINING ACTIONS</span><strong>{{ model ? number(model.training_decisions) : "—" }}</strong></p>
-          <p><span>HERO VOCABULARY</span><strong>{{ model ? number(heroCount) : "—" }}</strong></p>
-          <p><span>DRAFT SLOTS</span><strong>{{ model ? number(draftSlotCount) : "—" }}</strong></p>
+        <div class="demo-controls">
+          <button type="button" :disabled="demoStep === 0" @click="setDemoStep(demoStep - 1)">上一步</button>
+          <button type="button" @click="toggleDemo">{{ demoPlaying ? "暂停" : "自动播放" }}</button>
+          <button type="button" :disabled="demoStep === demoStages.length - 1" @click="setDemoStep(demoStep + 1)">下一步</button>
+          <button type="button" @click="stopDemo(); setDemoStep(0)">重置</button>
         </div>
-        <div class="terminal-foot">
-          <span>MODEL OUTPUT</span>
-          <strong>Next legal pick / ban probability</strong>
+
+        <div class="model-visual" aria-live="polite">
+          <div class="visual-input">
+            <p class="visual-label">历史 BP token</p>
+            <div class="token-stream">
+              <template v-for="(action, index) in demoActions" :key="action.id">
+                <div class="hero-token" :class="{ selected: demoStep >= index + 2 }"><span>t{{ index + 1 }}</span>{{ action.label }}</div>
+                <span v-if="index < demoActions.length - 1" class="flow-arrow">→</span>
+              </template>
+              <div class="next-action">下一手：我方 Pick</div>
+            </div>
+          </div>
+
+          <div class="branch-grid">
+            <div class="branch bag-branch" :class="{ muted: demoStep < 1 }">
+              <div class="branch-heading"><strong>Bag 分支</strong><span>不强调输入顺序</span></div>
+              <div class="bag-inputs"><div v-for="action in demoActions" :key="`bag-${action.id}`" class="small-token">{{ action.relation }}</div></div>
+              <div class="pool-arrow">聚合 ↓</div>
+              <div class="vector-state"><span class="vector-name">p_bag</span><span v-for="cell in vectorCells" :key="`bag-cell-${cell}`" class="vector-cell" :style="{ opacity: demoStep >= 1 ? 0.36 + ((cell * 17) % 55) / 100 : 0.12 }"></span></div>
+            </div>
+
+            <div class="branch gru-branch" :class="{ muted: demoStep < 2 }">
+              <div class="branch-heading"><strong>GRU 分支</strong><span>按真实 BP 顺序读取</span></div>
+              <div class="gru-chain">
+                <template v-for="(action, index) in demoActions" :key="`gru-${action.id}`">
+                  <div class="gru-unit" :class="{ active: demoStep >= index + 2 }">
+                    <div class="small-token">{{ action.label }}</div><div class="gru-cell">GRU</div>
+                    <div class="hidden-vector"><span>h{{ index + 1 }}</span><i v-for="cell in vectorCells.slice(0, 5)" :key="cell" :style="{ opacity: demoStep >= index + 2 ? 0.38 + ((cell * 19 + index * 13) % 54) / 100 : 0.12 }"></i></div>
+                  </div>
+                  <span v-if="index < demoActions.length - 1" class="flow-arrow">→</span>
+                </template>
+              </div>
+            </div>
+          </div>
+
+          <div class="score-flow" :class="{ muted: demoStep < 5 }">
+            <div class="query-source"><span>q_bag</span><span>q_gru</span></div><span class="flow-arrow">→</span>
+            <div class="score-list">
+              <div v-for="candidate in candidateScores" :key="candidate.hero" class="score-row">
+                <span>{{ candidate.hero }}</span><div class="score-bar"><i class="bag-score" :style="{ width: `${candidate.bag}%` }"></i></div><div class="score-bar gru-score"><i :style="{ width: `${Math.abs(candidate.gru)}%`, marginLeft: candidate.gru < 0 ? '30%' : '50%' }"></i></div>
+              </div>
+            </div>
+            <span class="flow-arrow">→</span>
+            <div class="final-rank" :class="{ ready: demoStep >= 6 }"><span>最终排序</span><strong>1. 英雄 X</strong><strong>2. 英雄 Y</strong><strong>3. 英雄 Z</strong></div>
+          </div>
         </div>
+        <p class="demo-description">第 {{ demoStep + 1 }} 步：{{ demoStageText }}</p>
       </div>
     </header>
 
-    <section class="truth-strip" aria-label="Key facts">
+    <div class="methodology-layout">
+      <nav class="section-nav" aria-label="页面目录">
+        <button
+          v-for="[id, label] in sections"
+          :key="id"
+          :class="{ active: activeSection === id }"
+          @click="scrollToSection(id)"
+        >
+          {{ label }}
+        </button>
+      </nav>
+
       <article>
-        <span>01</span>
-        <strong>Backend computes</strong>
-        <p>Probabilities and statistics never come from Kimi’s memory.</p>
+        <section id="relations">
+          <h2>1. 四种英雄关系统计</h2>
+          <p>
+            关系统计不是模型本身，而是从历史比赛中直接计算得到的可解释参考。所有统计都只在“目标英雄当时仍可选择”的局面中计数，避免把已经被 Ban 或 Pick 的英雄算进分母。
+          </p>
+
+          <pre>opportunities(B) = 英雄 B 在对应历史局面中仍然合法的次数</pre>
+          <pre>selections(A → B) = 在这些局面中，随后实际选择 B 的次数</pre>
+          <pre>raw_rate(A → B) = selections(A → B) / opportunities(B)</pre>
+
+          <p>
+            页面显示的不是单纯的 <code>raw_rate</code>。样本很小时，1 次命中 / 1 次机会会错误地显示为 100%。因此系统会使用平滑后的概率、全局基准概率和 Wilson 置信区间来排序；样本过少的关系不会作为强结论展示。
+          </p>
+
+          <h3>1.1 同队 Pick 协同</h3>
+          <p>
+            当一支队伍已经 Pick 英雄 A，随后该队伍在 B 仍合法时 Pick 英雄 B，就记为一次 <strong>A → B</strong> 的同队协同样本。它回答的是：已经有 A 时，这支队伍是否更常补出 B。
+          </p>
+
+          <h3>1.2 对方 Pick 后的反制 Pick</h3>
+          <p>
+            当对手先 Pick 英雄 A，而当前队伍之后在 B 仍合法时 Pick 英雄 B，就记为一次反制 Pick 样本。它回答的是：面对 A 时，B 是否更常被拿出来应对。
+          </p>
+
+          <h3>1.3 对方 Pick 后的反制 Ban</h3>
+          <p>
+            当对手先 Pick 英雄 A，而当前队伍之后在 B 仍合法时 Ban 英雄 B，就记为一次反制 Ban 样本。它反映的是：面对 A 后，哪些英雄更常被主动移出对局。
+          </p>
+
+          <h3>1.4 Ban 之后的后续响应</h3>
+          <p>
+            当英雄 A 被 Ban 后，系统继续观察后续仍合法的英雄 B：B 可能被另一方 Ban，也可能被任意一方 Pick。这个统计用于查看一个 Ban 是否常常伴随其他英雄的连锁处理。
+          </p>
+
+          <p class="plain-note">
+            这些关系是历史共现和条件选择频率，不代表英雄之间存在因果关系。版本、战队、位置、赛制和样本量都会影响结果。
+          </p>
+        </section>
+
+        <section id="bag">
+          <h2>2. Bag 基线分支</h2>
+          <p>Bag 分支的作用是先建立一个稳定的“当前 BP 局面基线判断”。</p>
+          <p>
+            它会读取当前已经发生的所有 Ban/Pick，但不严格区分它们的先后顺序。也就是说，它知道：
+          </p>
+          <blockquote>当前双方已经 Ban/Pick 了哪些英雄、这些动作属于谁、是 Ban 还是 Pick。</blockquote>
+          <p>但它不会特别强调“这个英雄是两手之前选的，还是五手之前选的”。</p>
+          <p>每一个历史动作先变成一个向量：</p>
+
+          <pre>uₜ = tanh(WₛH(heroₜ) + E_action(actionₜ) + E_relation(relationₜ))</pre>
+
+          <ul>
+            <li><code>t</code>：第 <code>t</code> 个历史 BP 动作。</li>
+            <li><code>uₜ</code>：该历史动作经过 Bag 分支编码后的 48 维向量。</li>
+            <li><code>heroₜ</code>：第 <code>t</code> 手涉及的英雄。</li>
+            <li><code>H(heroₜ)</code>：该英雄的 48 维表示，由英雄的 99 维结构化特征和英雄专属 embedding 共同生成。</li>
+            <li><code>Wₛ</code>：可学习的线性投影矩阵，用于转换英雄表示。</li>
+            <li><code>E_action(actionₜ)</code>：该手是 Ban 还是 Pick 的 embedding。</li>
+            <li><code>actionₜ</code>：动作类型，取值为 <code>ban</code> 或 <code>pick</code>。</li>
+            <li><code>E_relation(relationₜ)</code>：该动作相对于当前执行方的关系 embedding。</li>
+            <li><code>relationₜ</code>：四种情况之一：己方 Pick、对方 Pick、己方 Ban、对方 Ban。</li>
+            <li><code>tanh</code>：非线性函数，让模型可以表达更复杂的特征组合。</li>
+          </ul>
+
+          <p>然后把所有历史动作聚合：</p>
+
+          <pre>p_bag = (Σₜ₌₁ᴸ uₜ) / √L</pre>
+
+          <ul>
+            <li><code>L</code>：当前已经发生的 BP 动作数量。</li>
+            <li><code>Σₜ₌₁ᴸ uₜ</code>：把历史动作向量相加。</li>
+            <li><code>p_bag</code>：当前局面的整体 Bag 表示。</li>
+            <li><code>√L</code>：长度归一化项，防止后期 BP 因为动作更多而让向量数值过大。</li>
+          </ul>
+
+          <p>例如下面两种局面，在 Bag 分支看来会比较接近：</p>
+
+          <pre>局面一
+对方 Pick A → 我方 Pick B → 对方 Pick C</pre>
+
+          <pre>局面二
+对方 Pick C → 我方 Pick B → 对方 Pick A</pre>
+
+          <p>因为它们包含的英雄和关系相似；这正是 GRU 分支随后要补充的部分。</p>
+          <p>最后，Bag 分支结合“下一步是什么动作”生成预测 query：</p>
+
+          <pre>q_bag = tanh(W_b p_bag + b_b + c)</pre>
+          <pre>c = E_next_action + E_next_side + E_next_position + E_team_slot + E_acting_team + E_opponent_team</pre>
+
+          <ul>
+            <li><code>q_bag</code>：Bag 分支用来给候选英雄打分的 48 维查询向量。</li>
+            <li><code>W_b</code>：将聚合局面 <code>p_bag</code> 投影到预测空间的可学习矩阵。</li>
+            <li><code>b_b</code>：该投影层的 bias。</li>
+            <li><code>c</code>：下一步 BP 的上下文向量。</li>
+            <li><code>E_next_action</code>：下一步是 Ban 还是 Pick。</li>
+            <li><code>E_next_side</code>：下一步是蓝方还是红方操作。</li>
+            <li><code>E_next_position</code>：下一步是完整 BP 的第几手。</li>
+            <li><code>E_team_slot</code>：该队伍第几次执行这一类动作，例如“红方第 2 次 Pick”。</li>
+            <li><code>E_acting_team</code>：当前执行操作的战队 embedding。</li>
+            <li><code>E_opponent_team</code>：对手战队 embedding。</li>
+          </ul>
+
+          <p>
+            最终，Bag 分支会得到一个基线判断：当前双方阵容、Ban/Pick 信息、战队偏好和下一步阶段共同表明，哪些英雄总体上更可能成为下一次选择。这个判断比较稳定；GRU 分支则在其基础上，根据严格的 BP 顺序做进一步修正。
+          </p>
+        </section>
+
+        <section id="gru">
+          <h2>3. GRU 顺序分支</h2>
+          <p>
+            GRU 分支解决的是 Bag 分支不区分顺序的问题。它把每一次历史 Ban/Pick 当作序列中的一个 token，并按真实发生顺序逐手读取。
+          </p>
+
+          <pre>xₜ = H(heroₜ) + E_action(actionₜ) + E_side(sideₜ) + E_relation(relationₜ) + E_position(t)</pre>
+          <pre>hₜ = GRU(xₜ, hₜ₋₁)</pre>
+          <pre>q_gru = tanh(W_g h_L + b_g + c)</pre>
+
+          <ul>
+            <li><code>xₜ</code>：第 <code>t</code> 手的输入向量。</li>
+            <li><code>H(heroₜ)</code>：该英雄的 48 维表示，与 Bag 分支使用同一类英雄表示。</li>
+            <li><code>E_action(actionₜ)</code>：该手是 Ban 或 Pick。</li>
+            <li><code>E_side(sideₜ)</code>：执行这一手的是蓝方还是红方。</li>
+            <li><code>E_relation(relationₜ)</code>：这一手相对当前执行方是己方还是对方、是 Pick 还是 Ban。</li>
+            <li><code>E_position(t)</code>：这一手在完整 BP 中的位置 embedding。</li>
+            <li><code>hₜ</code>：GRU 读完第 <code>t</code> 手后的隐藏状态，保存此前顺序相关的信息。</li>
+            <li><code>hₜ₋₁</code>：读当前动作前的隐藏状态。</li>
+            <li><code>h_L</code>：读完当前全部 <code>L</code> 手后的最终状态。</li>
+            <li><code>W_g</code>、<code>b_g</code>：把最终隐藏状态映射到预测空间的可学习参数。</li>
+            <li><code>c</code>：与 Bag 分支相同的下一步上下文向量。</li>
+            <li><code>q_gru</code>：GRU 分支给候选英雄打分使用的 48 维 query。</li>
+          </ul>
+
+          <p>
+            因此，“对方先 Pick A，两手后我方 Pick B”和“对方先 Pick C，再 Pick A，最后我方 Pick B”会产生不同的 <code>h_L</code>。GRU 能学习到 B 是紧接着对 A 的回应，还是在另一套阵容条件下出现的选择。
+          </p>
+        </section>
+
+        <section id="scoring">
+          <h2>4. 候选英雄打分</h2>
+          <p>模型会为每一个英雄建立候选表示，再分别与 Bag query 和 GRU query 做点积。</p>
+
+          <pre>R(j) = W_f f(j) + e_hero(j)</pre>
+          <pre>logits_bag(j) = q_bag · R(j) + b_hero(j)</pre>
+          <pre>logits_gru(j) = q_gru · R(j) + b_hero(j)</pre>
+
+          <ul>
+            <li><code>j</code>：一个候选英雄。</li>
+            <li><code>f(j)</code>：英雄 <code>j</code> 的 99 维结构化特征，例如职业、定位和游戏内属性。</li>
+            <li><code>W_f</code>：把 99 维结构化特征投影到 48 维空间的可学习矩阵。</li>
+            <li><code>e_hero(j)</code>：英雄 <code>j</code> 的专属 48 维 embedding。</li>
+            <li><code>R(j)</code>：候选英雄 <code>j</code> 的最终 48 维表示。</li>
+            <li><code>q_bag · R(j)</code>：Bag 当前局面与英雄 <code>j</code> 的匹配分数。</li>
+            <li><code>q_gru · R(j)</code>：严格 BP 顺序与英雄 <code>j</code> 的匹配分数。</li>
+            <li><code>b_hero(j)</code>：英雄 <code>j</code> 的学习到的基础偏置。</li>
+          </ul>
+
+          <p>已经被 Ban 或 Pick 的英雄会被 mask 掉：</p>
+
+          <pre>logits(j) = −∞,  如果英雄 j 当前不合法</pre>
+          <pre>P(j) = softmax(logits)(j),  只在当前合法英雄之间归一化</pre>
+
+          <p>
+            所以即使某个英雄的历史选择率很高，只要它在当前 BP 已经不可用，模型就不会把它放进预测结果。
+          </p>
+        </section>
+
+        <section id="fusion">
+          <h2>5. 两个分支如何合并</h2>
+          <p>
+            当前线上模型不是让 GRU 完全覆盖 Bag，而是让 GRU 作为对稳定基线的顺序修正。
+          </p>
+
+          <pre>μ_gru = mean(logits_gru(j)),  j ∈ 当前合法英雄</pre>
+          <pre>center(logits_gru(j)) = logits_gru(j) − μ_gru</pre>
+          <pre>α = sigmoid(a)</pre>
+          <pre>logits_final(j) = logits_bag(j) + α · center(logits_gru(j))</pre>
+
+          <ul>
+            <li><code>logits_bag(j)</code>：Bag 分支对英雄 <code>j</code> 的稳定基线判断。</li>
+            <li><code>logits_gru(j)</code>：GRU 分支对英雄 <code>j</code> 的顺序判断。</li>
+            <li><code>μ_gru</code>：所有当前合法英雄的 GRU logit 平均值。</li>
+            <li><code>center(...)</code>：减去平均值。这样 GRU 主要负责提高或降低英雄之间的相对排序，不会整体改变 logit 的基准。</li>
+            <li><code>a</code>：训练时学习的标量参数。</li>
+            <li><code>α</code>：经过 sigmoid 后的残差系数，范围在 0 到 1 之间。</li>
+            <li><code>logits_final(j)</code>：最终用于 softmax 和排序的分数。</li>
+          </ul>
+
+          <p>
+            当前导出的模型中，<code>α ≈ 0.2265</code>。这表示 Bag 仍然是主要判断来源，而 GRU 会以较小但明确的幅度调整排序。这样做是因为历史 BP 数据规模有限：顺序信息有价值，但不应让高方差的顺序分支取代稳定的局面基线。
+          </p>
+        </section>
+
+        <section id="training">
+          <h2>6. 训练、评估与线上推理</h2>
+          <p>
+            训练数据中的每一个样本都是一个真实的历史 BP 前缀：输入为当时已经发生的动作和下一步上下文，标签为真实发生的下一手英雄。训练时最小化真实英雄的负对数概率：
+          </p>
+
+          <pre>loss = −log P(y | 历史 BP, 下一步上下文)</pre>
+
+          <ul>
+            <li><code>y</code>：历史比赛中真实被 Ban 或 Pick 的下一位英雄。</li>
+            <li><code>P(y | ...)</code>：模型在当前合法英雄集合中分配给真实英雄 <code>y</code> 的概率。</li>
+            <li><code>loss</code>：真实英雄排名越靠前，损失越低。</li>
+          </ul>
+
+          <p>
+            当前模型使用 37,121 个训练决策、800 个验证决策和 899 个留出测试决策。留出测试的 Top-1 为 22.91%，Top-5 为 56.73%。Top-5 的意思是：在类似的历史局面中，真实下一手英雄有约 56.73% 的概率出现在模型给出的前五个候选内。
+          </p>
+
+          <p>
+            与网站原先的非顺序方法在滚动历史评估上的比较为：Top-1 从 21.81% 提升到 22.84%，Top-5 从 52.81% 提升到 56.19%，负对数损失从 3.0735 降至 2.9017。
+          </p>
+
+          <span id="rankings" aria-hidden="true"></span>
+        </section>
       </article>
-      <article>
-        <span>02</span>
-        <strong>Teams are learned</strong>
-        <p>Acting-team and opponent embeddings are part of the trained model.</p>
-      </article>
-      <article>
-        <span>03</span>
-        <strong>Legality comes first</strong>
-        <p>A hero is removed before scoring if the current rules make it unavailable.</p>
-      </article>
-      <article>
-        <span>04</span>
-        <strong>Every step recalculates</strong>
-        <p>The distribution changes after each pick, ban, team, or side change.</p>
-      </article>
-    </section>
-
-    <div class="guide-layout">
-      <aside class="guide-rail">
-        <div class="rail-status" aria-live="polite">
-          <div>
-            <span>Current section</span>
-            <strong>{{ t(activeSectionMeta.label) }}</strong>
-          </div>
-          <b data-i18n-ignore>
-            {{ activeSectionMeta.number }} / {{ String(guideSections.length).padStart(2, "0") }}
-          </b>
-          <div class="rail-progress" aria-hidden="true">
-            <i :style="{ width: sectionProgress }"></i>
-          </div>
-        </div>
-        <p>On this page</p>
-        <nav aria-label="On this page">
-          <a
-            v-for="section in guideSections"
-            :key="section.id"
-            :href="`#${section.id}`"
-            :data-section-id="section.id"
-            :class="{ active: activeSection === section.id }"
-            :aria-current="activeSection === section.id ? 'location' : undefined"
-            @click="selectSection(section.id)"
-          >
-            <span data-i18n-ignore>{{ section.number }}</span>{{ t(section.label) }}
-          </a>
-        </nav>
-      </aside>
-
-      <div class="guide-content">
-        <section id="system-map" class="guide-section system-section">
-          <div class="section-heading">
-            <span>01 · System map</span>
-            <h2>Five layers, one answer.</h2>
-            <p>
-              The project is not one giant AI model. It is a chain of small,
-              inspectable systems with a clear handoff between each layer.
-            </p>
-          </div>
-
-          <div class="system-map">
-            <article class="system-card source-card">
-              <span>INPUT</span>
-              <b>Official match records</b>
-              <p>Matches, battles, BP actions, teams, players, sides, and winners.</p>
-            </article>
-            <span class="flow-arrow" aria-hidden="true">→</span>
-            <article class="system-card">
-              <span>PREPARE</span>
-              <b>Decision rows</b>
-              <p>One pre-action state for every normal pick and ban.</p>
-            </article>
-            <span class="flow-arrow" aria-hidden="true">→</span>
-            <article class="system-card model-card">
-              <span>LEARN</span>
-              <b>Team-aware model</b>
-              <p>Shared draft patterns plus acting-team and opponent embeddings.</p>
-            </article>
-            <span class="flow-arrow" aria-hidden="true">→</span>
-            <article class="system-card">
-              <span>SCORE</span>
-              <b>Legal probability list</b>
-              <p>Every available hero receives one normalized probability.</p>
-            </article>
-            <span class="flow-arrow" aria-hidden="true">→</span>
-            <article class="system-card output-card">
-              <span>USE</span>
-              <b>Simulator + coach</b>
-              <p>Run rollouts or turn structured evidence into a concise answer.</p>
-            </article>
-          </div>
-        </section>
-
-        <section id="training" class="guide-section">
-          <div class="section-heading split-heading">
-            <div>
-              <span>02 · Training data</span>
-              <h2>Every action becomes a choice problem.</h2>
-            </div>
-            <p>
-              Training does not ask “who won this draft?” It asks: given the
-              board, teams, draft moment, and legal pool, which hero was actually
-              selected?
-            </p>
-          </div>
-
-          <div class="training-grid">
-            <article class="decision-record">
-              <div class="record-head">
-                <span>ONE TRAINING ROW</span>
-                <strong>before_action.json</strong>
-              </div>
-              <dl>
-                <div><dt>action</dt><dd>pick</dd></div>
-                <div><dt>side / slot</dt><dd>blue · 2</dd></div>
-                <div><dt>acting team</dt><dd>Wolves</dd></div>
-                <div><dt>opponent</dt><dd>AG</dd></div>
-                <div>
-                  <dt>visible board</dt>
-                  <dd class="hero-strip compact-strip" data-i18n-ignore>
-                    <img :src="heroAsset(exampleHeroes.lubanMaster.id)" :alt="exampleHeroes.lubanMaster.name" />
-                    <img :src="heroAsset(exampleHeroes.gongsunLi.id)" :alt="exampleHeroes.gongsunLi.name" />
-                    <img :src="heroAsset(exampleHeroes.dunshan.id)" :alt="exampleHeroes.dunshan.name" />
-                    <img :src="heroAsset(exampleHeroes.goya.id)" :alt="exampleHeroes.goya.name" />
-                  </dd>
-                </div>
-                <div><dt>legal candidate</dt><dd class="hero-name" data-i18n-ignore><img :src="heroAsset(exampleHeroes.zhaoYun.id)" :alt="exampleHeroes.zhaoYun.name" />{{ exampleHeroes.zhaoYun.name }}</dd></div>
-                <div class="record-target"><dt>observed target</dt><dd class="hero-name" data-i18n-ignore><img :src="heroAsset(exampleHeroes.zhaoYun.id)" :alt="exampleHeroes.zhaoYun.name" />{{ exampleHeroes.zhaoYun.name }}</dd></div>
-              </dl>
-            </article>
-
-            <article class="weight-card">
-              <div class="card-label">RECENCY WEIGHT</div>
-              <h3>Recent seasons speak louder.</h3>
-              <p>The target season receives full weight. Each prior season is multiplied by 0.45 again.</p>
-              <div class="weight-bars" data-i18n-ignore>
-                <div><span>S0</span><i style="--weight: 100%"></i><b>1.000</b></div>
-                <div><span>S−1</span><i style="--weight: 45%"></i><b>0.450</b></div>
-                <div><span>S−2</span><i style="--weight: 20.25%"></i><b>0.203</b></div>
-                <div><span>S−3</span><i style="--weight: 9.11%"></i><b>0.091</b></div>
-                <div><span>S−4</span><i style="--weight: 4.10%"></i><b>0.041</b></div>
-              </div>
-              <div class="outcome-weight">
-                <span>Winning pick</span>
-                <strong>× 1.5</strong>
-                <p>Bans and other picks retain their normal recency weight.</p>
-              </div>
-            </article>
-          </div>
-        </section>
-
-        <section id="prediction" class="guide-section">
-          <div class="section-heading">
-            <span>03 · One prediction</span>
-            <h2 class="prediction-title"><span>Build a query.</span><span>Score only legal heroes.</span></h2>
-            <p>
-              Four learned signals are added into one draft-state query. That
-              query is compared with every candidate hero representation.
-            </p>
-          </div>
-
-          <div class="signal-grid">
-            <article><span>01</span><b>Draft moment</b><p>Pick or ban, Blue or Red, and that team’s action slot.</p></article>
-            <article><span>02</span><b>Visible board</b><p>Own and opponent picks and bans, represented separately.</p></article>
-            <article><span>03</span><b>Acting team</b><p>A learned vector captures the team’s recurring draft preferences.</p></article>
-            <article><span>04</span><b>Opponent</b><p>A second vector captures how choices shift into this opponent.</p></article>
-          </div>
-
-          <figure class="model-architecture" aria-labelledby="architecture-title">
-            <figcaption>
-              <span>MODEL ARCHITECTURE</span>
-              <strong id="architecture-title">How one legal hero receives a probability.</strong>
-            </figcaption>
-            <div class="architecture-flow">
-              <div class="architecture-inputs">
-                <article class="architecture-node context-node">
-                  <span>01 · DRAFT CONTEXT</span>
-                  <b>Blue pick · slot 2</b>
-                </article>
-                <article class="architecture-node board-node">
-                  <span>02 · VISIBLE BOARD</span>
-                  <div class="architecture-board" data-i18n-ignore>
-                    <div><small>BLUE PICK</small><img :src="heroAsset(exampleHeroes.lubanMaster.id)" :alt="exampleHeroes.lubanMaster.name" /><b>{{ exampleHeroes.lubanMaster.name }}</b></div>
-                    <div><small>RED PICK</small><img :src="heroAsset(exampleHeroes.gongsunLi.id)" :alt="exampleHeroes.gongsunLi.name" /><b>{{ exampleHeroes.gongsunLi.name }}</b></div>
-                    <div><small>BANS</small><span><img :src="heroAsset(exampleHeroes.dunshan.id)" :alt="exampleHeroes.dunshan.name" /><img :src="heroAsset(exampleHeroes.goya.id)" :alt="exampleHeroes.goya.name" /></span></div>
-                  </div>
-                </article>
-                <article class="architecture-node team-node">
-                  <span>03 · TEAM MATCHUP</span>
-                  <b>Wolves <i>vs</i> AG</b>
-                </article>
-              </div>
-
-              <div class="architecture-arrow" aria-hidden="true">→</div>
-
-              <article class="architecture-node encoder-node">
-                <span>STATE ENCODER</span>
-                <b>Learned draft-state query <em>q</em></b>
-                <p>context + board + acting team + opponent</p>
-                <div class="vector-dots" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
-              </article>
-
-              <div class="architecture-arrow" aria-hidden="true">→</div>
-
-              <div class="architecture-candidate">
-                <article class="architecture-node hero-vector-node">
-                  <span>LEGAL CANDIDATE</span>
-                  <div class="candidate-profile" data-i18n-ignore>
-                    <img :src="heroAsset(exampleHeroes.zhaoYun.id)" :alt="exampleHeroes.zhaoYun.name" />
-                    <div><b>{{ exampleHeroes.zhaoYun.name }}</b><small>hero vector <em>h</em></small></div>
-                  </div>
-                </article>
-                <div class="architecture-merge" aria-hidden="true"><span>q · h</span><i>↓</i></div>
-                <article class="architecture-node score-node">
-                  <span>SCORE + LEGAL MASK</span>
-                  <b>Only legal heroes continue</b>
-                  <p>softmax over the remaining scores</p>
-                  <div class="probability-output"><img :src="heroAsset(exampleHeroes.zhaoYun.id)" :alt="exampleHeroes.zhaoYun.name" /><i></i><strong>P(赵云)</strong></div>
-                </article>
-              </div>
-            </div>
-            <p class="architecture-note">The model repeats the candidate branch for every legal hero, then normalizes those scores into one probability list.</p>
-          </figure>
-
-          <div class="prediction-workbench">
-            <article class="equation-card" data-i18n-ignore>
-              <div class="example-board-head">
-                <span>EXAMPLE · BLUE PICK 2</span>
-                <div class="hero-strip">
-                  <img :src="heroAsset(exampleHeroes.lubanMaster.id)" :alt="exampleHeroes.lubanMaster.name" title="鲁班大师 · Blue pick" />
-                  <img :src="heroAsset(exampleHeroes.gongsunLi.id)" :alt="exampleHeroes.gongsunLi.name" title="公孙离 · Red pick" />
-                  <img :src="heroAsset(exampleHeroes.dunshan.id)" :alt="exampleHeroes.dunshan.name" title="盾山 · Blue ban" />
-                  <img :src="heroAsset(exampleHeroes.goya.id)" :alt="exampleHeroes.goya.name" title="戈娅 · Red ban" />
-                  <i>→</i>
-                  <img class="candidate-hero" :src="heroAsset(exampleHeroes.zhaoYun.id)" :alt="exampleHeroes.zhaoYun.name" title="赵云 · legal candidate" />
-                </div>
-              </div>
-              <code>query = context + board + acting_team + opponent</code>
-              <code>score(赵云) = hero_vector · query + hero_bias</code>
-              <code>P(赵云) = softmax(legal_scores)</code>
-              <p>Σ probability(legal heroes) = 100%</p>
-            </article>
-            <article class="legal-gate">
-              <span class="card-label">LEGAL GATE</span>
-              <h3>Filtering happens before softmax.</h3>
-              <div class="availability-example">
-                <span>Already on board</span>
-                <img :src="heroAsset(exampleHeroes.lubanMaster.id)" :alt="exampleHeroes.lubanMaster.name" />
-                <img :src="heroAsset(exampleHeroes.goya.id)" :alt="exampleHeroes.goya.name" />
-                <i>×</i>
-                <span>Legal candidate</span>
-                <img class="available" :src="heroAsset(exampleHeroes.zhaoYun.id)" :alt="exampleHeroes.zhaoYun.name" />
-                <i class="check">✓</i>
-              </div>
-              <ul>
-                <li>Already picked or banned this game</li>
-                <li>Used earlier by this team under Global BP</li>
-                <li>Breaks distinct-role feasibility for a pick</li>
-                <li>Outside a supplied custom legal pool</li>
-              </ul>
-              <p>An illegal hero receives no probability—not a very small one.</p>
-            </article>
-          </div>
-        </section>
-
-        <section id="team-aware" class="guide-section team-section">
-          <div class="section-heading split-heading">
-            <div>
-              <span>04 · Team awareness</span>
-              <h2>Same board. Different matchup. Different distribution.</h2>
-            </div>
-            <p>
-              Team identity is inside the learnable model. It is not a
-              post-processing multiplier applied after prediction.
-            </p>
-          </div>
-
-          <div class="team-probability-example">
-            <header class="team-probability-head">
-              <div>
-                <span>ILLUSTRATIVE TEAM OUTPUTS</span>
-                <b>Same league. Different team. Different BP probability.</b>
-              </div>
-              <div class="shared-board" data-i18n-ignore>
-                <small>SAME EXAMPLE BOARD</small>
-                <img :src="heroAsset(exampleHeroes.lubanMaster.id)" :alt="exampleHeroes.lubanMaster.name" />
-                <img :src="heroAsset(exampleHeroes.gongsunLi.id)" :alt="exampleHeroes.gongsunLi.name" />
-                <img :src="heroAsset(exampleHeroes.dunshan.id)" :alt="exampleHeroes.dunshan.name" />
-                <img :src="heroAsset(exampleHeroes.goya.id)" :alt="exampleHeroes.goya.name" />
-              </div>
-            </header>
-
-            <div class="team-probability-grid">
-              <article v-for="example in teamProbabilityExamples" :key="example.team" class="team-probability-card">
-                <header>
-                  <span>ACTING TEAM</span>
-                  <b data-i18n-ignore>{{ example.team }}</b>
-                </header>
-                <div class="probability-group">
-                  <strong>Next pick · Blue slot 2</strong>
-                  <div v-for="row in example.pick" :key="`pick-${example.team}-${row.hero.id}`" class="team-probability-row" data-i18n-ignore>
-                    <img :src="heroAsset(row.hero.id)" :alt="row.hero.name" />
-                    <span>{{ row.hero.name }}</span>
-                    <i><em :style="{ width: `${row.probability}%` }"></em></i>
-                    <b>{{ row.probability }}%</b>
-                  </div>
-                </div>
-                <div class="probability-group ban-group">
-                  <strong>Next ban · Blue slot 1</strong>
-                  <div v-for="row in example.ban" :key="`ban-${example.team}-${row.hero.id}`" class="team-probability-row" data-i18n-ignore>
-                    <img :src="heroAsset(row.hero.id)" :alt="row.hero.name" />
-                    <span>{{ row.hero.name }}</span>
-                    <i><em :style="{ width: `${row.probability}%` }"></em></i>
-                    <b>{{ row.probability }}%</b>
-                  </div>
-                </div>
-              </article>
-            </div>
-            <p>Illustrative hard-coded values: the live simulator always calculates its own probabilities from the selected teams and current BP state.</p>
-          </div>
-
-          <div class="team-notes">
-            <article><strong>Known team</strong><p>Use its trained embedding from the five-season team vocabulary.</p></article>
-            <article><strong>Unknown team</strong><p>Fall back to the shared league and draft representation.</p></article>
-            <article><strong>No double count</strong><p>The learnable model skips the separate statistical team-tendency adjustment.</p></article>
-          </div>
-        </section>
-
-        <section id="outputs" class="guide-section">
-          <div class="section-heading">
-            <span>05 · Simulator & coach</span>
-            <h2>One model, two different jobs.</h2>
-            <p>
-              The simulator consumes probabilities directly. The coach combines
-              model output with other registered evidence tools and explains it.
-            </p>
-          </div>
-
-          <div class="output-grid">
-            <article class="output-panel simulator-panel">
-              <div class="panel-head"><span>PROBABILITY CONSUMER</span><b>Draft simulator</b></div>
-              <ol class="loop-list">
-                <li><span>1</span><p><strong>Calculate</strong> the next legal probability list.</p></li>
-                <li><span>2</span><p><strong>Sample</strong> one hero using that distribution.</p></li>
-                <li><span>3</span><p><strong>Add</strong> the action to the board.</p></li>
-                <li><span>4</span><p><strong>Repeat</strong> with a newly calculated distribution.</p></li>
-              </ol>
-              <div class="loop-mark">↻</div>
-            </article>
-
-            <article class="output-panel coach-panel">
-              <div class="panel-head"><span>EVIDENCE ORCHESTRATOR</span><b>AI Draft Coach</b></div>
-              <div class="coach-flow">
-                <div><span>QUESTION</span><p>“What might Wolves pick next?”</p></div>
-                <i>↓</i>
-                <div><span>ROUTE</span><p>Kimi selects the registered prediction tool.</p></div>
-                <i>↓</i>
-                <div><span>COMPUTE</span><p>The backend loads the model and returns structured evidence.</p></div>
-                <i>↓</i>
-                <div><span>EXPLAIN</span><p>Kimi writes a short, human-readable KPL answer.</p></div>
-              </div>
-            </article>
-          </div>
-
-          <div class="responsibility-line">
-            <div><span>MODEL</span><strong>Produces probabilities</strong></div>
-            <div><span>TOOLS</span><strong>Retrieve evidence</strong></div>
-            <div><span>KIMI</span><strong>Routes and explains</strong></div>
-          </div>
-        </section>
-
-        <section id="rankings" class="guide-section rankings-method-section">
-          <div class="section-heading split-heading">
-            <div>
-              <span>06 · Power rankings</span>
-              <h2>Two boards, two questions.</h2>
-            </div>
-            <p>
-              The team board asks who is strongest now. The hero board asks
-              which active player has performed best when using one specific
-              hero. Both combine results across available competitions while
-              giving more influence to recent matches.
-            </p>
-          </div>
-
-          <div class="ranking-method-grid">
-            <article class="ranking-method-card team-ranking-method">
-              <header>
-                <span>TEAM POWER SCORE</span>
-                <strong>Opponent strength + current form</strong>
-              </header>
-              <ol>
-                <li>
-                  <b>01</b>
-                  <div><strong>Update Elo after every game</strong><p>Every team begins at 1,500. Beating a stronger opponent earns more Elo than beating a weaker one, and losing to a weaker opponent costs more.</p></div>
-                </li>
-                <li>
-                  <b>02</b>
-                  <div><strong>Reduce stale evidence</strong><p>Older results gradually receive less influence. Elo also moves back toward 1,500 when a team has been inactive for a long period.</p></div>
-                </li>
-                <li>
-                  <b>03</b>
-                  <div><strong>Estimate current-form win rate</strong><p>Recent weighted wins are divided by recent weighted games. Six neutral prior games—three wins and three losses—keep small samples close to 50%.</p></div>
-                </li>
-              </ol>
-              <div class="ranking-equation" data-i18n-ignore>
-                <span>{{ language === "zh-CN" ? "战队实力分" : "TEAM POWER" }}</span>
-                <strong>{{ language === "zh-CN" ? "72% Elo 强度 + 28% 近期胜率" : "72% Elo strength + 28% current-form win rate" }}</strong>
-              </div>
-            </article>
-
-            <article class="ranking-method-card player-ranking-method">
-              <header>
-                <span>PLAYER–HERO SCORE</span>
-                <strong>Performance in the selected hero</strong>
-              </header>
-              <ol>
-                <li>
-                  <b>01</b>
-                  <div><strong>Compare players in the same role</strong><p>Each game is compared with players in the same competition and position, so support and carry statistics are not judged on the same raw scale.</p></div>
-                </li>
-                <li>
-                  <b>02</b>
-                  <div><strong>Build one game-performance score</strong><p>KDA contributes 40%, official MVP score 18%, participation 12%, hero-damage share 10%, gold pace 8%, and whether the player won 12%.</p></div>
-                </li>
-                <li>
-                  <b>03</b>
-                  <div><strong>Protect against tiny samples</strong><p>Recent games receive more influence. Four neutral games at a score of 50 are added before ranking, preventing one exceptional appearance from leading the board.</p></div>
-                </li>
-              </ol>
-              <div class="ranking-equation" data-i18n-ignore>
-                <span>{{ language === "zh-CN" ? "选手英雄综合分" : "PLAYER–HERO SCORE" }}</span>
-                <strong>{{ language === "zh-CN" ? "（加权表现 + 4 × 50）÷（有效局数 + 4）" : "(weighted performance + 4 × 50) ÷ (effective games + 4)" }}</strong>
-              </div>
-            </article>
-          </div>
-
-          <div class="ranking-reading-guide">
-            <span>HOW TO READ THE BOARDS</span>
-            <div>
-              <p><strong>Power score is comparative.</strong> It is designed for ordering teams or players inside the available evidence, not as a prediction that the top entry will win every next match.</p>
-              <p><strong>Evidence still matters.</strong> Current-season games, effective games, and confidence show how much support sits behind a score. Treat close scores and small samples as approximately even.</p>
-            </div>
-          </div>
-        </section>
-
-      </div>
     </div>
   </main>
 </template>
 
 <style scoped>
-.method-page { width:min(1500px, calc(100% - 2rem)); margin:0 auto; padding:2rem 0 6rem; color:var(--ink); }
-.method-hero { display:grid; grid-template-columns:minmax(0, 1.2fr) minmax(390px, .7fr); gap:clamp(2rem, 7vw, 7rem); align-items:end; min-height:520px; padding:4.5rem clamp(1rem, 4vw, 4rem); overflow:hidden; border:1px solid rgba(16,42,46,.16); border-radius:1.2rem; background:radial-gradient(circle at 76% 18%, rgba(255,209,109,.26), transparent 30%), linear-gradient(135deg, rgba(255,255,255,.92), rgba(224,239,231,.9)); box-shadow:0 2rem 5rem rgba(16,42,46,.08); position:relative; }
-.method-hero::before { content:""; position:absolute; width:430px; height:430px; right:-170px; bottom:-210px; border:1px solid rgba(15,138,107,.24); border-radius:50%; box-shadow:0 0 0 55px rgba(15,138,107,.035), 0 0 0 110px rgba(15,138,107,.025); }
-.hero-copy, .model-terminal { position:relative; z-index:1; }
-.eyebrow, .section-heading > span, .section-heading > div > span, .card-label { color:var(--accent-deep); font-size:.66rem; font-weight:700; letter-spacing:.14em; text-transform:uppercase; }
-.eyebrow b { color:inherit; font:inherit; }
-.hero-copy h1 { max-width:760px; margin:.8rem 0 0; font:800 clamp(4rem, 8vw, 7.8rem)/.84 var(--display); letter-spacing:-.075em; }
-.hero-copy h1 span { color:var(--accent); }
-.hero-intro { max-width:610px; margin:1.6rem 0 0; color:var(--ink-soft); font:500 clamp(.9rem, 1.4vw, 1.1rem)/1.65 var(--display); }
-.hero-actions { display:flex; flex-wrap:wrap; gap:.7rem; margin-top:2rem; }
-.hero-actions a { display:inline-flex; align-items:center; min-height:44px; padding:.75rem 1rem; border:1px solid var(--ink); border-radius:.35rem; font-size:.7rem; font-weight:700; text-decoration:none; }
-.primary-action { background:var(--ink); color:#fff; }.secondary-action { color:var(--ink); background:rgba(255,255,255,.55); }
-.hero-actions a:hover { transform:translateY(-1px); box-shadow:0 .55rem 1rem rgba(16,42,46,.1); }
-.model-terminal { overflow:hidden; border:1px solid rgba(255,255,255,.16); border-radius:.8rem; background:#102a2e; color:#fff; box-shadow:0 1.5rem 3rem rgba(16,42,46,.24); }
-.terminal-head { display:flex; align-items:center; gap:.45rem; min-height:44px; padding:0 1rem; border-bottom:1px solid rgba(255,255,255,.12); color:rgba(255,255,255,.58); font-size:.6rem; letter-spacing:.1em; text-transform:uppercase; }
-.terminal-head > span { flex:1; }.terminal-head i { width:.48rem; height:.48rem; border-radius:50%; background:#c45c26; }.terminal-head i.ready { background:#62d49c; box-shadow:0 0 12px rgba(98,212,156,.7); }.terminal-head strong { color:#fff; font-size:.58rem; }
-.terminal-body { padding:.9rem 1rem; }.terminal-body p { display:flex; justify-content:space-between; gap:1rem; margin:0; padding:.67rem 0; border-bottom:1px solid rgba(255,255,255,.08); }.terminal-body p:last-child { border:0; }.terminal-body span, .terminal-foot span { color:rgba(255,255,255,.46); font-size:.55rem; letter-spacing:.09em; }.terminal-body strong { color:#fff; font-size:.72rem; text-align:right; }
-.terminal-foot { display:grid; gap:.28rem; padding:.9rem 1rem; background:rgba(98,212,156,.1); }.terminal-foot strong { color:#8fe0c8; font:700 .75rem var(--display); }
-.truth-strip { display:grid; grid-template-columns:repeat(4, 1fr); margin:1rem 0 0; border:1px solid var(--line); border-radius:.75rem; background:rgba(255,255,255,.62); }
-.truth-strip article { min-height:150px; padding:1.15rem; border-right:1px solid var(--line); }.truth-strip article:last-child { border:0; }.truth-strip span { display:block; color:var(--accent); font-size:.58rem; letter-spacing:.1em; }.truth-strip strong { display:block; margin:.8rem 0 .35rem; font:700 1rem var(--display); }.truth-strip p { margin:0; color:var(--ink-soft); font-size:.67rem; line-height:1.55; }
-.guide-layout { display:grid; grid-template-columns:220px minmax(0, 1fr); gap:clamp(2rem, 5vw, 5.5rem); margin-top:5rem; align-items:start; }
-.guide-rail { position:sticky; top:1rem; align-self:start; width:220px; height:max-content; }.rail-status { display:grid; grid-template-columns:minmax(0, 1fr) auto; gap:.45rem .75rem; margin-bottom:1rem; padding:.9rem; border:1px solid var(--line); border-radius:.55rem; background:rgba(255,255,255,.74); box-shadow:0 .65rem 1.8rem rgba(16,42,46,.06); backdrop-filter:blur(14px); }.rail-status > div:first-child { display:grid; gap:.2rem; min-width:0; }.rail-status span { color:var(--ink-soft); font-size:.5rem; font-weight:700; letter-spacing:.11em; text-transform:uppercase; }.rail-status strong { overflow:hidden; font:700 .75rem var(--display); text-overflow:ellipsis; white-space:nowrap; }.rail-status > b { align-self:center; color:var(--accent-deep); font:700 .58rem var(--mono); }.rail-progress { grid-column:1/-1; height:3px; overflow:hidden; border-radius:999px; background:rgba(16,42,46,.1); }.rail-progress i { display:block; height:100%; border-radius:inherit; background:linear-gradient(90deg, var(--accent-deep), #62d49c); transition:width .25s ease; }
-.guide-rail > p { margin:0 0 .65rem; color:var(--ink-soft); font-size:.58rem; letter-spacing:.12em; text-transform:uppercase; }.guide-rail nav { display:grid; border-top:1px solid var(--line); }.guide-rail nav a { position:relative; display:grid; grid-template-columns:2rem 1fr; gap:.4rem; padding:.72rem 0; border-bottom:1px solid var(--line); color:var(--ink-soft); font:600 .68rem var(--display); text-decoration:none; transition:padding .18s ease, color .18s ease, background .18s ease; }.guide-rail nav a::before { content:""; position:absolute; top:.45rem; bottom:.45rem; left:0; width:2px; border-radius:999px; background:var(--accent); transform:scaleY(0); transition:transform .18s ease; }.guide-rail nav a span { color:var(--accent); font:600 .56rem var(--mono); }.guide-rail nav a:hover { color:var(--ink); padding-left:.25rem; }.guide-rail nav a.active { padding-left:.55rem; color:var(--ink); background:linear-gradient(90deg, rgba(15,138,107,.09), transparent); }.guide-rail nav a.active::before { transform:scaleY(1); }.guide-rail nav a.active span { color:var(--accent-deep); }
-.rail-note { margin-top:1rem; padding:.9rem; border-radius:.5rem; background:var(--ink); }.rail-note span { color:#8fe0c8; font-size:.55rem; letter-spacing:.1em; text-transform:uppercase; }.rail-note p { margin:.55rem 0 0; color:rgba(255,255,255,.72); font-size:.65rem; line-height:1.55; }
-.guide-content { min-width:0; }.guide-section { scroll-margin-top:1rem; padding:0 0 6rem; margin-bottom:6rem; border-bottom:1px solid var(--line); }.guide-section:last-child { margin-bottom:0; }
-.section-heading { max-width:880px; margin-bottom:2rem; }.section-heading h2 { max-width:850px; margin:.55rem 0 .8rem; font:800 clamp(2.4rem, 5vw, 4.7rem)/.95 var(--display); letter-spacing:-.06em; }.section-heading > p, .split-heading > p { max-width:720px; margin:0; color:var(--ink-soft); font:500 .84rem/1.7 var(--display); }.prediction-title span { display:block; }
-.split-heading { display:grid; grid-template-columns:minmax(0, 1.1fr) minmax(280px, .7fr); gap:2rem; max-width:none; align-items:end; }.split-heading h2 { margin-bottom:0; }.split-heading > p { padding-bottom:.25rem; }
-.system-map { display:grid; grid-template-columns:repeat(4, minmax(120px, 1fr) 28px) minmax(120px, 1fr); align-items:stretch; }
-.system-card { min-height:190px; padding:1rem; border:1px solid var(--line); border-radius:.55rem; background:rgba(255,255,255,.65); }.system-card span { color:var(--accent); font-size:.54rem; letter-spacing:.12em; }.system-card b { display:block; margin:1.5rem 0 .55rem; font:700 .9rem/1.15 var(--display); }.system-card p { margin:0; color:var(--ink-soft); font-size:.62rem; line-height:1.55; }.source-card { background:rgba(255,255,255,.85); }.model-card { border-color:var(--accent); background:rgba(15,138,107,.09); }.output-card { border-color:var(--ink); background:var(--ink); color:#fff; }.output-card b { color:#fff; }.output-card p { color:rgba(255,255,255,.66); }.output-card span { color:#8fe0c8; }.flow-arrow { display:grid; place-items:center; color:var(--accent); }
-.plain-callout { display:grid; grid-template-columns:180px 1fr; gap:1.2rem; margin-top:1rem; padding:1.1rem; border-left:3px solid #e8bf6c; background:rgba(232,191,108,.13); }.plain-callout span { color:var(--ink); font:700 .72rem var(--display); }.plain-callout p { margin:0; color:var(--ink-soft); font-size:.68rem; line-height:1.55; }
-.training-grid, .prediction-workbench, .output-grid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:1rem; }
-.decision-record, .weight-card, .legal-gate, .output-panel { border:1px solid var(--line); border-radius:.7rem; background:rgba(255,255,255,.68); overflow:hidden; }
-.record-head, .panel-head { display:flex; justify-content:space-between; gap:1rem; padding:.85rem 1rem; border-bottom:1px solid var(--line); background:rgba(16,42,46,.035); }.record-head span, .panel-head span { color:var(--accent-deep); font-size:.55rem; letter-spacing:.1em; }.record-head strong { font-size:.62rem; }.decision-record dl { margin:0; padding:.65rem 1rem 1rem; }.decision-record dl div { display:grid; grid-template-columns:1fr 1.2fr; padding:.58rem 0; border-bottom:1px solid var(--line); }.decision-record dt { color:var(--ink-soft); font-size:.62rem; }.decision-record dd { margin:0; color:var(--ink); font:600 .68rem var(--mono); text-align:right; }.hero-strip { display:flex; align-items:center; justify-content:flex-end; gap:.3rem; }.hero-strip img, .hero-name img, .availability-example img { width:2rem; height:2rem; border:1px solid rgba(255,255,255,.2); border-radius:.28rem; object-fit:cover; background:#102a2e; }.hero-strip.compact-strip { gap:.2rem; }.hero-strip.compact-strip img { width:1.55rem; height:1.55rem; }.hero-strip .candidate-hero, .availability-example img.available { border-color:#62d49c; box-shadow:0 0 0 2px rgba(98,212,156,.2); }.hero-strip i { color:#ffd16d; font:700 .8rem var(--mono); font-style:normal; }.hero-name { display:inline-flex; align-items:center; justify-content:flex-end; gap:.4rem; }.hero-name img { width:1.5rem; height:1.5rem; border-color:var(--line); }.decision-record .record-target { margin-top:.55rem; padding:.72rem; border:0; border-radius:.35rem; background:rgba(15,138,107,.09); }.record-target dd { color:var(--accent-deep); }
-.weight-card { padding:1rem; }.weight-card h3, .legal-gate h3 { margin:.55rem 0 .4rem; font:700 1.45rem/1.1 var(--display); letter-spacing:-.035em; }.weight-card > p, .legal-gate > p { margin:0; color:var(--ink-soft); font-size:.67rem; line-height:1.55; }.weight-bars { display:grid; gap:.5rem; margin:1.4rem 0; }.weight-bars div { display:grid; grid-template-columns:2.1rem 1fr 3rem; gap:.5rem; align-items:center; }.weight-bars span, .weight-bars b { font-size:.58rem; }.weight-bars b { text-align:right; }.weight-bars i { display:block; width:var(--weight); height:.46rem; border-radius:999px; background:linear-gradient(90deg, var(--accent-deep), #62d49c); }.outcome-weight { display:grid; grid-template-columns:1fr auto; align-items:end; gap:.2rem 1rem; padding:.9rem; border-radius:.45rem; background:var(--ink); color:#fff; }.outcome-weight span { color:rgba(255,255,255,.56); font-size:.58rem; text-transform:uppercase; }.outcome-weight strong { color:#ffd16d; font:800 1.7rem var(--display); }.outcome-weight p { grid-column:1/-1; margin:.25rem 0 0; color:rgba(255,255,255,.66); font-size:.6rem; }
-.signal-grid { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:.65rem; margin-bottom:1rem; }.signal-grid article { min-height:150px; padding:.9rem; border-top:2px solid var(--accent); background:rgba(255,255,255,.62); }.signal-grid span { color:var(--accent); font-size:.56rem; }.signal-grid b { display:block; margin:1rem 0 .4rem; font:700 .85rem var(--display); }.signal-grid p { margin:0; color:var(--ink-soft); font-size:.62rem; line-height:1.5; }
-.model-architecture { margin:1rem 0; padding:1.1rem; border:1px solid var(--line); border-radius:.75rem; background:rgba(255,255,255,.72); }.model-architecture figcaption { display:grid; gap:.25rem; margin-bottom:1rem; }.model-architecture figcaption span, .architecture-node > span { color:var(--accent-deep); font-size:.54rem; font-weight:700; letter-spacing:.11em; }.model-architecture figcaption strong { font:700 1.1rem var(--display); }.architecture-flow { display:grid; grid-template-columns:minmax(220px, 1.2fr) 28px minmax(180px, .9fr) 28px minmax(220px, 1.1fr); gap:.55rem; align-items:center; }.architecture-inputs { display:grid; gap:.45rem; }.architecture-node { border:1px solid var(--line); border-radius:.45rem; background:rgba(255,255,255,.86); }.architecture-node > span { display:block; }.context-node, .team-node { display:grid; grid-template-columns:1fr auto; align-items:center; gap:.5rem; min-height:44px; padding:.65rem .75rem; }.context-node b, .team-node b { font:700 .68rem var(--display); }.team-node i { color:var(--accent-deep); font-style:normal; }.board-node { padding:.65rem .75rem; }.architecture-board { display:grid; grid-template-columns:repeat(3, 1fr); gap:.45rem; margin-top:.5rem; }.architecture-board > div { display:grid; grid-template-columns:auto minmax(0, 1fr); gap:.25rem .35rem; align-items:center; min-width:0; }.architecture-board small { grid-column:1/-1; color:var(--ink-soft); font-size:.45rem; letter-spacing:.06em; }.architecture-board img, .candidate-profile img, .probability-output img { width:1.75rem; height:1.75rem; border-radius:.25rem; object-fit:cover; }.architecture-board b { overflow:hidden; font:600 .53rem var(--display); text-overflow:ellipsis; white-space:nowrap; }.architecture-board > div:last-child span { display:flex; gap:.15rem; }.architecture-board > div:last-child img { width:1.2rem; height:1.2rem; }.architecture-arrow { color:var(--accent-deep); font:700 1.35rem var(--mono); text-align:center; }.encoder-node { display:grid; align-content:center; gap:.65rem; min-height:188px; padding:1rem; border-color:var(--accent); background:rgba(15,138,107,.08); }.encoder-node b, .score-node b { font:700 .82rem/1.25 var(--display); }.encoder-node em, .candidate-profile em { color:var(--accent-deep); font:700 1.1rem var(--mono); font-style:normal; }.encoder-node p, .score-node p { margin:0; color:var(--ink-soft); font-size:.58rem; line-height:1.45; }.vector-dots { display:flex; gap:.25rem; }.vector-dots i { display:block; width:.45rem; height:.45rem; border-radius:50%; background:var(--accent); }.vector-dots i:nth-child(2n) { opacity:.5; }.vector-dots i:nth-child(3n) { opacity:.22; }.architecture-candidate { display:grid; gap:.45rem; }.hero-vector-node { padding:.75rem; }.candidate-profile { display:flex; align-items:center; gap:.55rem; margin-top:.5rem; }.candidate-profile img { width:2.4rem; height:2.4rem; box-shadow:0 0 0 2px rgba(15,138,107,.18); }.candidate-profile div { display:grid; gap:.15rem; }.candidate-profile b { font:700 .8rem var(--display); }.candidate-profile small { color:var(--ink-soft); font:.55rem var(--mono); }.architecture-merge { display:grid; justify-items:center; gap:.1rem; color:var(--accent-deep); }.architecture-merge span { padding:.12rem .35rem; border-radius:999px; background:rgba(15,138,107,.1); font:700 .58rem var(--mono); }.architecture-merge i { font-style:normal; }.score-node { display:grid; gap:.4rem; padding:.75rem; border-color:var(--ink); background:#102a2e; color:#fff; }.score-node > span { color:#8fe0c8; }.score-node p { color:rgba(255,255,255,.6); }.probability-output { display:grid; grid-template-columns:1.5rem 1fr auto; gap:.4rem; align-items:center; margin-top:.15rem; }.probability-output img { width:1.5rem; height:1.5rem; }.probability-output i { display:block; height:.36rem; border-radius:999px; background:linear-gradient(90deg, #62d49c 72%, rgba(255,255,255,.16) 72%); }.probability-output strong { color:#ffd16d; font:700 .6rem var(--mono); }.architecture-note { margin:.85rem 0 0; color:var(--ink-soft); font-size:.6rem; line-height:1.5; }
-.equation-card { display:grid; align-content:center; gap:.8rem; min-height:330px; padding:1.3rem; border-radius:.7rem; background:#102a2e; box-shadow:inset 0 0 0 1px rgba(255,255,255,.08); }.equation-card span { color:#8fe0c8; font-size:.57rem; letter-spacing:.1em; }.example-board-head { display:grid; gap:.5rem; }.example-board-head .hero-strip { justify-content:flex-start; }.equation-card code { display:block; padding:.85rem; border:1px solid rgba(255,255,255,.1); border-radius:.3rem; color:#fff; background:rgba(255,255,255,.04); font-size:.68rem; white-space:normal; }.equation-card p { margin:0; color:#ffd16d; font-size:.64rem; }.legal-gate { padding:1.2rem; }.availability-example { display:flex; flex-wrap:wrap; align-items:center; gap:.35rem; margin-top:1rem; padding:.65rem; border:1px solid var(--line); border-radius:.4rem; background:rgba(16,42,46,.035); }.availability-example span { color:var(--ink-soft); font-size:.53rem; letter-spacing:.06em; }.availability-example img { width:1.75rem; height:1.75rem; border-color:var(--line); }.availability-example i { color:var(--warn); font:800 .85rem var(--mono); font-style:normal; }.availability-example i.check { color:var(--accent-deep); }.legal-gate ul { margin:1.2rem 0; padding:0; list-style:none; }.legal-gate li { position:relative; padding:.62rem 0 .62rem 1.5rem; border-bottom:1px solid var(--line); color:var(--ink-soft); font:500 .68rem/1.45 var(--display); }.legal-gate li::before { content:"×"; position:absolute; left:0; color:var(--warn); font:700 .8rem var(--mono); }.legal-gate > p { padding:.75rem; background:rgba(196,92,38,.07); color:var(--warn); }
-.matchup-visual { padding:1.3rem; border:1px solid var(--line); border-radius:.8rem; background:rgba(255,255,255,.64); }.matchup-row { display:grid; grid-template-columns:minmax(130px, .75fr) 24px minmax(130px, .75fr) minmax(40px, 1fr) minmax(150px, .9fr); gap:.6rem; align-items:center; }.team-pill, .query-pill { display:grid; gap:.22rem; padding:.8rem; border:1px solid var(--line); border-radius:.45rem; background:#fff; }.team-pill span, .query-pill span { color:var(--ink-soft); font-size:.5rem; letter-spacing:.1em; }.team-pill b, .query-pill b { font:700 .82rem var(--display); }.opponent-pill { background:rgba(232,191,108,.12); }.query-pill { border-color:var(--accent); background:rgba(15,138,107,.08); }.query-pill span { color:var(--accent-deep); }.plus { color:var(--ink-soft); text-align:center; }.route-line { height:1px; background:linear-gradient(90deg, var(--line), var(--accent)); }.same-board { display:grid; grid-template-columns:1fr auto 1fr; gap:.7rem; align-items:center; margin:.8rem 0; color:var(--ink-soft); font-size:.52rem; letter-spacing:.1em; }.same-board > div { display:grid; justify-items:center; gap:.35rem; }.same-board .hero-strip { justify-content:center; }.same-board span { height:1px; background:var(--line); }
-.team-probability-example { overflow:hidden; border:1px solid var(--line); border-radius:.8rem; background:rgba(255,255,255,.7); }.team-probability-head { display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:1rem 1.15rem; border-bottom:1px solid var(--line); background:linear-gradient(90deg, rgba(15,138,107,.08), rgba(255,255,255,.4)); }.team-probability-head > div:first-child { display:grid; gap:.28rem; }.team-probability-head span, .team-probability-card header span { color:var(--accent-deep); font-size:.54rem; font-weight:700; letter-spacing:.11em; }.team-probability-head b { font:700 1rem var(--display); }.shared-board { display:flex; align-items:center; gap:.25rem; }.shared-board small { margin-right:.25rem; color:var(--ink-soft); font-size:.48rem; letter-spacing:.06em; }.shared-board img { width:1.7rem; height:1.7rem; border-radius:.25rem; object-fit:cover; }.team-probability-grid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:1px; background:var(--line); }.team-probability-card { padding:1rem 1.15rem 1.1rem; background:rgba(255,255,255,.78); }.team-probability-card header { display:flex; align-items:end; justify-content:space-between; gap:.5rem; padding-bottom:.65rem; border-bottom:1px solid var(--line); }.team-probability-card header b { font:800 1.25rem var(--display); }.probability-group { display:grid; gap:.42rem; margin-top:.85rem; }.probability-group + .probability-group { margin-top:1rem; padding-top:.85rem; border-top:1px solid var(--line); }.probability-group > strong { color:var(--ink-soft); font-size:.56rem; letter-spacing:.05em; }.team-probability-row { display:grid; grid-template-columns:1.55rem minmax(3.5rem, .8fr) minmax(3rem, 1.4fr) 2.1rem; gap:.38rem; align-items:center; }.team-probability-row img { width:1.55rem; height:1.55rem; border-radius:.22rem; object-fit:cover; }.team-probability-row span { overflow:hidden; color:var(--ink); font:600 .6rem var(--display); text-overflow:ellipsis; white-space:nowrap; }.team-probability-row > i { display:block; height:.35rem; overflow:hidden; border-radius:999px; background:rgba(16,42,46,.1); }.team-probability-row > i em { display:block; height:100%; border-radius:inherit; background:linear-gradient(90deg, var(--accent-deep), #62d49c); }.ban-group .team-probability-row > i em { background:linear-gradient(90deg, #c45c26, #e8bf6c); }.team-probability-row b { color:var(--ink-soft); font:700 .58rem var(--mono); text-align:right; }.team-probability-example > p { margin:0; padding:.7rem 1.15rem; border-top:1px solid var(--line); color:var(--ink-soft); font-size:.57rem; line-height:1.45; }
-.team-notes { display:grid; grid-template-columns:repeat(3, 1fr); gap:.65rem; margin-top:.7rem; }.team-notes article { padding:.9rem; border-left:2px solid var(--accent); background:rgba(255,255,255,.55); }.team-notes strong { font:700 .75rem var(--display); }.team-notes p { margin:.35rem 0 0; color:var(--ink-soft); font-size:.61rem; line-height:1.5; }
-.output-panel { position:relative; min-height:410px; }.panel-head { display:grid; }.panel-head b { margin-top:.3rem; font:700 1.25rem var(--display); }.loop-list { display:grid; gap:0; margin:0; padding:1rem; list-style:none; }.loop-list li { display:grid; grid-template-columns:2rem 1fr; align-items:center; gap:.6rem; padding:.72rem 0; border-bottom:1px solid var(--line); }.loop-list li > span { display:grid; place-items:center; width:1.7rem; height:1.7rem; border-radius:50%; background:rgba(15,138,107,.1); color:var(--accent-deep); font-size:.58rem; }.loop-list p { margin:0; color:var(--ink-soft); font-size:.66rem; }.loop-list strong { color:var(--ink); }.loop-mark { position:absolute; right:1rem; bottom:.7rem; color:rgba(15,138,107,.18); font:800 5rem var(--display); }
-.coach-panel { background:#102a2e; }.coach-panel .panel-head { border-color:rgba(255,255,255,.12); background:rgba(255,255,255,.04); }.coach-panel .panel-head span { color:#8fe0c8; }.coach-panel .panel-head b { color:#fff; }.coach-flow { display:grid; grid-template-columns:1fr 24px 1fr 24px 1fr 24px 1fr; gap:.4rem; align-items:center; padding:1rem; }.coach-flow div { min-height:170px; padding:.75rem; border:1px solid rgba(255,255,255,.1); border-radius:.4rem; background:rgba(255,255,255,.035); }.coach-flow span { color:#8fe0c8; font-size:.5rem; letter-spacing:.1em; }.coach-flow p { margin:2rem 0 0; color:rgba(255,255,255,.72); font:500 .65rem/1.55 var(--display); }.coach-flow i { color:#ffd16d; font-style:normal; text-align:center; transform:rotate(-90deg); }
-.responsibility-line { display:grid; grid-template-columns:repeat(3, 1fr); margin-top:1rem; border:1px solid var(--line); }.responsibility-line div { padding:.85rem; border-right:1px solid var(--line); }.responsibility-line div:last-child { border:0; }.responsibility-line span { display:block; color:var(--accent); font-size:.52rem; letter-spacing:.1em; }.responsibility-line strong { display:block; margin-top:.3rem; font:700 .72rem var(--display); }
-.ranking-method-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.8rem; }.ranking-method-card { overflow:hidden; border:1px solid var(--line); border-radius:.8rem; background:rgba(255,255,255,.7); }.ranking-method-card header { display:grid; gap:.35rem; padding:1.15rem; border-bottom:1px solid var(--line); }.ranking-method-card header span,.ranking-reading-guide>span { color:var(--accent-deep); font-size:.55rem; font-weight:700; letter-spacing:.11em; }.ranking-method-card header strong { font:700 1.2rem var(--display); }.ranking-method-card ol { margin:0; padding:0 1.15rem; list-style:none; }.ranking-method-card li { display:grid; grid-template-columns:2rem 1fr; gap:.65rem; padding:1rem 0; border-bottom:1px solid var(--line); }.ranking-method-card li>b { color:var(--accent); font:.7rem var(--mono); }.ranking-method-card li strong { font:700 .78rem var(--display); }.ranking-method-card li p { margin:.3rem 0 0; color:var(--ink-soft); font-size:.65rem; line-height:1.55; }.ranking-equation { display:grid; gap:.35rem; margin:1rem 1.15rem 1.15rem; padding:1rem; border-radius:.45rem; background:#102a2e; color:#fff; }.ranking-equation span { color:#8fe0c8; font-size:.52rem; letter-spacing:.1em; }.ranking-equation strong { font:700 .78rem/1.45 var(--display); }.ranking-reading-guide { display:grid; grid-template-columns:180px 1fr; gap:1.2rem; margin-top:.8rem; padding:1.1rem; border-left:3px solid #e8bf6c; background:rgba(232,191,108,.12); }.ranking-reading-guide>div { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1rem; }.ranking-reading-guide p { margin:0; color:var(--ink-soft); font-size:.68rem; line-height:1.6; }.ranking-reading-guide strong { color:var(--ink); }
-.meaning-grid { display:grid; grid-template-columns:repeat(2, 1fr); gap:1rem; }.meaning-grid article { padding:1.2rem; border-radius:.7rem; }.meaning-grid article > span { font-size:.55rem; font-weight:700; letter-spacing:.12em; }.meaning-grid ul { margin:1rem 0 0; padding:0; list-style:none; }.meaning-grid li { position:relative; padding:.7rem 0 .7rem 1.6rem; border-bottom:1px solid rgba(16,42,46,.09); color:var(--ink-soft); font:500 .69rem/1.45 var(--display); }.meaning-grid li::before { position:absolute; left:0; font-weight:700; }.means-yes { background:rgba(15,138,107,.08); }.means-yes > span, .means-yes li::before { color:var(--accent-deep); }.means-yes li::before { content:"✓"; }.means-no { background:rgba(196,92,38,.07); }.means-no > span, .means-no li::before { color:var(--warn); }.means-no li::before { content:"×"; }
-.honesty-note { display:grid; grid-template-columns:190px 1fr; gap:1rem; margin-top:1rem; padding:1.1rem; border:1px solid #e8bf6c; border-radius:.55rem; background:rgba(232,191,108,.12); }.honesty-note span { color:#8b641e; font-size:.55rem; font-weight:700; letter-spacing:.1em; }.honesty-note p { margin:0; color:var(--ink-soft); font-size:.68rem; line-height:1.6; }
-.closing-link { display:grid; grid-template-columns:1fr auto; gap:.25rem 1rem; margin-top:1rem; padding:1.2rem; border-radius:.6rem; background:var(--ink); color:#fff; text-decoration:none; }.closing-link span { color:rgba(255,255,255,.52); font-size:.57rem; letter-spacing:.1em; text-transform:uppercase; }.closing-link strong { font:700 1.15rem var(--display); }.closing-link b { grid-column:2; grid-row:1/3; align-self:center; color:#8fe0c8; font-size:1.5rem; }.closing-link:hover b { transform:translateX(.25rem); }
-@media (max-width:1180px) { .method-hero { grid-template-columns:1fr minmax(330px, .75fr); min-height:460px; padding:3rem 2rem; gap:2rem; }.hero-copy h1 { font-size:clamp(3.7rem, 7vw, 6rem); }.guide-layout { grid-template-columns:170px minmax(0,1fr); gap:2rem; }.guide-rail { width:170px; }.system-map { grid-template-columns:repeat(2, 1fr); gap:.65rem; }.flow-arrow { display:none; }.system-card:last-child { grid-column:1/-1; min-height:150px; }.coach-flow { grid-template-columns:1fr; }.coach-flow div { min-height:auto; }.coach-flow i { transform:none; }.output-panel { min-height:auto; } }
-@media (max-width:820px) { .method-page { width:min(100% - 1.2rem, 720px); padding-top:.6rem; }.method-hero { grid-template-columns:1fr; min-height:auto; padding:2.2rem 1.2rem; }.model-terminal { width:100%; }.truth-strip { grid-template-columns:repeat(2, 1fr); }.truth-strip article:nth-child(2) { border-right:0; }.truth-strip article:nth-child(-n+2) { border-bottom:1px solid var(--line); }.guide-layout { display:block; margin-top:3rem; }.guide-rail { position:sticky; z-index:20; top:0; width:auto; max-height:none; margin:0 -.6rem 3rem; padding:.55rem .6rem .65rem; overflow:visible; border-bottom:1px solid var(--line); background:rgba(243,246,244,.92); box-shadow:0 .7rem 1.4rem rgba(16,42,46,.06); backdrop-filter:blur(16px); }.guide-rail > p, .rail-note { display:none; }.rail-status { grid-template-columns:minmax(0, 1fr) auto; margin:0 0 .45rem; padding:0; border:0; background:transparent; box-shadow:none; backdrop-filter:none; }.rail-status span { display:none; }.rail-status strong { font-size:.7rem; }.rail-status > b { font-size:.54rem; }.rail-progress { height:2px; }.guide-rail nav { display:flex; gap:.35rem; overflow-x:auto; border:0; scrollbar-width:none; scroll-snap-type:x proximity; }.guide-rail nav::-webkit-scrollbar { display:none; }.guide-rail nav a { display:flex; flex:0 0 auto; grid-template-columns:none; gap:.3rem; align-items:center; padding:.43rem .58rem; border:1px solid var(--line); border-radius:999px; background:rgba(255,255,255,.76); scroll-snap-align:center; }.guide-rail nav a::before { display:none; }.guide-rail nav a:hover { padding-left:.58rem; }.guide-rail nav a.active { padding-left:.58rem; border-color:var(--ink); background:var(--ink); color:#fff; }.guide-rail nav a.active span { color:#8fe0c8; }.guide-section { scroll-margin-top:7.5rem; padding-bottom:4rem; margin-bottom:4rem; }.split-heading { grid-template-columns:1fr; gap:1rem; }.training-grid, .prediction-workbench, .output-grid { grid-template-columns:1fr; }.signal-grid { grid-template-columns:repeat(2, 1fr); }.matchup-row { grid-template-columns:1fr 18px 1fr; }.matchup-row .route-line { display:none; }.query-pill { grid-column:1/-1; }.same-board { margin:1rem 0; }.team-notes { grid-template-columns:1fr; }.coach-flow { grid-template-columns:1fr; }.responsibility-line { grid-template-columns:1fr; }.responsibility-line div { border-right:0; border-bottom:1px solid var(--line); }.meaning-grid { grid-template-columns:1fr; } }
-@media (max-width:520px) { .method-page { width:calc(100% - .8rem); }.method-hero { border-radius:.8rem; }.hero-copy h1 { font-size:3.5rem; }.hero-intro { font-size:.8rem; }.hero-actions { display:grid; }.hero-actions a { justify-content:center; }.terminal-body p { align-items:start; }.truth-strip { grid-template-columns:1fr; }.truth-strip article { min-height:auto; border-right:0; border-bottom:1px solid var(--line); }.truth-strip article:nth-child(3) { border-bottom:1px solid var(--line); }.guide-rail { margin-left:0; margin-right:0; }.section-heading h2 { font-size:2.75rem; }.system-map, .signal-grid { grid-template-columns:1fr; }.system-card:last-child { grid-column:auto; }.plain-callout, .honesty-note { grid-template-columns:1fr; }.matchup-row { grid-template-columns:1fr; }.plus { display:none; }.same-board b { text-align:center; }.decision-record dl div { grid-template-columns:1fr; gap:.2rem; }.decision-record dd { text-align:left; }.coach-flow p { margin-top:.8rem; }.closing-link { grid-template-columns:1fr auto; } }
-@media (max-width:1180px) { .architecture-flow { grid-template-columns:minmax(190px, 1fr) 24px minmax(170px, .8fr) 24px minmax(190px, 1fr); gap:.35rem; }.architecture-board { gap:.25rem; }.architecture-board b { display:none; } }
-@media (max-width:820px) { .architecture-flow { grid-template-columns:1fr; gap:.6rem; }.architecture-arrow { transform:rotate(90deg); }.architecture-inputs { grid-template-columns:1fr; }.encoder-node { min-height:auto; }.architecture-candidate { grid-template-columns:1fr; }.architecture-board b { display:block; } }
-@media (max-width:820px) { .ranking-method-grid { grid-template-columns:1fr; }.ranking-reading-guide { grid-template-columns:1fr; }.ranking-reading-guide>div { grid-template-columns:1fr; } }
-@media (max-width:640px) { .team-probability-head { align-items:start; flex-direction:column; }.team-probability-grid { grid-template-columns:1fr; }.team-probability-card { padding:1rem; }.shared-board small { display:none; }.team-probability-example > p { padding:.7rem 1rem; } }
+.methodology-page {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 44px 28px 80px;
+  color: #20242b;
+}
+
+.page-header {
+  max-width: 780px;
+  border-bottom: 1px solid #d9dde3;
+  padding-bottom: 28px;
+  margin-bottom: 30px;
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  color: #687385;
+  font-size: 0.88rem;
+  letter-spacing: 0.08em;
+}
+
+h1, h2, h3 {
+  color: #15191f;
+  font-weight: 650;
+  line-height: 1.3;
+}
+
+h1 {
+  margin: 0 0 14px;
+  font-size: clamp(1.9rem, 4vw, 2.7rem);
+}
+
+h2 {
+  font-size: 1.55rem;
+  margin: 0 0 18px;
+  scroll-margin-top: 22px;
+}
+
+h3 {
+  margin: 28px 0 8px;
+  font-size: 1.08rem;
+}
+
+p, li {
+  font-size: 1rem;
+  line-height: 1.85;
+}
+
+p {
+  margin: 0 0 14px;
+}
+
+.model-note, .plain-note {
+  color: #5d6776;
+  font-size: 0.94rem;
+}
+
+.process-demo {
+  border-top: 1px solid #d9dde3;
+  margin-top: 24px;
+  padding-top: 20px;
+}
+
+.demo-heading {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+.demo-title {
+  color: #15191f;
+  font-weight: 650;
+  margin-bottom: 10px;
+}
+
+.demo-heading span {
+  color: #687385;
+  font-size: 0.82rem;
+}
+
+.demo-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.demo-controls button {
+  background: #fff;
+  border: 1px solid #bac2cd;
+  border-radius: 3px;
+  color: #26364f;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 6px 10px;
+}
+
+.demo-controls button:hover:not(:disabled) {
+  border-color: #283f72;
+}
+
+.demo-controls button:disabled {
+  color: #9ba3ae;
+  cursor: default;
+}
+
+.model-visual {
+  border: 1px solid #d5dbe3;
+  display: grid;
+  gap: 17px;
+  padding: 18px;
+}
+
+.visual-label, .branch-heading {
+  color: #526072;
+  font-size: 0.84rem;
+  margin: 0 0 8px;
+}
+
+.token-stream, .bag-inputs, .gru-chain, .score-flow, .query-source {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.hero-token, .next-action, .small-token, .query-source span, .final-rank {
+  border: 1px solid #cbd1d9;
+  border-radius: 3px;
+  color: #26364f;
+  font-size: 0.8rem;
+  line-height: 1.35;
+  padding: 5px 7px;
+}
+
+.hero-token {
+  background: #f8f9fa;
+  opacity: 0.5;
+  transition: border-color 180ms ease, opacity 180ms ease, transform 180ms ease;
+}
+
+.hero-token span {
+  color: #7a8595;
+  display: block;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.71rem;
+}
+
+.hero-token.selected {
+  border-color: #7185af;
+  opacity: 1;
+  transform: translateY(-2px);
+}
+
+.next-action { background: #f0f4f9; }
+.flow-arrow, .pool-arrow { color: #738094; font-size: 0.9rem; }
+
+.branch-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.branch {
+  border-left: 2px solid #9da9b8;
+  min-height: 136px;
+  padding-left: 11px;
+  transition: opacity 180ms ease;
+}
+
+.branch.muted, .score-flow.muted { opacity: 0.22; }
+
+.branch-heading {
+  align-items: baseline;
+  display: flex;
+  gap: 9px;
+}
+
+.branch-heading strong { color: #26364f; font-weight: 650; }
+.branch-heading span { color: #7a8595; font-size: 0.76rem; }
+
+.small-token { background: #f5f6f8; }
+.pool-arrow { margin: 10px 0 6px; }
+
+.vector-state, .hidden-vector {
+  align-items: center;
+  display: flex;
+  gap: 3px;
+}
+
+.vector-name, .hidden-vector span {
+  color: #526072;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.76rem;
+  margin-right: 4px;
+}
+
+.vector-cell, .hidden-vector i {
+  background: #49699f;
+  display: inline-block;
+  height: 17px;
+  transition: opacity 240ms ease;
+  width: 10px;
+}
+
+.gru-chain { align-items: stretch; gap: 5px; }
+.gru-unit { display: grid; gap: 5px; justify-items: center; opacity: 0.38; transition: opacity 180ms ease; }
+.gru-unit.active { animation: unit-enter 260ms ease-out; opacity: 1; }
+.gru-cell { background: #eef3fb; border: 1px solid #9dadd0; border-radius: 3px; color: #304e7d; font-size: 0.78rem; padding: 4px 10px; }
+.hidden-vector i { height: 12px; width: 7px; }
+.hidden-vector span { margin: 0 2px 0 0; }
+
+.score-flow { border-top: 1px solid #e0e4e9; padding-top: 15px; transition: opacity 180ms ease; }
+.query-source { align-items: stretch; flex-direction: column; }
+.query-source span { background: #f1f4f8; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.score-list { display: grid; gap: 5px; min-width: 190px; }
+.score-row { align-items: center; display: grid; gap: 5px; grid-template-columns: 47px 1fr 1fr; }
+.score-row > span { color: #526072; font-size: 0.77rem; }
+.score-bar { background: #e7eaee; height: 7px; overflow: hidden; position: relative; }
+.score-bar i { background: #536f9f; display: block; height: 100%; transition: width 260ms ease; }
+.gru-score::before { background: #b6bdc7; content: ""; height: 100%; left: 50%; position: absolute; width: 1px; }
+.gru-score i { background: #71879a; }
+.final-rank { display: grid; gap: 2px; min-width: 92px; opacity: 0.4; transition: opacity 260ms ease, border-color 260ms ease; }
+.final-rank.ready { border-color: #78947e; opacity: 1; }
+.final-rank span { color: #526072; font-size: 0.72rem; }
+.final-rank strong { color: #26364f; font-size: 0.78rem; font-weight: 550; }
+
+.demo-description {
+  color: #526072;
+  font-size: 0.93rem;
+  margin: 14px 0 0;
+}
+
+@keyframes unit-enter {
+  from { opacity: 0; transform: translateX(-7px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.methodology-layout {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 760px);
+  gap: 54px;
+}
+
+.section-nav {
+  align-self: start;
+  position: sticky;
+  top: 24px;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid #d9dde3;
+}
+
+.section-nav button {
+  appearance: none;
+  border: 0;
+  border-left: 2px solid transparent;
+  background: transparent;
+  color: #687385;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.section-nav button:hover, .section-nav button.active {
+  border-left-color: #283f72;
+  color: #1c2c50;
+}
+
+section {
+  padding: 12px 0 46px;
+  border-bottom: 1px solid #e2e5e9;
+}
+
+section:last-child {
+  border-bottom: 0;
+}
+
+blockquote {
+  border-left: 3px solid #8b98ad;
+  color: #394354;
+  margin: 18px 0;
+  padding: 2px 18px;
+  line-height: 1.8;
+}
+
+pre {
+  background: #f5f6f8;
+  border: 1px solid #e1e4e8;
+  border-radius: 4px;
+  color: #1c2735;
+  font: 0.91rem/1.75 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  margin: 18px 0;
+  overflow-x: auto;
+  padding: 15px 18px;
+  white-space: pre-wrap;
+}
+
+ul {
+  margin: 10px 0 18px;
+  padding-left: 24px;
+}
+
+li {
+  margin: 5px 0;
+}
+
+code {
+  background: #f1f3f5;
+  border-radius: 3px;
+  color: #29394f;
+  font-size: 0.91em;
+  padding: 1px 4px;
+}
+
+@media (max-width: 780px) {
+  .methodology-page {
+    padding: 30px 18px 56px;
+  }
+
+  .methodology-layout {
+    display: block;
+  }
+
+  .section-nav {
+    position: static;
+    margin-bottom: 28px;
+  }
+
+  .branch-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .score-flow {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .gru-chain {
+    align-items: center;
+  }
+
+  .gru-unit .small-token {
+    max-width: 78px;
+    text-align: center;
+  }
+}
 </style>
