@@ -26,7 +26,9 @@ const loading = ref(false);
 const simulating = ref(false);
 const error = ref("");
 const search = ref("");
-const modelType = ref("sequence");
+// BP forecasts always use the chronological GRU model. Keeping this fixed
+// avoids presenting model choice in either the desktop or mobile interface.
+const modelType = "sequence";
 const bpOrder = ref(1);
 const board = ref(emptyBoard());
 const history = ref([]);
@@ -76,10 +78,6 @@ const usedHeroIds = computed(
 );
 
 const heroes = computed(() => model.value?.heroes || []);
-const availableModels = computed(() => model.value?.available_models || []);
-const selectedModel = computed(() =>
-  availableModels.value.find((candidate) => candidate.id === modelType.value)
-);
 
 const pickerTitle = computed(() => {
   if (pickerTarget.value === "global-blue") return addEarlierHeroLabel(teamsBySide.value.blue);
@@ -160,7 +158,7 @@ const coachDraftState = computed(() => {
   const blue = selectedTeam(teamsBySide.value.blue);
   const red = selectedTeam(teamsBySide.value.red);
   return {
-    model_type: modelType.value,
+    model_type: modelType,
     blue_team_id: String(blue.team_id),
     blue_team_name: blue.team_name,
     red_team_id: String(red.team_id),
@@ -274,7 +272,6 @@ async function loadModel() {
   model.value = null;
   seasonTeams.value = [];
   selectedTeamIds.value = { [TEAM_A]: "", [TEAM_B]: "" };
-  modelType.value = "sequence";
   board.value = emptyBoard();
   history.value = [];
   bpOrder.value = 1;
@@ -290,10 +287,6 @@ async function loadModel() {
     ]);
     model.value = draftModel;
     seasonTeams.value = teams;
-    const defaultModel = draftModel.available_models?.find(
-      (candidate) => candidate.id === draftModel.default_model_type && candidate.available
-    );
-    modelType.value = defaultModel?.id || "stats";
     const wolves =
       teams.find((team) => String(team.team_id) === "10001") ||
       teams.find((team) => String(team.team_name).includes("狼队"));
@@ -327,7 +320,7 @@ async function forecast() {
   try {
     result.value = await simulateDraft({
       league_id: leagueId.value,
-      model_type: modelType.value,
+      model_type: modelType,
       blue_team_id: String(blue.team_id),
       blue_team_name: blue.team_name,
       red_team_id: String(red.team_id),
@@ -505,7 +498,6 @@ onMounted(async () => {
 });
 
 watch(leagueId, loadModel);
-watch(modelType, forecast);
 watch(selectedTeamIds, forecast, { deep: true });
 </script>
 
@@ -535,27 +527,6 @@ watch(selectedTeamIds, forecast, { deep: true });
     <p v-else-if="loading" class="simulator-message">Loading draft model…</p>
 
     <template v-else-if="model">
-      <section class="model-choice" aria-label="Forecast model">
-        <div>
-          <p class="simulator-eyebrow">{{ t("Forecast model") }}</p>
-          <h2>{{ t("Choose how the next legal BP action is predicted") }}</h2>
-        </div>
-        <div class="model-choice-options">
-          <button
-            v-for="candidate in availableModels"
-            :key="candidate.id"
-            type="button"
-            :class="{ active: modelType === candidate.id }"
-            :disabled="!candidate.available || simulating"
-            @click="modelType = candidate.id"
-          >
-            <strong>{{ t(candidate.label) }}</strong>
-            <span>{{ t(candidate.description) }}</span>
-            <small v-if="!candidate.available">{{ t("Not available for this season") }}</small>
-          </button>
-        </div>
-      </section>
-
       <section class="global-bp-panel">
         <div>
           <p class="simulator-eyebrow">Match format</p>
@@ -736,7 +707,6 @@ watch(selectedTeamIds, forecast, { deep: true });
                 <div>
                   <p class="simulator-eyebrow">Model forecast</p>
                   <h2 data-i18n-ignore>{{ forecastLabel() }}</h2>
-                  <small v-if="selectedModel">{{ t(selectedModel.label) }}</small>
                 </div>
                 <span v-if="simulating">Updating…</span>
               </div>
@@ -835,7 +805,6 @@ watch(selectedTeamIds, forecast, { deep: true });
 .simulator-season select, .simulator-actions select, .picker-heading input { min-height: 42px; padding: .55rem .7rem; border: 1px solid var(--line); background: rgba(255,255,255,.85); color: var(--ink); font: inherit; }
 .simulator-season small { color: var(--ink-soft); font-size: .66rem; }
 .simulator-message { margin: 1.5rem 0; color: var(--ink-soft); }.simulator-message.error { color: var(--warn); }
-.model-choice { display:grid; grid-template-columns:minmax(14rem, .8fr) minmax(30rem, 1.8fr); gap:1rem 1.5rem; align-items:center; margin-top:1.5rem; padding:1rem 1.15rem; border:1px solid var(--accent-deep); background:linear-gradient(120deg, rgba(232,191,108,.24), rgba(255,255,255,.82)); }.model-choice h2 { margin:0; font:700 1.28rem var(--display); letter-spacing:-.035em; }.model-choice-options { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:.65rem; }.model-choice button { display:grid; gap:.22rem; min-height:84px; padding:.7rem .8rem; border:1px solid var(--line); background:rgba(255,255,255,.86); color:var(--ink); text-align:left; font:inherit; cursor:pointer; }.model-choice button strong { font-size:.8rem; }.model-choice button span, .model-choice button small { color:var(--ink-soft); font-size:.66rem; line-height:1.35; }.model-choice button.active { border-color:var(--accent-deep); box-shadow:inset 3px 0 var(--accent-deep); background:#fffaf0; }.model-choice button:disabled { cursor:not-allowed; opacity:.58; }
 .simulator-status { align-items: center; margin-top: 1.5rem; padding: 1rem 1.15rem; border: 1px solid var(--line); background: rgba(255,255,255,.72); }
 .simulator-status > div:first-child span, .simulator-status small { display: block; color: var(--ink-soft); font-size: .65rem; letter-spacing: .08em; text-transform: uppercase; }
 .simulator-status strong { display: block; margin: .18rem 0; font: 700 1.25rem var(--display); }
@@ -858,7 +827,7 @@ watch(selectedTeamIds, forecast, { deep: true });
 .commentary-panel { margin-top:.75rem; padding:1rem 1.15rem; border:1px solid var(--accent-deep); background:linear-gradient(120deg, rgba(232,191,108,.18), rgba(255,255,255,.84)); }.commentary-panel h2 { max-width:70rem; margin:.25rem 0 0; font:700 1rem/1.55 var(--display); letter-spacing:-.015em; }.commentary-loading { margin:0; color:var(--ink-soft); font-size:.75rem; }.commentary-toggle { display:grid; gap:.12rem; min-width:8.5rem; padding:.42rem .6rem; border:1px solid var(--line); background:rgba(255,255,255,.8); color:var(--ink-soft); text-align:left; font:inherit; cursor:pointer; }.commentary-toggle strong { color:var(--ink); font-size:.72rem; }.commentary-toggle small { font-size:.58rem; }.commentary-toggle.active { border-color:var(--accent-deep); background:rgba(232,191,108,.2); }.commentary-toggle.active strong { color:var(--accent-deep); }
 .hero-picker { margin-top: .75rem; padding: 1rem; }.picker-heading { display:flex; align-items:end; justify-content:space-between; gap:1rem; }.picker-heading h2 { font-size:1.4rem; }.picker-heading input { width:min(100%, 260px); }.picker-targets { margin-top:.85rem; }.hero-options { display:grid; grid-template-columns:repeat(auto-fill, minmax(3.6rem, 1fr)); gap:.45rem; margin-top:1rem; max-height:360px; overflow:auto; }.hero-options button { position:relative; display:grid; place-items:center; aspect-ratio:1; padding:0; overflow:hidden; }.hero-options button img { width:100%; height:100%; object-fit:cover; }.hero-options button small { position:absolute; right:0; bottom:0; padding:.14rem .2rem; background:rgba(16,42,46,.84); color:#fff; font-size:.56rem; }.hero-options button:hover:not(:disabled), .draft-slots button:not(:disabled):hover { border-color: var(--accent); color: var(--accent-deep); }
 @media (max-width: 1000px) { .simulator-workspace { grid-template-columns:1fr; }.coach-rail { position:static; }.coach-rail { grid-row:1; }.simulator-main-column { grid-row:2; } }
-@media (max-width: 860px) { .simulator-hero, .simulator-status, .simulator-layout { flex-direction:column; align-items:stretch; }.simulator-season, .forecast-panel { width:100%; }.forecast-panel { min-width:0; }.model-choice { grid-template-columns:1fr; }.simulator-actions { justify-content:space-between; }.draft-board { grid-template-columns:1fr; }.global-bp-panel { grid-template-columns:1fr; }.global-used { grid-template-columns:1fr; }.next-battle { justify-self:start; } }
+@media (max-width: 860px) { .simulator-hero, .simulator-status, .simulator-layout { flex-direction:column; align-items:stretch; }.simulator-season, .forecast-panel { width:100%; }.forecast-panel { min-width:0; }.simulator-actions { justify-content:space-between; }.draft-board { grid-template-columns:1fr; }.global-bp-panel { grid-template-columns:1fr; }.global-used { grid-template-columns:1fr; }.next-battle { justify-self:start; } }
 @media (max-width:620px) {
   .forecast-panel { display:none; }
   .global-used > .used-team { display:none; }

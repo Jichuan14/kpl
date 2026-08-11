@@ -52,12 +52,16 @@ img {
   max-width: 100%;
 }
 
-/* Keep form controls readable and prevent iOS from zooming into fields. */
-@media (max-width: 640px) {
+/*
+ * Safari zooms the page when a focused native form control has text smaller
+ * than 16px. Component-scoped control styles intentionally use compact text,
+ * so this needs to win over those styles on phone-sized screens.
+ */
+@media (max-width: 767px) {
   input,
   select,
   textarea {
-    font-size: 16px;
+    font-size: 16px !important;
   }
 
   button,
