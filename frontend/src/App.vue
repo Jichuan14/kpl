@@ -1343,7 +1343,7 @@ watch(selectedYear, () => {
 
 .site-footnote {
   width: min(1240px, calc(100% - 2rem));
-  margin: 0 auto;
+  margin: auto auto 0;
   padding: 1.25rem 0 2rem;
   border-top: 1px solid var(--line);
   color: var(--ink-soft);
