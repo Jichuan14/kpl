@@ -348,7 +348,7 @@ def data_status(
     power_rankings = artifact(
         league_output_dir / "power_rankings.json",
         "power_rankings",
-        "Team and player-hero power rankings",
+        "Team, player-position, and player-hero power rankings",
     )
     power_rankings_path = league_output_dir / "power_rankings.json"
     power_rankings["ready"] = bool(
@@ -360,7 +360,9 @@ def data_status(
         try:
             with power_rankings_path.open(encoding="utf-8") as source:
                 summary = json.load(source).get("summary") or {}
-            power_rankings["records"] = int(summary.get("player_hero_rows") or 0)
+            power_rankings["records"] = int(
+                summary.get("player_hero_rows") or 0
+            ) + int(summary.get("player_position_rows") or 0)
         except (OSError, ValueError, json.JSONDecodeError):
             power_rankings["records"] = 0
 
@@ -472,9 +474,9 @@ def data_status(
         },
         {
             "key": "power_rankings",
-            "label": "Decayed team and hero rankings",
+            "label": "Decayed team, position, and hero rankings",
             "ready": power_rankings["ready"],
-            "detail": f'{power_rankings["records"]:,} player-hero rows',
+            "detail": f'{power_rankings["records"]:,} player ranking rows',
         },
         {
             "key": "draft_model",

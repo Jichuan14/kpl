@@ -40,7 +40,7 @@ pipeline API.
 | `analysis/outputs/{league_id}/team_combo_performance.jsonl` | `compute_team_draft_profiles.py` (`team_profiles`) | Team-profile tools and Draft Coach |
 | `analysis/outputs/{league_id}/player_hero_pools.jsonl` | `compute_team_draft_profiles.py` (`team_profiles`) | Player-pool tools and Draft Coach |
 | `analysis/outputs/{league_id}/team_recent_trends.jsonl` | `compute_team_draft_profiles.py` (`team_profiles`) | Recent-form context in Draft Coach |
-| `analysis/outputs/{league_id}/power_rankings.json` | `compute_power_rankings.py` (`power_rankings`) | Source for the Rankings page's team Elo and player-by-hero boards |
+| `analysis/outputs/{league_id}/power_rankings.json` | `compute_power_rankings.py` (`power_rankings`) | Source for the Rankings page's team Elo and player-by-position and player-by-hero boards |
 | `analysis/outputs/{league_id}/draft_model.json` | `build_draft_model.py` (`draft_model`) | Draft Simulator and published draft-model metadata |
 | `analysis/outputs/{league_id}/learnable_draft_choice_model.json` | `train_learnable_draft_choice_model.py` (`learnable_draft_model`) | Learned scoring in Draft Simulator and model-status API |
 | `analysis/outputs/{league_id}/learned_hero_feature_space.json` | `train_learnable_draft_choice_model.py` (`learnable_draft_model`) | Feature Space page and model-status API |

@@ -26,7 +26,7 @@ hero may have several rows when it has been played in multiple positions.
 | `compute_meta_heroes.py` | Rank opening-priority heroes from first-phase bans and Blue first picks |
 | `compute_team_synergies.py` | Rank availability-adjusted hero pairs preferred by each team |
 | `compute_team_draft_profiles.py` | Build season rosters, team tendencies/openings/combos, player pools, and recent trends |
-| `compute_power_rankings.py` | Build decayed team Elo and per-hero player performance boards across available seasons |
+| `compute_power_rankings.py` | Build decayed team Elo plus player-position and player-hero performance boards across available seasons |
 | `build_hero_tactical_roles.py` | Build the commentary-only hero class and tactical-role artifact from Tencent sources |
 | `build_draft_model.py` | Train an interpretable next-action probability model and run BP rollouts |
 | `train_learnable_draft_choice_model.ipynb` | Train the team-aware learnable choice model with acting-team and opponent-team embeddings |
@@ -131,14 +131,17 @@ Output:
 analysis/outputs/{league_id}/meta_hero_stats.jsonl
 ```
 
-### Build team and player-hero power rankings
+### Build team, player-position, and player-hero power rankings
 
-The selected season determines eligible teams and player-hero pairs. All
-available match exports up to that season contribute with a 180-day half-life.
-Team strength blends opponent-adjusted Elo with a decayed Bayesian win rate.
+The selected season determines eligible teams, player-position pairs, and
+player-hero pairs. All available match exports up to that season contribute
+with a 180-day half-life. Team strength blends opponent-adjusted Elo with a
+decayed Bayesian win rate.
 Player-hero strength blends role-and-season-normalized KDA, MVP score,
 participation, hero damage share, gold pace, and battle results, with a neutral
-prior protecting sparse samples.
+prior protecting sparse samples. Position boards use that same single-game
+score but aggregate every hero an active player used in the role. The website
+defaults to at least five selected-season games when displaying those boards.
 
 ```bash
 python3 analysis/compute_power_rankings.py --league-id 20260003
