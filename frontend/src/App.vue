@@ -44,13 +44,9 @@ const notice = ref("");
 const apiConnected = ref(false);
 const rightsContactEmail = "jichuan1625@gmail.com";
 const firstVisitKey = "draft-atlas-notice-seen";
-const welcomePromptKey = "draft-atlas-welcome-prompt-seen";
 const visitorIdKey = "draft-atlas-visitor-id";
 const showProjectNotice = ref(
   window.localStorage.getItem(firstVisitKey) !== "true"
-);
-const showWelcomePrompt = ref(
-  window.localStorage.getItem(welcomePromptKey) !== "true"
 );
 const utilityMenu = ref(null);
 let syncTimer = null;
@@ -64,25 +60,15 @@ const isManagement = computed(() => routePath.value.startsWith("/management"));
 const isMethodology = computed(() => routePath.value.startsWith("/methodology"));
 const isTeams = computed(() => routePath.value.startsWith("/teams"));
 const isSimulator = computed(() => routePath.value.startsWith("/simulator"));
-const isFeatureSpace = computed(() => routePath.value.startsWith("/feature-space"));
-const isRankings = computed(() => routePath.value.startsWith("/rankings"));
-const isLandingPage = computed(
-  () => !isManagement.value && !isMethodology.value && !isTeams.value && !isSimulator.value && !isFeatureSpace.value && !isRankings.value
+const isFeatureSpace = computed(
+  () => routePath.value === "/" || routePath.value.startsWith("/feature-space")
 );
+const isRankings = computed(() => routePath.value.startsWith("/rankings"));
+const isBpData = computed(() => routePath.value.startsWith("/bp-data"));
 
 function dismissProjectNotice() {
   window.localStorage.setItem(firstVisitKey, "true");
   showProjectNotice.value = false;
-}
-
-function dismissWelcomePrompt() {
-  window.localStorage.setItem(welcomePromptKey, "true");
-  showWelcomePrompt.value = false;
-}
-
-function openWelcomeDestination(path) {
-  dismissWelcomePrompt();
-  navigate(path);
 }
 
 const selectedLeague = computed(() =>
@@ -574,19 +560,19 @@ watch(selectedYear, () => {
       <div class="primary-tabs" aria-label="Analysis views">
         <a
           href="/"
-          :class="{ active: !isManagement && !isMethodology && !isTeams && !isSimulator && !isFeatureSpace && !isRankings }"
+          :class="{ active: isFeatureSpace }"
           @click.prevent="navigate('/')"
         >
-          <span>Explore</span>
-          <strong>Draft patterns</strong>
+          <span>Plan</span>
+          <strong>Hero matchups</strong>
         </a>
         <a
-          href="/teams"
-          :class="{ active: isTeams }"
-          @click.prevent="navigate('/teams')"
+          href="/rankings"
+          :class="{ active: isRankings }"
+          @click.prevent="navigate('/rankings')"
         >
-          <span>Compare</span>
-          <strong>Teams</strong>
+          <span>Rank</span>
+          <strong>Power board</strong>
         </a>
         <a
           href="/simulator"
@@ -597,20 +583,20 @@ watch(selectedYear, () => {
           <strong>BP draft</strong>
         </a>
         <a
-          href="/feature-space"
-          :class="{ active: isFeatureSpace }"
-          @click.prevent="navigate('/feature-space')"
+          href="/bp-data"
+          :class="{ active: isBpData }"
+          @click.prevent="navigate('/bp-data')"
         >
           <span>Explore</span>
-          <strong>Hero space</strong>
+          <strong>BP data</strong>
         </a>
         <a
-          href="/rankings"
-          :class="{ active: isRankings }"
-          @click.prevent="navigate('/rankings')"
+          href="/teams"
+          :class="{ active: isTeams }"
+          @click.prevent="navigate('/teams')"
         >
-          <span>Rank</span>
-          <strong>Power board</strong>
+          <span>Compare</span>
+          <strong>Teams</strong>
         </a>
       </div>
       <details ref="utilityMenu" class="utility-menu">
@@ -1019,7 +1005,8 @@ watch(selectedYear, () => {
   <HeroFeatureSpacePage v-else-if="isFeatureSpace" />
   <RankingsPage v-else-if="isRankings" />
   <MethodologyPage v-else-if="isMethodology" />
-  <VisualizationPage v-else />
+  <VisualizationPage v-else-if="isBpData" />
+  <HeroFeatureSpacePage v-else />
 
   <footer class="site-footnote">
     <div>
@@ -1065,23 +1052,6 @@ watch(selectedYear, () => {
       </a>
     </div>
   </footer>
-
-  <Transition name="welcome-prompt">
-    <aside
-      v-if="showWelcomePrompt && !showProjectNotice && !startupLoading && isLandingPage"
-      class="welcome-prompt"
-      aria-labelledby="welcome-prompt-title"
-    >
-      <button class="welcome-close" type="button" aria-label="Dismiss welcome prompt" @click="dismissWelcomePrompt">×</button>
-      <p class="eyebrow">Start here</p>
-      <h2 id="welcome-prompt-title">Turn a BP board into a next-action forecast.</h2>
-      <p>Try a live draft simulation, or see how the model turns teams and hero choices into probabilities.</p>
-      <div class="welcome-actions">
-        <button type="button" class="welcome-primary" @click="openWelcomeDestination('/simulator')">Try the BP simulator <span>→</span></button>
-        <button type="button" class="welcome-secondary" @click="openWelcomeDestination('/methodology')">See how it works</button>
-      </div>
-    </aside>
-  </Transition>
 
   <Transition name="project-notice">
     <section
@@ -1212,6 +1182,7 @@ watch(selectedYear, () => {
   align-items: center;
   gap: 1rem;
 }
+
 
 .primary-tabs {
   display: flex;
@@ -2054,6 +2025,7 @@ select {
     align-self: flex-end;
   }
 
+
   .primary-tabs a {
     min-width: 0;
     flex: 1;
@@ -2170,6 +2142,7 @@ select {
     top: .75rem;
     right: 0;
   }
+
 
   .page {
     padding: 1.1rem 0 3rem;

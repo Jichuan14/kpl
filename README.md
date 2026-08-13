@@ -118,7 +118,7 @@ performance data. Historical all-zero API placeholders are retained with
 | `/simulator` | Live draft board, recommendations, and Draft Coach |
 | `/teams` | Team-specific synergy patterns and draft tendencies |
 | `/rankings` | Time-decayed team Elo plus player rankings by position and hero |
-| `/feature-space` | Learned hero representation for the selected season |
+| `/feature-space` | Learned hero representation plus favorite-aware, multi-opponent hero recommendations |
 | `/methodology` | Definitions, caveats, and calculation explanations |
 | `/management` | Local data sync, analysis, and asset publishing |
 

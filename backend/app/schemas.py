@@ -122,6 +122,26 @@ class DraftSimulationRequest(BaseModel):
         return self
 
 
+class HeroMatchupRecommendationRequest(BaseModel):
+    model_config = {"extra": "forbid"}
+
+    league_id: str = Field(min_length=1, max_length=32)
+    favorite_hero_ids: list[int] = Field(default_factory=list, max_length=12)
+    opponent_hero_ids: list[int] = Field(min_length=1, max_length=5)
+    preferred_lane: Literal["clash", "mid", "jungle", "farm", "roam"] | None = None
+    limit: int = Field(default=6, ge=1, le=24)
+
+    @model_validator(mode="after")
+    def validate_heroes(self) -> "HeroMatchupRecommendationRequest":
+        if len(self.favorite_hero_ids) != len(set(self.favorite_hero_ids)):
+            raise ValueError("Favorite heroes must be unique")
+        if len(self.opponent_hero_ids) != len(set(self.opponent_hero_ids)):
+            raise ValueError("Opponent heroes must be unique")
+        if set(self.favorite_hero_ids).intersection(self.opponent_hero_ids):
+            raise ValueError("A favorite hero cannot also be an opponent pick")
+        return self
+
+
 class DraftSelectionCommentaryRequest(DraftSimulationRequest):
     """The board immediately before a selected pick or ban."""
 

@@ -3,7 +3,12 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import get_db
-from app.schemas import ApiResponse, DraftSelectionCommentaryRequest, DraftSimulationRequest
+from app.schemas import (
+    ApiResponse,
+    DraftSelectionCommentaryRequest,
+    DraftSimulationRequest,
+    HeroMatchupRecommendationRequest,
+)
 from app.services.draft_commentary import build_selection_commentary
 from app.services.draft_simulator import (
     FIXED_ROLLOUTS,
@@ -14,6 +19,7 @@ from app.services.draft_simulator import (
 from app.services.season_teams import validate_season_team_pair
 from app.services.coach_rate_limit import CoachRateLimiter
 from app.services.request_identity import client_key
+from app.services.hero_matchup import recommend_heroes
 
 router = APIRouter(prefix="/api/simulations", tags=["simulations"])
 
@@ -75,6 +81,27 @@ def draft_model(league_id: str = Query(..., min_length=1, max_length=32)) -> Api
 def feature_space(league_id: str = Query(..., min_length=1, max_length=32)) -> ApiResponse:
     try:
         return ApiResponse(data=learned_feature_space(league_id))
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/hero-matchup")
+def hero_matchup(body: HeroMatchupRecommendationRequest) -> ApiResponse:
+    """Recommend favorite-compatible heroes into one or more enemy picks."""
+    try:
+        space = learned_feature_space(body.league_id)
+        return ApiResponse(
+            data=recommend_heroes(
+                body.league_id,
+                space,
+                body.favorite_hero_ids,
+                body.opponent_hero_ids,
+                body.preferred_lane,
+                limit=body.limit,
+            )
+        )
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
