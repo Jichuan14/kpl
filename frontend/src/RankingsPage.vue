@@ -13,6 +13,7 @@ const loading = ref(false);
 const error = ref("");
 const board = ref("teams");
 const selectedHeroId = ref(0);
+const selectedPositionId = ref(0);
 const heroSearch = ref("");
 const playerSearch = ref("");
 const minimumGames = ref(5);
@@ -20,6 +21,7 @@ const heroDirectoryOpen = ref(false);
 
 const teams = computed(() => payload.value?.team_rankings || []);
 const heroes = computed(() => payload.value?.hero_rankings || []);
+const positions = computed(() => payload.value?.position_rankings || []);
 function heroUsage(hero) {
   return (hero?.players || []).reduce(
     (total, player) => total + Number(player.target_season_games || 0),
@@ -52,11 +54,39 @@ const shownPlayers = computed(() => {
         player.current_team_name.toLocaleLowerCase().includes(needle))
   );
 });
+const selectedPosition = computed(() =>
+  positions.value.find((position) => position.position === selectedPositionId.value)
+);
+const shownPositionPlayers = computed(() => {
+  const needle = playerSearch.value.trim().toLocaleLowerCase();
+  return (selectedPosition.value?.players || []).filter(
+    (player) =>
+      player.target_season_games >= Number(minimumGames.value || 1) &&
+      (!needle ||
+        player.player_name.toLocaleLowerCase().includes(needle) ||
+        player.current_team_name.toLocaleLowerCase().includes(needle))
+  );
+});
 const topTeams = computed(() => teams.value.slice(0, 3));
 const maxTeamScore = computed(() => Math.max(...teams.value.map((row) => row.hybrid_score), 1));
-const maxPlayerScore = computed(() =>
+const maxHeroPlayerScore = computed(() =>
   Math.max(...shownPlayers.value.map((row) => row.hybrid_score), 1)
 );
+const maxPositionPlayerScore = computed(() =>
+  Math.max(...shownPositionPlayers.value.map((row) => row.hybrid_score), 1)
+);
+
+const positionLabels = {
+  2: { en: "Mid", "zh-CN": "中路" },
+  4: { en: "Roam", "zh-CN": "游走" },
+  5: { en: "Jungle", "zh-CN": "打野" },
+  6: { en: "Clash lane", "zh-CN": "对抗路" },
+  7: { en: "Farm lane", "zh-CN": "发育路" },
+};
+
+function positionLabel(position) {
+  return positionLabels[position.position]?.[language.value] || position.position_name;
+}
 
 function number(value, digits = 0) {
   return Number(value || 0).toLocaleString(language.value, {
@@ -100,6 +130,9 @@ async function loadRankings() {
     if (!heroes.value.some((hero) => hero.hero_id === selectedHeroId.value)) {
       selectedHeroId.value = filteredHeroes.value[0]?.hero_id || 0;
     }
+    if (!positions.value.some((position) => position.position === selectedPositionId.value)) {
+      selectedPositionId.value = positions.value[0]?.position || 0;
+    }
   } catch (err) {
     payload.value = null;
     error.value = err.message || "Could not load power rankings.";
@@ -130,7 +163,8 @@ watch(leagueId, loadRankings);
         <h1>Power Rankings</h1>
         <p>
           Current strength without pretending old results last forever. Compare
-          team Elo or open any hero to see which active player performs best.
+          team Elo, compare players within each position, or open any hero to
+          see which active player performs best.
         </p>
       </div>
       <label class="season-control">
@@ -187,6 +221,17 @@ watch(leagueId, loadRankings);
           <span>02</span>
           <strong>Best on hero</strong>
           <small>Role-normalized performance by hero</small>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          :aria-selected="board === 'positions'"
+          :class="{ active: board === 'positions' }"
+          @click="board = 'positions'; playerSearch = ''"
+        >
+          <span>03</span>
+          <strong>Best by position</strong>
+          <small>All-hero performance within each role</small>
         </button>
       </div>
 
@@ -248,7 +293,7 @@ watch(leagueId, loadRankings);
         </div>
       </section>
 
-      <section v-else class="hero-board">
+      <section v-else-if="board === 'heroes'" class="hero-board">
         <aside class="hero-directory">
           <div class="directory-head">
             <div>
@@ -343,7 +388,7 @@ watch(leagueId, loadRankings);
               <div class="player-identity">
                 <strong>{{ player.player_name }}</strong>
                 <small>{{ player.current_team_name }} · {{ player.positions.join(" / ") }}</small>
-                <span><i :style="{ width: scoreWidth(player.hybrid_score, maxPlayerScore) }"></i></span>
+                <span><i :style="{ width: scoreWidth(player.hybrid_score, maxHeroPlayerScore) }"></i></span>
               </div>
               <div class="player-stat primary">
                 <strong>{{ number(player.hybrid_score, 1) }}</strong>
@@ -379,6 +424,110 @@ watch(leagueId, loadRankings);
           </aside>
         </div>
       </section>
+
+      <section v-else class="position-board">
+        <div class="section-heading position-heading">
+          <div>
+            <p class="rankings-eyebrow">Active players · All heroes</p>
+            <h2>Player rankings by position</h2>
+          </div>
+          <p>Compare players only with peers who play the same role.</p>
+        </div>
+
+        <div class="position-tabs" role="tablist" aria-label="Player position">
+          <button
+            v-for="position in positions"
+            :key="position.position"
+            type="button"
+            role="tab"
+            :aria-selected="position.position === selectedPositionId"
+            :class="{ active: position.position === selectedPositionId }"
+            @click="selectedPositionId = position.position; playerSearch = ''"
+          >
+            <strong>{{ positionLabel(position) }}</strong>
+            <small data-i18n-ignore>
+              {{ position.player_count }}{{ language === "zh-CN" ? " 名选手" : " players" }}
+            </small>
+          </button>
+        </div>
+
+        <template v-if="selectedPosition">
+          <section class="hero-filters position-filters">
+            <label>
+              <span>Current-season games</span>
+              <select v-model.number="minimumGames">
+                <option :value="1">At least 1</option>
+                <option :value="2">At least 2</option>
+                <option :value="3">At least 3</option>
+                <option :value="5">At least 5</option>
+              </select>
+            </label>
+            <label>
+              <span>Find player or team</span>
+              <input v-model="playerSearch" type="search" placeholder="Search…" />
+            </label>
+          </section>
+
+          <div class="player-board-card position-player-card">
+            <div class="player-board-head">
+              <div>
+                <p class="rankings-eyebrow">{{ positionLabel(selectedPosition) }}</p>
+                <h3 data-i18n-ignore>
+                  {{ shownPositionPlayers.length }}{{ language === "zh-CN" ? " 名符合条件的选手" : " qualifying players" }}
+                </h3>
+              </div>
+              <span data-i18n-ignore>
+                {{ language === "zh-CN" ? "跨英雄汇总 · 按位置标准化" : "All heroes · role normalized" }}
+              </span>
+            </div>
+            <article
+              v-for="(player, index) in shownPositionPlayers"
+              :key="`${selectedPosition.position}-${player.player_id}`"
+              class="player-row"
+            >
+              <span class="player-rank">{{ String(index + 1).padStart(2, "0") }}</span>
+              <div class="player-identity">
+                <strong>{{ player.player_name }}</strong>
+                <small data-i18n-ignore>
+                  {{ player.current_team_name }} ·
+                  {{ player.hero_count }}{{ language === "zh-CN" ? " 个英雄" : " heroes" }}
+                </small>
+                <span><i :style="{ width: scoreWidth(player.hybrid_score, maxPositionPlayerScore) }"></i></span>
+              </div>
+              <div class="player-stat primary">
+                <strong>{{ number(player.hybrid_score, 1) }}</strong>
+                <span>score</span>
+              </div>
+              <div class="player-stat">
+                <strong>{{ number(player.decayed_kda, 2) }}</strong>
+                <span>decayed KDA</span>
+              </div>
+              <div class="player-stat">
+                <strong>{{ percent(player.decayed_win_rate) }}</strong>
+                <span>Current-form win rate</span>
+              </div>
+              <div class="player-stat">
+                <strong>{{ player.games }}</strong>
+                <span>career games</span>
+              </div>
+              <div class="player-stat confidence">
+                <strong>{{ percent(player.confidence) }}</strong>
+                <span>confidence</span>
+              </div>
+            </article>
+            <p v-if="!shownPositionPlayers.length" class="empty-board">No players match these filters.</p>
+          </div>
+
+          <aside class="formula-note">
+            <strong>How position rankings work</strong>
+            <p data-i18n-ignore>
+              {{ language === "zh-CN"
+                ? "榜单汇总选手在该位置使用所有英雄的单局表现。每局仍只与同赛事、同位置的选手比较；旧比赛会随时间衰减，并加入四局中性先验。至少 5 局的默认筛选可避免当前赛季极小样本占据榜首。"
+                : "The board aggregates every hero a player used in this position. Each game is still compared only with the same role and competition; older games decay and four neutral games protect against small samples. The default five-game filter keeps tiny current-season samples from leading the visible board." }}
+            </p>
+          </aside>
+        </template>
+      </section>
     </template>
   </main>
 </template>
@@ -395,7 +544,7 @@ select,input { min-height:43px; padding:.62rem .75rem; border:1px solid var(--li
 .rankings-message { margin:.8rem 0 0; padding:1rem; border:1px solid var(--line); background:#fff; }.rankings-message.error{color:var(--warn)}
 .method-strip { display:grid; grid-template-columns:repeat(3,1fr); margin-top:.75rem; border:1px solid var(--line); background:rgba(255,255,255,.78); }
 .method-strip > div,.method-strip > a { margin:0; padding:1rem 1.15rem; border-right:1px solid var(--line); }.method-strip > :last-child{border-right:0}.method-strip>a{color:var(--ink);text-decoration:none}.method-strip>a:hover{background:rgba(15,138,107,.07)}.method-strip span,.method-strip strong{display:block}.method-strip span{color:var(--ink-soft);font-size:.6rem;text-transform:uppercase}.method-strip strong{margin-top:.25rem;font:700 1rem var(--display)}
-.board-switch { display:grid; grid-template-columns:1fr 1fr; gap:.7rem; margin-top:.75rem; }
+.board-switch { display:grid; grid-template-columns:repeat(3,1fr); gap:.7rem; margin-top:.75rem; }
 .board-switch button { display:grid; grid-template-columns:40px 1fr; gap:.12rem .7rem; padding:1.1rem; border:1px solid var(--line); background:rgba(255,255,255,.72); color:var(--ink); text-align:left; }.board-switch button>span{grid-row:1/3;color:var(--accent);font:700 .7rem var(--mono)}.board-switch strong{font:700 1.15rem var(--display)}.board-switch small{color:var(--ink-soft)}.board-switch button.active{border-color:var(--ink);background:var(--ink);color:#fff}.board-switch button.active small{color:#b9cbc8}
 .team-board { margin-top:2.4rem; }.section-heading,.player-board-head { display:flex; align-items:flex-end; justify-content:space-between; gap:2rem; }.section-heading h2{margin:0;font:800 clamp(2.2rem,5vw,4.5rem)/.9 var(--display);letter-spacing:-.06em}.section-heading>p{max-width:340px;margin:0;color:var(--ink-soft);font-size:.68rem;text-align:right}
 .podium { display:grid; grid-template-columns:repeat(3,1fr); gap:.7rem; margin-top:1.5rem; }.podium article{position:relative;min-height:210px;padding:1.35rem;border:1px solid var(--line);background:rgba(255,255,255,.82);overflow:hidden}.podium article::after{content:"";position:absolute;width:150px;height:150px;right:-65px;bottom:-70px;border-radius:50%;background:rgba(15,138,107,.09)}.podium-rank{color:var(--accent);font-weight:700}.team-monogram{display:grid;width:50px;height:50px;margin-top:1.4rem;place-items:center;border-radius:50%;background:var(--ink);color:#fff;font:700 .82rem var(--display)}.podium h3{margin:1rem 0 .5rem;font:700 1.45rem var(--display)}.podium article>strong{font:800 2.4rem var(--display)}.podium article>small{margin-left:.5rem;color:var(--ink-soft)}.podium .place-1{background:linear-gradient(135deg,#fff8e7,#edf4ef);border-color:rgba(196,92,38,.35)}
@@ -403,6 +552,7 @@ select,input { min-height:43px; padding:.62rem .75rem; border:1px solid var(--li
 .hero-board { display:grid; grid-template-columns:255px minmax(0,1fr); gap:.75rem; margin-top:.75rem; align-items:start; }.hero-directory{position:sticky;top:.75rem;max-height:calc(100vh - 1.5rem);padding:1rem;border:1px solid var(--line);background:rgba(255,255,255,.88);overflow:auto}.directory-head h2{margin:0;font:700 1.45rem var(--display)}.directory-toggle{display:none}.hero-search{display:grid;gap:.3rem;margin:1rem 0 .65rem}.hero-list{display:grid;gap:.25rem}.hero-list button{display:grid;grid-template-columns:40px 1fr;gap:.65rem;align-items:center;width:100%;padding:.55rem;border:1px solid transparent;background:transparent;color:var(--ink);text-align:left}.hero-list button.active{border-color:rgba(15,138,107,.3);background:rgba(15,138,107,.08)}.hero-list button>img,.hero-list button>span{width:40px;height:40px;object-fit:cover;border-radius:50%;background:#dce8e2}.hero-list button>span{display:grid;place-items:center}.hero-list strong,.hero-list small{display:block}.hero-list strong{font-family:var(--display)}.hero-list small{color:var(--ink-soft);font-size:.6rem}
 .hero-banner{display:flex;align-items:center;gap:1.2rem;padding:1.4rem;border:1px solid var(--line);background:linear-gradient(120deg,rgba(255,255,255,.9),rgba(231,241,236,.88))}.hero-portrait{display:grid;width:94px;height:94px;place-items:center;overflow:hidden;border-radius:50%;background:#dce8e2;font:800 2rem var(--display)}.hero-portrait img{width:100%;height:100%;object-fit:cover}.hero-banner h2{margin:0;font:800 clamp(2.5rem,6vw,5rem)/.9 var(--display);letter-spacing:-.06em}.hero-banner>div:last-child>span{display:block;margin-top:.5rem;color:var(--ink-soft)}
 .hero-filters{display:grid;grid-template-columns:minmax(180px,.5fr) minmax(240px,1fr);gap:.65rem;margin-top:.7rem;padding:1rem;border:1px solid var(--line);background:rgba(255,255,255,.76)}.hero-filters label{display:grid;gap:.3rem}.player-board-head h3{margin:0;font:700 1.55rem var(--display)}.player-board-head>span{color:var(--ink-soft);font-size:.65rem}.player-row{display:grid;grid-template-columns:30px minmax(180px,1fr) repeat(5,minmax(75px,.35fr));gap:.65rem;align-items:center;padding:.9rem 0;border-top:1px solid var(--line)}.player-row:first-of-type{margin-top:1rem}.player-rank{color:var(--accent);font-weight:700}.player-identity{min-width:0}.player-identity strong,.player-identity small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.player-identity strong{font:700 1rem var(--display)}.player-identity small{margin:.1rem 0 .42rem;color:var(--ink-soft);font-size:.62rem}.player-identity>span{width:min(150px,100%)}.player-stat strong,.player-stat span{display:block}.player-stat strong{font:700 .95rem var(--display)}.player-stat span{color:var(--ink-soft);font-size:.55rem;text-transform:uppercase}.player-stat.primary strong{color:var(--accent-deep);font-size:1.2rem}.formula-note{margin-top:.7rem;padding:1rem 1.2rem;border-left:3px solid var(--accent);background:rgba(255,255,255,.72)}.formula-note strong{font-family:var(--display)}.formula-note p{margin:.35rem 0 0;color:var(--ink-soft);font-size:.68rem;line-height:1.65}.empty-board{padding:2rem 0;color:var(--ink-soft);text-align:center}
+.position-board{margin-top:2.4rem}.position-tabs{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:.45rem;margin-top:1.5rem}.position-tabs button{display:grid;gap:.2rem;padding:1rem;border:1px solid var(--line);background:rgba(255,255,255,.76);color:var(--ink);text-align:left}.position-tabs button.active{border-color:var(--ink);background:var(--ink);color:#fff}.position-tabs strong{font:700 1rem var(--display)}.position-tabs small{color:var(--ink-soft);font-size:.6rem}.position-tabs button.active small{color:#b9cbc8}.position-filters{margin-top:.45rem}.position-player-card{margin-top:.45rem}
 @media(max-width:980px){.rankings-hero{display:grid;gap:2rem}.season-control{min-width:0}.hero-board{grid-template-columns:1fr}.hero-directory{position:static;max-height:none}.directory-head{display:flex;align-items:center;justify-content:space-between}.directory-toggle{display:block;padding:.6rem .75rem;border:1px solid var(--line);background:#fff;color:var(--ink)}.hero-search{display:none}.hero-list{display:none;grid-template-columns:repeat(3,1fr);margin-top:.8rem}.hero-list.open{display:grid}.player-row{grid-template-columns:28px minmax(160px,1fr) repeat(3,minmax(72px,.35fr))}.player-stat:nth-last-child(-n+2){display:none}}
-@media(max-width:680px){.rankings-page{width:min(100% - 1rem,640px);padding-top:.6rem}.rankings-hero{padding:1.5rem}.method-strip{display:none}.board-switch{grid-template-columns:repeat(2,minmax(0,1fr));gap:.35rem}.board-switch button{display:flex;min-height:44px;align-items:center;justify-content:center;padding:.5rem .4rem;text-align:center}.board-switch button>span,.board-switch button>small{display:none}.board-switch strong{font-size:.72rem;white-space:nowrap}.podium{grid-template-columns:repeat(3,minmax(0,1fr));gap:.35rem}.podium article{min-height:0;padding:.7rem}.podium article::after{width:90px;height:90px;right:-42px;bottom:-45px}.podium .team-monogram{width:34px;height:34px;margin-top:.7rem;font-size:.62rem}.podium h3{margin:.65rem 0 .3rem;font-size:.9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.podium article>strong{font-size:1.4rem}.podium article>small{display:block;margin:.2rem 0 0;font-size:.58rem}.hero-list.open{grid-template-columns:1fr}.hero-banner{align-items:flex-start}.hero-portrait{width:66px;height:66px}.hero-filters{display:none}.player-row{grid-template-columns:25px minmax(130px,1fr) 70px 75px}.player-stat:nth-of-type(n+5){display:none}.player-stat.confidence{display:none}.section-heading,.player-board-head{align-items:flex-start;flex-direction:column;gap:.5rem}.section-heading>p{text-align:left}}
+@media(max-width:680px){.rankings-page{width:min(100% - 1rem,640px);padding-top:.6rem}.rankings-hero{padding:1.5rem}.method-strip{display:none}.board-switch{grid-template-columns:repeat(3,minmax(0,1fr));gap:.35rem}.board-switch button{display:flex;min-height:44px;align-items:center;justify-content:center;padding:.5rem .4rem;text-align:center}.board-switch button>span,.board-switch button>small{display:none}.board-switch strong{font-size:.68rem;white-space:nowrap}.podium{grid-template-columns:repeat(3,minmax(0,1fr));gap:.35rem}.podium article{min-height:0;padding:.7rem}.podium article::after{width:90px;height:90px;right:-42px;bottom:-45px}.podium .team-monogram{width:34px;height:34px;margin-top:.7rem;font-size:.62rem}.podium h3{margin:.65rem 0 .3rem;font-size:.9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.podium article>strong{font-size:1.4rem}.podium article>small{display:block;margin:.2rem 0 0;font-size:.58rem}.hero-list.open{grid-template-columns:1fr}.hero-banner{align-items:flex-start}.hero-portrait{width:66px;height:66px}.hero-filters{display:none}.position-tabs{grid-template-columns:repeat(3,minmax(0,1fr));margin-top:1rem}.position-tabs button{padding:.7rem}.player-row{grid-template-columns:25px minmax(130px,1fr) 70px 75px}.player-stat:nth-of-type(n+5){display:none}.player-stat.confidence{display:none}.section-heading,.player-board-head{align-items:flex-start;flex-direction:column;gap:.5rem}.section-heading>p{text-align:left}}
 </style>

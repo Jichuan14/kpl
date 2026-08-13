@@ -123,6 +123,13 @@ export function fetchLearnedFeatureSpace(leagueId) {
   return request(`/api/simulations/feature-space?${params}`);
 }
 
+export function fetchHeroMatchupRecommendations(payload) {
+  return request("/api/simulations/hero-matchup", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export function simulateDraft(state) {
   return request("/api/simulations/draft", {
     method: "POST",

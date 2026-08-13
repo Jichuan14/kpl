@@ -88,6 +88,31 @@ class SimulationApiTest(unittest.TestCase):
         self.assertEqual(response.json()["data"]["model_type"], "sequence")
         self.assertEqual(simulate.call_args.kwargs["model_type"], "sequence")
 
+    def test_hero_matchup_endpoint_uses_feature_space_and_counter_evidence(self) -> None:
+        payload = {
+            "league_id": "20260003",
+            "favorite_hero_ids": [101, 102],
+            "opponent_hero_ids": [201, 202],
+            "preferred_lane": "mid",
+        }
+        with (
+            patch(
+                "app.api.simulation.learned_feature_space",
+                return_value={"rows": [{"hero_id": 101}]},
+            ),
+            patch(
+                "app.api.simulation.recommend_heroes",
+                return_value={"recommendations": [{"hero_id": 102}]},
+            ) as recommend,
+        ):
+            response = self.client.post("/api/simulations/hero-matchup", json=payload)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["data"]["recommendations"][0]["hero_id"], 102)
+        recommend.assert_called_once_with(
+            "20260003", {"rows": [{"hero_id": 101}]}, [101, 102], [201, 202], "mid", limit=6
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

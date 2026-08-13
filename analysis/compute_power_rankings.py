@@ -1,4 +1,4 @@
-"""Build cross-season team Elo and player-on-hero performance rankings.
+"""Build cross-season team Elo, player-on-hero, and player-by-position rankings.
 
 The selected season defines who is eligible for the boards and the ranking
 cutoff. Earlier exported seasons contribute evidence with exponential time
@@ -23,6 +23,14 @@ DEFAULT_HALF_LIFE_DAYS = 180.0
 DEFAULT_ELO_K = 24.0
 DEFAULT_ELO_REGRESSION_HALF_LIFE_DAYS = 365.0
 DEFAULT_OUTPUT_NAME = "power_rankings.json"
+PLAYER_METRIC_NAMES = (
+    "kda",
+    "mvp_score",
+    "participation_rate",
+    "damage_rate",
+    "gold_per_minute",
+)
+POSITION_ORDER = {6: 0, 5: 1, 2: 2, 7: 3, 4: 4}
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -270,6 +278,32 @@ def _player_events(
     return events
 
 
+def _score_player_events(events: list[dict[str, Any]]) -> None:
+    """Add a role-normalized single-game score to each player event."""
+    distributions: defaultdict[tuple[str, int, str], list[float]] = defaultdict(list)
+    for event in events:
+        group = (event["league_id"], event["position"])
+        for metric in PLAYER_METRIC_NAMES:
+            distributions[(*group, metric)].append(float(event[metric]))
+    for values in distributions.values():
+        values.sort()
+
+    for event in events:
+        group = (event["league_id"], event["position"])
+        components = {
+            metric: percentile(float(event[metric]), distributions[(*group, metric)])
+            for metric in PLAYER_METRIC_NAMES
+        }
+        event["game_score"] = 100.0 * (
+            0.40 * components["kda"]
+            + 0.18 * components["mvp_score"]
+            + 0.12 * components["participation_rate"]
+            + 0.10 * components["damage_rate"]
+            + 0.08 * components["gold_per_minute"]
+            + 0.12 * float(event["won"])
+        )
+
+
 def compute_hero_rankings(
     target_matches: list[dict[str, Any]],
     history: list[dict[str, Any]],
@@ -288,14 +322,7 @@ def compute_hero_rankings(
         target_pair_games[(event["player_id"], event["hero_id"])] += 1
 
     events = _player_events(history)
-    distributions: defaultdict[tuple[str, int, str], list[float]] = defaultdict(list)
-    metric_names = ("kda", "mvp_score", "participation_rate", "damage_rate", "gold_per_minute")
-    for event in events:
-        group = (event["league_id"], event["position"])
-        for metric in metric_names:
-            distributions[(*group, metric)].append(float(event[metric]))
-    for values in distributions.values():
-        values.sort()
+    _score_player_events(events)
 
     aggregates: defaultdict[tuple[str, int], dict[str, Any]] = defaultdict(
         lambda: {
@@ -315,32 +342,19 @@ def compute_hero_rankings(
         key = (event["player_id"], event["hero_id"])
         if key not in eligible_pairs:
             continue
-        group = (event["league_id"], event["position"])
-        components = {
-            metric: percentile(
-                float(event[metric]),
-                distributions[(*group, metric)],
-            )
-            for metric in metric_names
-        }
-        game_score = 100.0 * (
-            0.40 * components["kda"]
-            + 0.18 * components["mvp_score"]
-            + 0.12 * components["participation_rate"]
-            + 0.10 * components["damage_rate"]
-            + 0.08 * components["gold_per_minute"]
-            + 0.12 * float(event["won"])
-        )
         weight = decay_weight(event["played_at"], as_of, half_life_days)
         aggregate = aggregates[key]
-        aggregate["weighted_score"] += weight * game_score
+        aggregate["weighted_score"] += weight * event["game_score"]
         aggregate["weighted_kda"] += weight * event["kda"]
         aggregate["weighted_wins"] += weight * float(event["won"])
         aggregate["weight"] += weight
         aggregate["games"] += 1
         aggregate["team_names"].add(event["team_name"])
         aggregate["positions"].add(event["position_desc"] or str(event["position"]))
-        if aggregate["last_event"] is None or event["played_at"] > aggregate["last_event"]["played_at"]:
+        if (
+            aggregate["last_event"] is None
+            or event["played_at"] > aggregate["last_event"]["played_at"]
+        ):
             aggregate["last_event"] = event
 
     by_hero: defaultdict[int, list[dict[str, Any]]] = defaultdict(list)
@@ -396,6 +410,117 @@ def compute_hero_rankings(
     return hero_rows
 
 
+def compute_position_rankings(
+    target_matches: list[dict[str, Any]],
+    history: list[dict[str, Any]],
+    as_of: datetime,
+    *,
+    half_life_days: float = DEFAULT_HALF_LIFE_DAYS,
+) -> list[dict[str, Any]]:
+    """Rank active players within each role across all heroes they played."""
+    target_events = _player_events(target_matches)
+    eligible_pairs = {
+        (event["player_id"], event["position"])
+        for event in target_events
+        if event["position"] > 0
+    }
+    target_pair_games: defaultdict[tuple[str, int], int] = defaultdict(int)
+    for event in target_events:
+        key = (event["player_id"], event["position"])
+        if key in eligible_pairs:
+            target_pair_games[key] += 1
+
+    events = _player_events(history)
+    _score_player_events(events)
+    aggregates: defaultdict[tuple[str, int], dict[str, Any]] = defaultdict(
+        lambda: {
+            "weighted_score": 0.0,
+            "weighted_kda": 0.0,
+            "weighted_wins": 0.0,
+            "weight": 0.0,
+            "games": 0,
+            "team_names": set(),
+            "hero_ids": set(),
+            "last_event": None,
+        }
+    )
+    for event in events:
+        key = (event["player_id"], event["position"])
+        if key not in eligible_pairs:
+            continue
+        weight = decay_weight(event["played_at"], as_of, half_life_days)
+        aggregate = aggregates[key]
+        aggregate["weighted_score"] += weight * event["game_score"]
+        aggregate["weighted_kda"] += weight * event["kda"]
+        aggregate["weighted_wins"] += weight * float(event["won"])
+        aggregate["weight"] += weight
+        aggregate["games"] += 1
+        aggregate["team_names"].add(event["team_name"])
+        aggregate["hero_ids"].add(event["hero_id"])
+        if aggregate["last_event"] is None or event["played_at"] > aggregate["last_event"]["played_at"]:
+            aggregate["last_event"] = event
+
+    by_position: defaultdict[int, list[dict[str, Any]]] = defaultdict(list)
+    position_names: dict[int, str] = {}
+    for (player_id, position), aggregate in aggregates.items():
+        weight = float(aggregate["weight"])
+        if weight <= 0:
+            continue
+        last_event = aggregate["last_event"]
+        position_names[position] = last_event["position_desc"] or str(position)
+        # Match the player-hero board's conservative four-game neutral prior.
+        hybrid_score = (aggregate["weighted_score"] + 4.0 * 50.0) / (weight + 4.0)
+        decayed_win_rate = (aggregate["weighted_wins"] + 1.5) / (weight + 3.0)
+        by_position[position].append(
+            {
+                "player_id": player_id,
+                "player_name": last_event["player_name"],
+                "source_player_name": last_event["source_player_name"],
+                "current_team_id": last_event["team_id"],
+                "current_team_name": last_event["team_name"],
+                "teams": sorted(name for name in aggregate["team_names"] if name),
+                "position": position,
+                "position_name": position_names[position],
+                "hybrid_score": round(hybrid_score, 2),
+                "decayed_kda": round(aggregate["weighted_kda"] / weight, 2),
+                "decayed_win_rate": round(decayed_win_rate, 6),
+                "games": aggregate["games"],
+                "effective_games": round(weight, 2),
+                "target_season_games": target_pair_games[(player_id, position)],
+                "hero_count": len(aggregate["hero_ids"]),
+                "confidence": round(1.0 - math.exp(-weight / 5.0), 6),
+                "last_played": last_event["played_at"].isoformat(sep=" "),
+            }
+        )
+
+    position_rows: list[dict[str, Any]] = []
+    for position, players in by_position.items():
+        players.sort(
+            key=lambda row: (
+                -row["hybrid_score"],
+                -row["effective_games"],
+                row["player_name"],
+            )
+        )
+        for rank, row in enumerate(players, 1):
+            row["rank"] = rank
+        position_rows.append(
+            {
+                "position": position,
+                "position_name": position_names[position],
+                "player_count": len(players),
+                "players": players,
+            }
+        )
+    position_rows.sort(
+        key=lambda row: (
+            POSITION_ORDER.get(row["position"], len(POSITION_ORDER)),
+            row["position"],
+        )
+    )
+    return position_rows
+
+
 def build_rankings(
     target_matches: list[dict[str, Any]],
     history: list[dict[str, Any]],
@@ -419,8 +544,14 @@ def build_rankings(
         half_life_days=half_life_days,
         hero_catalog=hero_catalog,
     )
+    position_rankings = compute_position_rankings(
+        target_matches,
+        history,
+        as_of,
+        half_life_days=half_life_days,
+    )
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "league": {
             "league_id": league_id,
             "league_name": str(target_matches[0].get("league_name") or league_id)
@@ -448,15 +579,25 @@ def build_rankings(
                 "prior_effective_games": 4.0,
                 "normalization": "within season and role",
             },
+            "player_position_score": {
+                "source": "same role-normalized single-game score as player_hero_score",
+                "aggregation": "all heroes played in the position",
+                "prior_effective_games": 4.0,
+            },
         },
         "summary": {
             "history_matches": len(history),
             "team_count": len(team_rankings),
             "hero_count": len(hero_rankings),
             "player_hero_rows": sum(row["player_count"] for row in hero_rankings),
+            "position_count": len(position_rankings),
+            "player_position_rows": sum(
+                row["player_count"] for row in position_rankings
+            ),
         },
         "team_rankings": team_rankings,
         "hero_rankings": hero_rankings,
+        "position_rankings": position_rankings,
     }
 
 
@@ -507,6 +648,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     print(
         f"Wrote {len(artifact['team_rankings'])} teams and "
+        f"{artifact['summary']['player_position_rows']} player-position and "
         f"{artifact['summary']['player_hero_rows']} player-hero rows: {output}"
     )
     return 0

@@ -25,6 +25,8 @@ def player(
     participation: float,
     damage_rate: float,
     gold: int,
+    position: int = 1,
+    position_desc: str = "Clash",
 ) -> dict:
     return {
         "team_id": team_id,
@@ -32,8 +34,8 @@ def player(
         "player_name": f"{team_name}.{name}",
         "hero_id": hero_id,
         "hero_name": f"Hero {hero_id}",
-        "position": 1,
-        "position_desc": "Clash",
+        "position": position,
+        "position_desc": position_desc,
         "performance_data_available": True,
         "kda": kda,
         "mvp_score": mvp,
@@ -124,7 +126,7 @@ class PowerRankingsTest(unittest.TestCase):
             hero_catalog={101: "Hero 101", 999: "Unused Hero"},
         )
 
-        self.assertEqual(artifact["schema_version"], 1)
+        self.assertEqual(artifact["schema_version"], 2)
         self.assertEqual(artifact["team_rankings"][0]["team_id"], "a")
         hero = next(row for row in artifact["hero_rankings"] if row["hero_id"] == 101)
         self.assertEqual(hero["hero_id"], 101)
@@ -137,6 +139,65 @@ class PowerRankingsTest(unittest.TestCase):
         self.assertEqual(hero["players"][0]["target_season_games"], 1)
         unused = next(row for row in artifact["hero_rankings"] if row["hero_id"] == 999)
         self.assertEqual(unused["players"], [])
+        position = artifact["position_rankings"][0]
+        self.assertEqual(position["position"], 1)
+        self.assertEqual(position["players"][0]["player_name"], "Strong")
+        self.assertEqual(artifact["summary"]["player_position_rows"], 2)
+
+    def test_position_ranking_aggregates_heroes_without_mixing_roles(self) -> None:
+        played_at = datetime(2026, 7, 1)
+        mid_a = player(
+            "Flexible",
+            "a",
+            "Team A",
+            101,
+            kda=8,
+            mvp=9,
+            participation=80,
+            damage_rate=0.25,
+            gold=11000,
+            position=2,
+            position_desc="Mid",
+        )
+        mid_b = {**mid_a, "hero_id": 102, "hero_name": "Hero 102"}
+        jungle = player(
+            "Jungler",
+            "b",
+            "Team B",
+            103,
+            kda=4,
+            mvp=6,
+            participation=70,
+            damage_rate=0.2,
+            gold=10000,
+            position=5,
+            position_desc="Jungle",
+        )
+        current = match(
+            "current",
+            "target-league",
+            played_at,
+            "a",
+            [mid_a, mid_b, jungle],
+        )
+
+        artifact = build_rankings(
+            [current],
+            [current],
+            played_at,
+            ["target-league"],
+        )
+
+        mid_board = next(
+            row for row in artifact["position_rankings"] if row["position"] == 2
+        )
+        jungle_board = next(
+            row for row in artifact["position_rankings"] if row["position"] == 5
+        )
+        self.assertEqual(mid_board["players"][0]["games"], 2)
+        self.assertEqual(mid_board["players"][0]["hero_count"], 2)
+        self.assertEqual(mid_board["players"][0]["target_season_games"], 2)
+        self.assertEqual(jungle_board["players"][0]["games"], 1)
 
 
 if __name__ == "__main__":

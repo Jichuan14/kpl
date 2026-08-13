@@ -117,8 +117,8 @@ performance data. Historical all-zero API placeholders are retained with
 | `/` | Multi-season Draft Atlas relationship explorer |
 | `/simulator` | Live draft board, recommendations, and Draft Coach |
 | `/teams` | Team-specific synergy patterns and draft tendencies |
-| `/rankings` | Time-decayed team Elo and per-hero player rankings |
-| `/feature-space` | Learned hero representation for the selected season |
+| `/rankings` | Time-decayed team Elo plus player rankings by position and hero |
+| `/feature-space` | Learned hero representation plus favorite-aware, multi-opponent hero recommendations |
 | `/methodology` | Definitions, caveats, and calculation explanations |
 | `/management` | Local data sync, analysis, and asset publishing |
 
@@ -148,8 +148,9 @@ The derived statistics include ban responses, pick synergies, counter-picks,
 counter-bans, opening-priority meta heroes, team-specific combinations, and
 cross-season power rankings. Rankings use a 180-day evidence half-life: team
 scores blend opponent-adjusted Elo with a decayed Bayesian win rate, while
-per-hero player scores blend role-normalized KDA and performance metrics with
-small-sample shrinkage.
+player scores blend role-normalized KDA and performance metrics with
+small-sample shrinkage. Player boards are available both by position across all
+heroes and by individual hero.
 Candidate rates use legal opportunities as their denominator, with smoothing
 and confidence intervals so sparse observations remain visible as sparse.
 
