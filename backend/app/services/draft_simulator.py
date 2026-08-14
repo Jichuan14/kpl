@@ -18,6 +18,7 @@ from app.services.sequence_model_runtime import (
     prepare_sequence_parameters,
     sequence_logits,
 )
+from app.services.draft_strategy import hero_lane_masks, second_ban_farm_conflicts
 
 _CACHE: dict[Path, tuple[int, dict[str, Any]]] = {}
 _LEARNABLE_CACHE: dict[Path, tuple[int, dict[str, Any]]] = {}
@@ -294,6 +295,11 @@ def load_sequence_model(league_id: str) -> dict[str, Any]:
     model["_hero_ids"] = hero_ids
     model["_hero_to_index"] = hero_to_index
     model["_team_to_index"] = team_to_index
+    model["_hero_lane_masks"] = hero_lane_masks(
+        hero_ids,
+        expected_feature_names,
+        feature_matrix,
+    )
     model["_prepared"] = prepare_sequence_parameters(model, feature_matrix)
     _SEQUENCE_CACHE[path] = (modified, model)
     return model
@@ -744,6 +750,21 @@ def _predict_sequence(
         for hero_id in _legal_heroes(base_model, state, step)
         if hero_id in hero_to_index
     ]
+    side = str(step["side"])
+    opponent_side = "red" if side == "blue" else "blue"
+    strategic_conflicts = second_ban_farm_conflicts(
+        action=str(step["action"]),
+        bp_order=int(step["bp_order"]),
+        opponent_pick_ids=state.get(f"{opponent_side}_picks", []),
+        candidate_ids=legal_hero_ids,
+        lane_masks=sequence_model["_hero_lane_masks"],
+        feature_names=sequence_model["feature_names"],
+    )
+    strategically_legal_hero_ids = [
+        hero_id for hero_id in legal_hero_ids if hero_id not in strategic_conflicts
+    ]
+    if strategically_legal_hero_ids:
+        legal_hero_ids = strategically_legal_hero_ids
     if not legal_hero_ids:
         return []
     legal_indices = np.asarray(
@@ -751,8 +772,6 @@ def _predict_sequence(
     )
     legal_mask = np.zeros(len(hero_ids), dtype=np.bool_)
     legal_mask[legal_indices] = True
-    side = str(step["side"])
-    opponent_side = "red" if side == "blue" else "blue"
     team_to_index = sequence_model["_team_to_index"]
     acting_team_id = str(state.get(f"{side}_team_id") or "")
     opponent_team_id = str(state.get(f"{opponent_side}_team_id") or "")

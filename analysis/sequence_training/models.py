@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import math
 import random
+import sys
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -13,6 +14,18 @@ from typing import Any, Iterable
 import torch
 from torch import Tensor, nn
 from torch.nn import functional as F
+
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+BACKEND_DIR = REPO_ROOT / "backend"
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(BACKEND_DIR))
+
+from app.services.draft_strategy import (  # noqa: E402
+    STRATEGIC_CONSTRAINT_VERSION,
+    hero_lane_masks,
+    second_ban_farm_conflicts,
+)
 
 
 MAX_ACTIONS = 20
@@ -709,6 +722,11 @@ def prepare_data(
         dtype=torch.float32,
     )
     feature_names = [*feature_artifact["feature_names"], "feature_known"]
+    lane_masks = hero_lane_masks(
+        hero_ids,
+        feature_names,
+        hero_features.tolist(),
+    )
     hero_names = {
         hero_id: str(feature_rows[hero_id].get("hero_name") or hero_id)
         for hero_id in hero_ids
@@ -836,6 +854,21 @@ def prepare_data(
                     team_to_index.get(str(row["opponent_team_id"]), 0)
                 )
                 legal_ids = {int(hero_id) for hero_id in row["legal_hero_ids"]}
+                legal_ids -= second_ban_farm_conflicts(
+                    action=str(row["action"]),
+                    bp_order=position,
+                    opponent_pick_ids=row.get("current_opponent_picks", []),
+                    candidate_ids=legal_ids,
+                    lane_masks=lane_masks,
+                    feature_names=feature_names,
+                )
+                if int(row["selected_hero_id"]) not in legal_ids:
+                    raise ValueError(
+                        "Strategic ban mask removed an observed selection: "
+                        f"season={row['_season']} match={row['match_id']} "
+                        f"battle={row['battle_id']} bp_order={position} "
+                        f"hero_id={row['selected_hero_id']}"
+                    )
                 values["legal_mask"].append(
                     [hero_id in legal_ids for hero_id in hero_ids]
                 )

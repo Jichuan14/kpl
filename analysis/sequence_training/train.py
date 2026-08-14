@@ -17,6 +17,7 @@ from models import (
     MODEL_TYPES,
     ModelConfig,
     PairwiseResponseModel,
+    STRATEGIC_CONSTRAINT_VERSION,
     benchmark_single_prediction,
     find_repo_root,
     pairwise_example,
@@ -125,6 +126,10 @@ def main() -> None:
         "train_decisions": len(data.train),
         "validation_decisions": len(data.validation),
         "holdout_decisions": len(data.holdout),
+        "strategic_constraints": {
+            "version": STRATEGIC_CONSTRAINT_VERSION,
+            "second_ban_farm_only_conflicts": True,
+        },
         "config": {
             **vars(args),
             "output_dir": str(output_dir),

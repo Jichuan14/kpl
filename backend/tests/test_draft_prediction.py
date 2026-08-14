@@ -30,6 +30,57 @@ def model_fixture() -> dict:
 
 
 class PredictNextActionTest(unittest.TestCase):
+    def test_sequence_second_ban_excludes_farm_only_candidate_after_opponent_farm_pick(self) -> None:
+        base_model = {
+            "hero_ids": [101, 102, 103],
+            "hero_names": {"101": "Opponent farm", "102": "Farm only", "103": "Mid"},
+            "_hero_role_masks": {101: 1, 102: 1, 103: 2},
+        }
+        sequence_model = {
+            "_hero_ids": [101, 102, 103],
+            "_hero_to_index": {101: 0, 102: 1, 103: 2},
+            "_team_to_index": {"blue-team": 1, "red-team": 2},
+            "_hero_lane_masks": {101: 1, 102: 1, 103: 2},
+            "feature_names": ["lane__farm", "lane__mid"],
+            "_prepared": {},
+            "team_training_decisions": {},
+        }
+        state = {
+            "blue_team_id": "blue-team",
+            "red_team_id": "red-team",
+            "blue_picks": [],
+            "red_picks": [101],
+            "blue_bans": [],
+            "red_bans": [],
+        }
+        step = {
+            "bp_order": 11,
+            "side": "blue",
+            "action": "ban",
+            "team_action_type_number": 3,
+        }
+        empty_history = tuple(
+            draft_simulator.np.asarray([], dtype=draft_simulator.np.int64)
+            for _ in range(5)
+        )
+
+        with (
+            patch.object(draft_simulator, "_sequence_history", return_value=empty_history),
+            patch.object(
+                draft_simulator,
+                "sequence_logits",
+                return_value=draft_simulator.np.asarray([-1e9, -1e9, 0.0]),
+            ) as logits,
+        ):
+            rows = draft_simulator._predict_sequence(
+                base_model, sequence_model, state, step
+            )
+
+        self.assertEqual([row["hero_id"] for row in rows], [103])
+        self.assertEqual(
+            logits.call_args.kwargs["legal_mask"].tolist(), [False, False, True]
+        )
+
     def test_sequence_loader_rejects_a_bad_parameter_checksum(self) -> None:
         artifact = {
             "schema_version": 3,

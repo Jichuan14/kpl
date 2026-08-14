@@ -198,6 +198,7 @@ def main() -> None:
             "best_epoch": model_result.get("best_epoch"),
             "validation_metrics": model_result.get("validation_metrics"),
             "holdout_metrics": checkpoint.get("holdout_metrics"),
+            "strategic_constraints": experiment.get("strategic_constraints", {}),
             "source_checkpoint_sha256": checkpoint_hash,
             "artifact_status": "experimental_chronological_checkpoint",
         },
