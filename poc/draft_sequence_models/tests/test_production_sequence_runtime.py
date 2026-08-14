@@ -50,6 +50,15 @@ class ProductionSequenceRuntimeParityTest(unittest.TestCase):
                 text=True,
             )
             artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
+        self.assertEqual(
+            artifact["inference_constraints"]["second_ban_single_lane_conflicts"],
+            ["clash", "mid", "jungle", "farm", "roam"],
+        )
+        self.assertFalse(
+            artifact["training"]["training_constraints"][
+                "strategic_lane_mask_applied"
+            ]
+        )
         prepared = prepare_sequence_parameters(
             artifact, checkpoint["state_dict"]["bag.hero_features"].numpy()
         )

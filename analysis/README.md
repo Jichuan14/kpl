@@ -243,7 +243,9 @@ python analysis/train_sequence_draft_choice_model.py --league-id 20260003
 `hero_lane_profiles.json` is a separate, versioned constraint artifact. It
 uses repeated cross-lane play to label flex heroes, exempts ambiguous heroes,
 and applies second-round single-lane ban constraints across clash, mid,
-jungle, farm, and roam. Multi-lane heroes are never removed by this rule.
+jungle, farm, and roam. Multi-lane heroes are never removed by this rule. The
+constraint is inference-only: sequence-model training retains the complete
+game-legal candidate mask and does not optimize against this strategic rule.
 
 This command trains the frozen bag baseline and GRU residual with chronological
 validation and holdout windows, then atomically writes:

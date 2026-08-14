@@ -164,6 +164,13 @@ def main() -> None:
             args.experiment_results.resolve().read_text(encoding="utf-8")
         )
         model_result = experiment.get("models", {}).get("hybrid_bag_gru", {})
+    training_constraints = experiment.get("training_constraints")
+    if training_constraints is None:
+        legacy_training_mask = bool(experiment.get("strategic_constraints"))
+        training_constraints = {
+            "game_legal_mask_only": not legacy_training_mask,
+            "strategic_lane_mask_applied": legacy_training_mask,
+        }
 
     checkpoint_hash = hashlib.sha256(checkpoint_path.read_bytes()).hexdigest()
     parameters = {
@@ -183,7 +190,20 @@ def main() -> None:
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "feature_artifact": feature_path.name,
         "lane_profile_artifact": "hero_lane_profiles.json",
-        "lane_profile_sha256": hashlib.sha256(lane_profile_path.read_bytes()).hexdigest(),
+        "lane_profile_sha256": hashlib.sha256(
+            lane_profile_path.read_bytes()
+        ).hexdigest(),
+        "inference_constraints": {
+            "version": 2,
+            "second_ban_single_lane_conflicts": [
+                "clash",
+                "mid",
+                "jungle",
+                "farm",
+                "roam",
+            ],
+            "multi_lane_and_uncertain_heroes_exempt": True,
+        },
         "feature_names": feature_names,
         "hero_ids": hero_ids,
         "hero_names": {
@@ -204,7 +224,7 @@ def main() -> None:
             "best_epoch": model_result.get("best_epoch"),
             "validation_metrics": model_result.get("validation_metrics"),
             "holdout_metrics": checkpoint.get("holdout_metrics"),
-            "strategic_constraints": experiment.get("strategic_constraints", {}),
+            "training_constraints": training_constraints,
             "source_checkpoint_sha256": checkpoint_hash,
             "artifact_status": "experimental_chronological_checkpoint",
         },

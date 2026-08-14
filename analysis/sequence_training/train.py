@@ -17,7 +17,6 @@ from models import (
     MODEL_TYPES,
     ModelConfig,
     PairwiseResponseModel,
-    STRATEGIC_CONSTRAINT_VERSION,
     benchmark_single_prediction,
     find_repo_root,
     pairwise_example,
@@ -126,17 +125,9 @@ def main() -> None:
         "train_decisions": len(data.train),
         "validation_decisions": len(data.validation),
         "holdout_decisions": len(data.holdout),
-        "strategic_constraints": {
-            "version": STRATEGIC_CONSTRAINT_VERSION,
-            "lane_profile_artifact": "hero_lane_profiles.json",
-            "second_ban_single_lane_conflicts": [
-                "clash",
-                "mid",
-                "jungle",
-                "farm",
-                "roam",
-            ],
-            "multi_lane_and_uncertain_heroes_exempt": True,
+        "training_constraints": {
+            "game_legal_mask_only": True,
+            "strategic_lane_mask_applied": False,
         },
         "config": {
             **vars(args),
