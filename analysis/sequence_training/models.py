@@ -23,8 +23,8 @@ if str(BACKEND_DIR) not in sys.path:
 
 from app.services.draft_strategy import (  # noqa: E402
     STRATEGIC_CONSTRAINT_VERSION,
-    hero_lane_masks,
-    second_ban_farm_conflicts,
+    hero_lane_profiles,
+    second_ban_lane_conflicts,
 )
 
 
@@ -722,11 +722,12 @@ def prepare_data(
         dtype=torch.float32,
     )
     feature_names = [*feature_artifact["feature_names"], "feature_known"]
-    lane_masks = hero_lane_masks(
-        hero_ids,
-        feature_names,
-        hero_features.tolist(),
+    lane_profile_artifact = json.loads(
+        (analysis_dir / "hero_lane_profiles.json").read_text(encoding="utf-8")
     )
+    lane_masks, constraint_eligible_ids = hero_lane_profiles(lane_profile_artifact)
+    if not set(hero_ids).issubset(lane_masks):
+        raise ValueError("Hero lane profiles do not cover the training vocabulary")
     hero_names = {
         hero_id: str(feature_rows[hero_id].get("hero_name") or hero_id)
         for hero_id in hero_ids
@@ -854,13 +855,13 @@ def prepare_data(
                     team_to_index.get(str(row["opponent_team_id"]), 0)
                 )
                 legal_ids = {int(hero_id) for hero_id in row["legal_hero_ids"]}
-                legal_ids -= second_ban_farm_conflicts(
+                legal_ids -= second_ban_lane_conflicts(
                     action=str(row["action"]),
                     bp_order=position,
                     opponent_pick_ids=row.get("current_opponent_picks", []),
                     candidate_ids=legal_ids,
                     lane_masks=lane_masks,
-                    feature_names=feature_names,
+                    constraint_eligible_ids=constraint_eligible_ids,
                 )
                 if int(row["selected_hero_id"]) not in legal_ids:
                     raise ValueError(

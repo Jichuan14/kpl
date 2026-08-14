@@ -236,8 +236,14 @@ pipeline can retrain the artifact.
 From a Python environment containing PyTorch, run:
 
 ```bash
+python analysis/build_hero_lane_profiles.py --through-season 20260003
 python analysis/train_sequence_draft_choice_model.py --league-id 20260003
 ```
+
+`hero_lane_profiles.json` is a separate, versioned constraint artifact. It
+uses repeated cross-lane play to label flex heroes, exempts ambiguous heroes,
+and applies second-round single-lane ban constraints across clash, mid,
+jungle, farm, and roam. Multi-lane heroes are never removed by this rule.
 
 This command trains the frozen bag baseline and GRU residual with chronological
 validation and holdout windows, then atomically writes:

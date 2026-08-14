@@ -128,7 +128,15 @@ def main() -> None:
         "holdout_decisions": len(data.holdout),
         "strategic_constraints": {
             "version": STRATEGIC_CONSTRAINT_VERSION,
-            "second_ban_farm_only_conflicts": True,
+            "lane_profile_artifact": "hero_lane_profiles.json",
+            "second_ban_single_lane_conflicts": [
+                "clash",
+                "mid",
+                "jungle",
+                "farm",
+                "roam",
+            ],
+            "multi_lane_and_uncertain_heroes_exempt": True,
         },
         "config": {
             **vars(args),

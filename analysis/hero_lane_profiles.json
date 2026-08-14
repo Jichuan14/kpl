@@ -1,0 +1,3682 @@
+{
+  "schema_version": 1,
+  "artifact_type": "hero_lane_profiles",
+  "lanes": [
+    "clash",
+    "mid",
+    "jungle",
+    "farm",
+    "roam"
+  ],
+  "source": {
+    "feature_path": "analysis/hero_draft_feature_vectors.json",
+    "feature_sha256": "a96f5e3ca3d643ecea2bd7c10c0138987b3e0ac857b2c4c51d7ce0be588ca9ef",
+    "decision_paths": [
+      "analysis/exports/20250001/bp_decisions.jsonl",
+      "analysis/exports/20250002/bp_decisions.jsonl",
+      "analysis/exports/20250003/bp_decisions.jsonl",
+      "analysis/exports/20260001/bp_decisions.jsonl",
+      "analysis/exports/20260002/bp_decisions.jsonl",
+      "analysis/exports/20260003/bp_decisions.jsonl"
+    ],
+    "decision_sha256": {
+      "analysis/exports/20250001/bp_decisions.jsonl": "7c31015c938278be331e25c411436fd4e0a02c2b2555be6657c041bddf1ad247",
+      "analysis/exports/20250002/bp_decisions.jsonl": "53e46e27a5334704cff60f4a488709dd1b79145ef03d0cc41afb1dc1ce076688",
+      "analysis/exports/20250003/bp_decisions.jsonl": "5b43f4dbdddcab85b57a3c5eaedaa428b740a5dc8fb71e25df9de9b21b0d20f2",
+      "analysis/exports/20260001/bp_decisions.jsonl": "125e9bd9766e05bc001a5cc7ddbc758d082336d0d5f8548afd145601ba7d323b",
+      "analysis/exports/20260002/bp_decisions.jsonl": "bd27d98d45c016f67e4b05f6fad24f570b33ff157c9ae1f34af87b1849616971",
+      "analysis/exports/20260003/bp_decisions.jsonl": "ec2ef870663fc0a61d3c5a4afec5be5dd07f408aabd5e0f1c2499af2da413054"
+    },
+    "seasons": [
+      "20250001",
+      "20250002",
+      "20250003",
+      "20260001",
+      "20260002",
+      "20260003"
+    ]
+  },
+  "policy": {
+    "secondary_lane_minimum_picks": 10,
+    "secondary_lane_minimum_share": 0.1,
+    "secondary_lane_minimum_teams": 2,
+    "secondary_lane_minimum_seasons": 2,
+    "observed_same_lane_second_ban_exempts_candidate": true
+  },
+  "rows": [
+    {
+      "hero_id": 105,
+      "hero_name": "廉颇",
+      "primary_lane": "clash",
+      "lanes": [
+        "clash",
+        "roam"
+      ],
+      "classification": "flex",
+      "constraint_eligible": false,
+      "constraint_exemption_reason": "multi_lane",
+      "observed_pick_count": 126,
+      "lane_evidence": {
+        "clash": {
+          "picks": 4,
+          "share": 0.031746,
+          "teams": 4,
+          "seasons": 2
+        },
+        "roam": {
+          "picks": 122,
+          "share": 0.968254,
+          "teams": 17,
+          "seasons": 6
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 106,
+      "hero_name": "小乔",
+      "primary_lane": "mid",
+      "lanes": [
+        "mid"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": false,
+      "constraint_exemption_reason": "observed_same_lane_second_ban",
+      "observed_pick_count": 411,
+      "lane_evidence": {
+        "mid": {
+          "picks": 411,
+          "share": 1.0,
+          "teams": 28,
+          "seasons": 6
+        }
+      },
+      "same_lane_second_ban_counterexamples": [
+        {
+          "season": "20260001",
+          "match_id": "2026032901",
+          "battle_id": "48251408_26_1774783279",
+          "bp_order": 14,
+          "locking_opponent_pick_ids": [
+            127
+          ]
+        }
+      ]
+    },
+    {
+      "hero_id": 107,
+      "hero_name": "赵云",
+      "primary_lane": "jungle",
+      "lanes": [
+        "jungle"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 126,
+      "lane_evidence": {
+        "jungle": {
+          "picks": 126,
+          "share": 1.0,
+          "teams": 20,
+          "seasons": 2
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 108,
+      "hero_name": "墨子",
+      "primary_lane": "mid",
+      "lanes": [
+        "mid",
+        "roam"
+      ],
+      "classification": "flex",
+      "constraint_eligible": false,
+      "constraint_exemption_reason": "multi_lane",
+      "observed_pick_count": 161,
+      "lane_evidence": {
+        "mid": {
+          "picks": 1,
+          "share": 0.006211,
+          "teams": 1,
+          "seasons": 1
+        },
+        "roam": {
+          "picks": 160,
+          "share": 0.993789,
+          "teams": 20,
+          "seasons": 6
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 109,
+      "hero_name": "妲己",
+      "primary_lane": "mid",
+      "lanes": [
+        "mid"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 3,
+      "lane_evidence": {
+        "mid": {
+          "picks": 3,
+          "share": 1.0,
+          "teams": 2,
+          "seasons": 2
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 110,
+      "hero_name": "嬴政",
+      "primary_lane": "mid",
+      "lanes": [
+        "mid"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 316,
+      "lane_evidence": {
+        "mid": {
+          "picks": 316,
+          "share": 1.0,
+          "teams": 26,
+          "seasons": 6
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 111,
+      "hero_name": "孙尚香",
+      "primary_lane": "farm",
+      "lanes": [
+        "farm"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 428,
+      "lane_evidence": {
+        "farm": {
+          "picks": 405,
+          "share": 0.946262,
+          "teams": 21,
+          "seasons": 6
+        },
+        "roam": {
+          "picks": 23,
+          "share": 0.053738,
+          "teams": 1,
+          "seasons": 3
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 112,
+      "hero_name": "鲁班七号",
+      "primary_lane": "farm",
+      "lanes": [
+        "farm"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 229,
+      "lane_evidence": {
+        "farm": {
+          "picks": 224,
+          "share": 0.978166,
+          "teams": 20,
+          "seasons": 6
+        },
+        "roam": {
+          "picks": 5,
+          "share": 0.021834,
+          "teams": 1,
+          "seasons": 2
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 113,
+      "hero_name": "庄周",
+      "primary_lane": "roam",
+      "lanes": [
+        "roam"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": false,
+      "constraint_exemption_reason": "observed_same_lane_second_ban",
+      "observed_pick_count": 50,
+      "lane_evidence": {
+        "clash": {
+          "picks": 1,
+          "share": 0.02,
+          "teams": 1,
+          "seasons": 1
+        },
+        "mid": {
+          "picks": 1,
+          "share": 0.02,
+          "teams": 1,
+          "seasons": 1
+        },
+        "roam": {
+          "picks": 48,
+          "share": 0.96,
+          "teams": 17,
+          "seasons": 6
+        }
+      },
+      "same_lane_second_ban_counterexamples": [
+        {
+          "season": "20260001",
+          "match_id": "2026031402",
+          "battle_id": "954221072_5_1773483066",
+          "bp_order": 11,
+          "locking_opponent_pick_ids": [
+            194
+          ]
+        },
+        {
+          "season": "20260001",
+          "match_id": "2026032201",
+          "battle_id": "48251408_35_1774162479",
+          "bp_order": 13,
+          "locking_opponent_pick_ids": [
+            188
+          ]
+        },
+        {
+          "season": "20260001",
+          "match_id": "2026033101",
+          "battle_id": "48251408_46_1774957274",
+          "bp_order": 12,
+          "locking_opponent_pick_ids": [
+            186
+          ]
+        },
+        {
+          "season": "20260001",
+          "match_id": "2026040201",
+          "battle_id": "48251408_65_1775131809",
+          "bp_order": 15,
+          "locking_opponent_pick_ids": [
+            159
+          ]
+        }
+      ]
+    },
+    {
+      "hero_id": 114,
+      "hero_name": "刘禅",
+      "primary_lane": "roam",
+      "lanes": [
+        "roam"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 2,
+      "lane_evidence": {
+        "roam": {
+          "picks": 2,
+          "share": 1.0,
+          "teams": 2,
+          "seasons": 2
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 115,
+      "hero_name": "高渐离",
+      "primary_lane": "mid",
+      "lanes": [
+        "mid"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 2,
+      "lane_evidence": {
+        "mid": {
+          "picks": 2,
+          "share": 1.0,
+          "teams": 2,
+          "seasons": 1
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 116,
+      "hero_name": "阿轲",
+      "primary_lane": "jungle",
+      "lanes": [
+        "jungle"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 0,
+      "lane_evidence": {},
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 117,
+      "hero_name": "钟无艳",
+      "primary_lane": "clash",
+      "lanes": [
+        "clash"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": false,
+      "constraint_exemption_reason": "observed_same_lane_second_ban",
+      "observed_pick_count": 0,
+      "lane_evidence": {},
+      "same_lane_second_ban_counterexamples": [
+        {
+          "season": "20250003",
+          "match_id": "2025101003",
+          "battle_id": "501236240_112_1760105619",
+          "bp_order": 12,
+          "locking_opponent_pick_ids": [
+            527
+          ]
+        }
+      ]
+    },
+    {
+      "hero_id": 118,
+      "hero_name": "孙膑",
+      "primary_lane": "roam",
+      "lanes": [
+        "roam"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 38,
+      "lane_evidence": {
+        "roam": {
+          "picks": 38,
+          "share": 1.0,
+          "teams": 17,
+          "seasons": 6
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 119,
+      "hero_name": "扁鹊",
+      "primary_lane": "mid",
+      "lanes": [
+        "mid"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": false,
+      "constraint_exemption_reason": "observed_same_lane_second_ban",
+      "observed_pick_count": 7,
+      "lane_evidence": {
+        "farm": {
+          "picks": 7,
+          "share": 1.0,
+          "teams": 4,
+          "seasons": 2
+        }
+      },
+      "same_lane_second_ban_counterexamples": [
+        {
+          "season": "20250001",
+          "match_id": "2025022803",
+          "battle_id": "501236240_9_1740754836",
+          "bp_order": 15,
+          "locking_opponent_pick_ids": [
+            179
+          ]
+        },
+        {
+          "season": "20250001",
+          "match_id": "2025032202",
+          "battle_id": "1222656528_22_1742636919",
+          "bp_order": 12,
+          "locking_opponent_pick_ids": [
+            157
+          ]
+        },
+        {
+          "season": "20250003",
+          "match_id": "2025092802",
+          "battle_id": "501236240_12_1759054442",
+          "bp_order": 13,
+          "locking_opponent_pick_ids": [
+            157
+          ]
+        },
+        {
+          "season": "20260001",
+          "match_id": "2026011803",
+          "battle_id": "1222656528_14_1768742623",
+          "bp_order": 11,
+          "locking_opponent_pick_ids": [
+            179
+          ]
+        },
+        {
+          "season": "20260001",
+          "match_id": "2026020102",
+          "battle_id": "1222656528_9_1769938789",
+          "bp_order": 13,
+          "locking_opponent_pick_ids": [
+            312
+          ]
+        }
+      ]
+    },
+    {
+      "hero_id": 120,
+      "hero_name": "白起",
+      "primary_lane": "clash",
+      "lanes": [
+        "clash",
+        "jungle"
+      ],
+      "classification": "flex",
+      "constraint_eligible": false,
+      "constraint_exemption_reason": "multi_lane",
+      "observed_pick_count": 120,
+      "lane_evidence": {
+        "clash": {
+          "picks": 99,
+          "share": 0.825,
+          "teams": 18,
+          "seasons": 5
+        },
+        "jungle": {
+          "picks": 18,
+          "share": 0.15,
+          "teams": 11,
+          "seasons": 3
+        },
+        "farm": {
+          "picks": 2,
+          "share": 0.016667,
+          "teams": 1,
+          "seasons": 1
+        },
+        "roam": {
+          "picks": 1,
+          "share": 0.008333,
+          "teams": 1,
+          "seasons": 1
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 121,
+      "hero_name": "芈月",
+      "primary_lane": "clash",
+      "lanes": [
+        "clash"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 48,
+      "lane_evidence": {
+        "clash": {
+          "picks": 48,
+          "share": 1.0,
+          "teams": 20,
+          "seasons": 4
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 123,
+      "hero_name": "吕布",
+      "primary_lane": "clash",
+      "lanes": [
+        "clash"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 62,
+      "lane_evidence": {
+        "clash": {
+          "picks": 61,
+          "share": 0.983871,
+          "teams": 15,
+          "seasons": 6
+        },
+        "farm": {
+          "picks": 1,
+          "share": 0.016129,
+          "teams": 1,
+          "seasons": 1
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 125,
+      "hero_name": "元歌",
+      "primary_lane": "clash",
+      "lanes": [
+        "clash"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 27,
+      "lane_evidence": {
+        "clash": {
+          "picks": 25,
+          "share": 0.925926,
+          "teams": 10,
+          "seasons": 4
+        },
+        "farm": {
+          "picks": 2,
+          "share": 0.074074,
+          "teams": 2,
+          "seasons": 1
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 126,
+      "hero_name": "夏侯惇",
+      "primary_lane": "clash",
+      "lanes": [
+        "clash",
+        "jungle"
+      ],
+      "classification": "flex",
+      "constraint_eligible": false,
+      "constraint_exemption_reason": "multi_lane",
+      "observed_pick_count": 465,
+      "lane_evidence": {
+        "clash": {
+          "picks": 1,
+          "share": 0.002151,
+          "teams": 1,
+          "seasons": 1
+        },
+        "jungle": {
+          "picks": 453,
+          "share": 0.974194,
+          "teams": 25,
+          "seasons": 6
+        },
+        "roam": {
+          "picks": 11,
+          "share": 0.023656,
+          "teams": 2,
+          "seasons": 3
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 127,
+      "hero_name": "甄姬",
+      "primary_lane": "mid",
+      "lanes": [
+        "mid"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 273,
+      "lane_evidence": {
+        "mid": {
+          "picks": 273,
+          "share": 1.0,
+          "teams": 22,
+          "seasons": 6
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 128,
+      "hero_name": "曹操",
+      "primary_lane": "clash",
+      "lanes": [
+        "clash"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": false,
+      "constraint_exemption_reason": "observed_same_lane_second_ban",
+      "observed_pick_count": 580,
+      "lane_evidence": {
+        "clash": {
+          "picks": 574,
+          "share": 0.989655,
+          "teams": 27,
+          "seasons": 6
+        },
+        "jungle": {
+          "picks": 6,
+          "share": 0.010345,
+          "teams": 3,
+          "seasons": 3
+        }
+      },
+      "same_lane_second_ban_counterexamples": [
+        {
+          "season": "20250003",
+          "match_id": "2025100703",
+          "battle_id": "501236240_83_1759848485",
+          "bp_order": 11,
+          "locking_opponent_pick_ids": [
+            503
+          ]
+        }
+      ]
+    },
+    {
+      "hero_id": 129,
+      "hero_name": "典韦",
+      "primary_lane": "jungle",
+      "lanes": [
+        "jungle"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 46,
+      "lane_evidence": {
+        "jungle": {
+          "picks": 45,
+          "share": 0.978261,
+          "teams": 15,
+          "seasons": 2
+        },
+        "roam": {
+          "picks": 1,
+          "share": 0.021739,
+          "teams": 1,
+          "seasons": 1
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 130,
+      "hero_name": "宫本武藏",
+      "primary_lane": "jungle",
+      "lanes": [
+        "jungle"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 60,
+      "lane_evidence": {
+        "jungle": {
+          "picks": 58,
+          "share": 0.966667,
+          "teams": 15,
+          "seasons": 6
+        },
+        "roam": {
+          "picks": 2,
+          "share": 0.033333,
+          "teams": 2,
+          "seasons": 2
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 131,
+      "hero_name": "李白",
+      "primary_lane": "jungle",
+      "lanes": [
+        "jungle"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 1,
+      "lane_evidence": {
+        "jungle": {
+          "picks": 1,
+          "share": 1.0,
+          "teams": 1,
+          "seasons": 1
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 132,
+      "hero_name": "马可波罗",
+      "primary_lane": "farm",
+      "lanes": [
+        "farm"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 30,
+      "lane_evidence": {
+        "farm": {
+          "picks": 29,
+          "share": 0.966667,
+          "teams": 13,
+          "seasons": 4
+        },
+        "roam": {
+          "picks": 1,
+          "share": 0.033333,
+          "teams": 1,
+          "seasons": 1
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 133,
+      "hero_name": "狄仁杰",
+      "primary_lane": "farm",
+      "lanes": [
+        "farm"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 343,
+      "lane_evidence": {
+        "farm": {
+          "picks": 333,
+          "share": 0.970845,
+          "teams": 24,
+          "seasons": 6
+        },
+        "roam": {
+          "picks": 10,
+          "share": 0.029155,
+          "teams": 1,
+          "seasons": 4
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 134,
+      "hero_name": "达摩",
+      "primary_lane": "clash",
+      "lanes": [
+        "clash"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 216,
+      "lane_evidence": {
+        "clash": {
+          "picks": 216,
+          "share": 1.0,
+          "teams": 21,
+          "seasons": 6
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 135,
+      "hero_name": "项羽",
+      "primary_lane": "clash",
+      "lanes": [
+        "clash"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 35,
+      "lane_evidence": {
+        "clash": {
+          "picks": 35,
+          "share": 1.0,
+          "teams": 14,
+          "seasons": 3
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 136,
+      "hero_name": "武则天",
+      "primary_lane": "mid",
+      "lanes": [
+        "mid"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 270,
+      "lane_evidence": {
+        "mid": {
+          "picks": 269,
+          "share": 0.996296,
+          "teams": 25,
+          "seasons": 6
+        },
+        "roam": {
+          "picks": 1,
+          "share": 0.003704,
+          "teams": 1,
+          "seasons": 1
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 139,
+      "hero_name": "老夫子",
+      "primary_lane": "clash",
+      "lanes": [
+        "clash"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": false,
+      "constraint_exemption_reason": "observed_same_lane_second_ban",
+      "observed_pick_count": 74,
+      "lane_evidence": {
+        "clash": {
+          "picks": 64,
+          "share": 0.864865,
+          "teams": 16,
+          "seasons": 6
+        },
+        "farm": {
+          "picks": 9,
+          "share": 0.121622,
+          "teams": 3,
+          "seasons": 5
+        },
+        "roam": {
+          "picks": 1,
+          "share": 0.013514,
+          "teams": 1,
+          "seasons": 1
+        }
+      },
+      "same_lane_second_ban_counterexamples": [
+        {
+          "season": "20250003",
+          "match_id": "2025093003",
+          "battle_id": "501236240_50_1759246499",
+          "bp_order": 13,
+          "locking_opponent_pick_ids": [
+            128
+          ]
+        },
+        {
+          "season": "20250003",
+          "match_id": "2025102401",
+          "battle_id": "870334992_14_1761305215",
+          "bp_order": 15,
+          "locking_opponent_pick_ids": [
+            128
+          ]
+        },
+        {
+          "season": "20260002",
+          "match_id": "2026043001",
+          "battle_id": "736117264_89_1777535191",
+          "bp_order": 14,
+          "locking_opponent_pick_ids": [
+            536
+          ]
+        },
+        {
+          "season": "20260002",
+          "match_id": "2026050902",
+          "battle_id": "736117264_37_1778330358",
+          "bp_order": 14,
+          "locking_opponent_pick_ids": [
+            537
+          ]
+        }
+      ]
+    },
+    {
+      "hero_id": 140,
+      "hero_name": "关羽",
+      "primary_lane": "clash",
+      "lanes": [
+        "clash"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": false,
+      "constraint_exemption_reason": "observed_same_lane_second_ban",
+      "observed_pick_count": 495,
+      "lane_evidence": {
+        "clash": {
+          "picks": 495,
+          "share": 1.0,
+          "teams": 26,
+          "seasons": 6
+        }
+      },
+      "same_lane_second_ban_counterexamples": [
+        {
+          "season": "20250002",
+          "match_id": "2025080801",
+          "battle_id": "48251408_26_1754647702",
+          "bp_order": 12,
+          "locking_opponent_pick_ids": [
+            128
+          ]
+        }
+      ]
+    },
+    {
+      "hero_id": 141,
+      "hero_name": "貂蝉",
+      "primary_lane": "mid",
+      "lanes": [
+        "mid"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 4,
+      "lane_evidence": {
+        "clash": {
+          "picks": 1,
+          "share": 0.25,
+          "teams": 1,
+          "seasons": 1
+        },
+        "mid": {
+          "picks": 3,
+          "share": 0.75,
+          "teams": 2,
+          "seasons": 3
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 142,
+      "hero_name": "安琪拉",
+      "primary_lane": "mid",
+      "lanes": [
+        "mid"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 296,
+      "lane_evidence": {
+        "mid": {
+          "picks": 296,
+          "share": 1.0,
+          "teams": 26,
+          "seasons": 6
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 144,
+      "hero_name": "程咬金",
+      "primary_lane": "clash",
+      "lanes": [
+        "clash"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 1,
+      "lane_evidence": {
+        "clash": {
+          "picks": 1,
+          "share": 1.0,
+          "teams": 1,
+          "seasons": 1
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 146,
+      "hero_name": "露娜",
+      "primary_lane": "jungle",
+      "lanes": [
+        "jungle"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 22,
+      "lane_evidence": {
+        "clash": {
+          "picks": 1,
+          "share": 0.045455,
+          "teams": 1,
+          "seasons": 1
+        },
+        "jungle": {
+          "picks": 18,
+          "share": 0.818182,
+          "teams": 8,
+          "seasons": 5
+        },
+        "roam": {
+          "picks": 3,
+          "share": 0.136364,
+          "teams": 1,
+          "seasons": 1
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 148,
+      "hero_name": "姜子牙",
+      "primary_lane": "mid",
+      "lanes": [
+        "mid"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": false,
+      "constraint_exemption_reason": "observed_same_lane_second_ban",
+      "observed_pick_count": 141,
+      "lane_evidence": {
+        "mid": {
+          "picks": 136,
+          "share": 0.964539,
+          "teams": 22,
+          "seasons": 6
+        },
+        "roam": {
+          "picks": 5,
+          "share": 0.035461,
+          "teams": 3,
+          "seasons": 2
+        }
+      },
+      "same_lane_second_ban_counterexamples": [
+        {
+          "season": "20250001",
+          "match_id": "2025040901",
+          "battle_id": "870334992_12_1744191474",
+          "bp_order": 16,
+          "locking_opponent_pick_ids": [
+            523
+          ]
+        },
+        {
+          "season": "20250002",
+          "match_id": "2025081602",
+          "battle_id": "1222656528_13_1755340893",
+          "bp_order": 15,
+          "locking_opponent_pick_ids": [
+            127
+          ]
+        }
+      ]
+    },
+    {
+      "hero_id": 149,
+      "hero_name": "刘邦",
+      "primary_lane": "roam",
+      "lanes": [
+        "roam"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": false,
+      "constraint_exemption_reason": "observed_same_lane_second_ban",
+      "observed_pick_count": 14,
+      "lane_evidence": {
+        "clash": {
+          "picks": 6,
+          "share": 0.428571,
+          "teams": 4,
+          "seasons": 3
+        },
+        "roam": {
+          "picks": 8,
+          "share": 0.571429,
+          "teams": 5,
+          "seasons": 4
+        }
+      },
+      "same_lane_second_ban_counterexamples": [
+        {
+          "season": "20250001",
+          "match_id": "2025040503",
+          "battle_id": "501236240_5_1743856973",
+          "bp_order": 12,
+          "locking_opponent_pick_ids": [
+            186
+          ]
+        }
+      ]
+    },
+    {
+      "hero_id": 150,
+      "hero_name": "韩信",
+      "primary_lane": "jungle",
+      "lanes": [
+        "jungle"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 4,
+      "lane_evidence": {
+        "jungle": {
+          "picks": 4,
+          "share": 1.0,
+          "teams": 4,
+          "seasons": 1
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 151,
+      "hero_name": "孙权",
+      "primary_lane": "farm",
+      "lanes": [
+        "farm"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 138,
+      "lane_evidence": {
+        "farm": {
+          "picks": 137,
+          "share": 0.992754,
+          "teams": 21,
+          "seasons": 5
+        },
+        "roam": {
+          "picks": 1,
+          "share": 0.007246,
+          "teams": 1,
+          "seasons": 1
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 152,
+      "hero_name": "王昭君",
+      "primary_lane": "mid",
+      "lanes": [
+        "mid"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 271,
+      "lane_evidence": {
+        "mid": {
+          "picks": 271,
+          "share": 1.0,
+          "teams": 23,
+          "seasons": 6
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 153,
+      "hero_name": "兰陵王",
+      "primary_lane": "jungle",
+      "lanes": [
+        "jungle"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": false,
+      "constraint_exemption_reason": "observed_same_lane_second_ban",
+      "observed_pick_count": 10,
+      "lane_evidence": {
+        "clash": {
+          "picks": 3,
+          "share": 0.3,
+          "teams": 1,
+          "seasons": 1
+        },
+        "jungle": {
+          "picks": 7,
+          "share": 0.7,
+          "teams": 3,
+          "seasons": 2
+        }
+      },
+      "same_lane_second_ban_counterexamples": [
+        {
+          "season": "20250001",
+          "match_id": "2025021602",
+          "battle_id": "48251408_47_1739701895",
+          "bp_order": 15,
+          "locking_opponent_pick_ids": [
+            502
+          ]
+        },
+        {
+          "season": "20250002",
+          "match_id": "2025062101",
+          "battle_id": "48251408_33_1750487788",
+          "bp_order": 12,
+          "locking_opponent_pick_ids": [
+            533
+          ]
+        },
+        {
+          "season": "20250002",
+          "match_id": "2025062101",
+          "battle_id": "48251408_36_1750493772",
+          "bp_order": 13,
+          "locking_opponent_pick_ids": [
+            531
+          ]
+        },
+        {
+          "season": "20250002",
+          "match_id": "2025071102",
+          "battle_id": "434127376_18_1752230966",
+          "bp_order": 12,
+          "locking_opponent_pick_ids": [
+            542
+          ]
+        }
+      ]
+    },
+    {
+      "hero_id": 154,
+      "hero_name": "花木兰",
+      "primary_lane": "clash",
+      "lanes": [
+        "clash"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 1,
+      "lane_evidence": {
+        "clash": {
+          "picks": 1,
+          "share": 1.0,
+          "teams": 1,
+          "seasons": 1
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 155,
+      "hero_name": "艾琳",
+      "primary_lane": "farm",
+      "lanes": [
+        "farm"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 342,
+      "lane_evidence": {
+        "farm": {
+          "picks": 331,
+          "share": 0.967836,
+          "teams": 22,
+          "seasons": 5
+        },
+        "roam": {
+          "picks": 11,
+          "share": 0.032164,
+          "teams": 1,
+          "seasons": 4
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 156,
+      "hero_name": "张良",
+      "primary_lane": "mid",
+      "lanes": [
+        "mid",
+        "roam"
+      ],
+      "classification": "flex",
+      "constraint_eligible": false,
+      "constraint_exemption_reason": "multi_lane",
+      "observed_pick_count": 272,
+      "lane_evidence": {
+        "mid": {
+          "picks": 1,
+          "share": 0.003676,
+          "teams": 1,
+          "seasons": 1
+        },
+        "roam": {
+          "picks": 271,
+          "share": 0.996324,
+          "teams": 22,
+          "seasons": 6
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 157,
+      "hero_name": "不知火舞",
+      "primary_lane": "mid",
+      "lanes": [
+        "mid"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": false,
+      "constraint_exemption_reason": "observed_same_lane_second_ban",
+      "observed_pick_count": 452,
+      "lane_evidence": {
+        "mid": {
+          "picks": 452,
+          "share": 1.0,
+          "teams": 23,
+          "seasons": 6
+        }
+      },
+      "same_lane_second_ban_counterexamples": [
+        {
+          "season": "20260001",
+          "match_id": "2026032901",
+          "battle_id": "48251408_26_1774783279",
+          "bp_order": 16,
+          "locking_opponent_pick_ids": [
+            127
+          ]
+        }
+      ]
+    },
+    {
+      "hero_id": 159,
+      "hero_name": "朵莉亚",
+      "primary_lane": "roam",
+      "lanes": [
+        "roam"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 350,
+      "lane_evidence": {
+        "farm": {
+          "picks": 1,
+          "share": 0.002857,
+          "teams": 1,
+          "seasons": 1
+        },
+        "roam": {
+          "picks": 349,
+          "share": 0.997143,
+          "teams": 22,
+          "seasons": 6
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 162,
+      "hero_name": "娜可露露",
+      "primary_lane": "jungle",
+      "lanes": [
+        "jungle"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": false,
+      "constraint_exemption_reason": "observed_same_lane_second_ban",
+      "observed_pick_count": 87,
+      "lane_evidence": {
+        "jungle": {
+          "picks": 86,
+          "share": 0.988506,
+          "teams": 16,
+          "seasons": 6
+        },
+        "roam": {
+          "picks": 1,
+          "share": 0.011494,
+          "teams": 1,
+          "seasons": 1
+        }
+      },
+      "same_lane_second_ban_counterexamples": [
+        {
+          "season": "20250002",
+          "match_id": "2025081602",
+          "battle_id": "1222656528_13_1755340893",
+          "bp_order": 11,
+          "locking_opponent_pick_ids": [
+            533
+          ]
+        },
+        {
+          "season": "20250003",
+          "match_id": "2025101002",
+          "battle_id": "501236240_107_1760093466",
+          "bp_order": 11,
+          "locking_opponent_pick_ids": [
+            533
+          ]
+        }
+      ]
+    },
+    {
+      "hero_id": 163,
+      "hero_name": "橘右京",
+      "primary_lane": "jungle",
+      "lanes": [
+        "jungle"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": false,
+      "constraint_exemption_reason": "observed_same_lane_second_ban",
+      "observed_pick_count": 258,
+      "lane_evidence": {
+        "clash": {
+          "picks": 1,
+          "share": 0.003876,
+          "teams": 1,
+          "seasons": 1
+        },
+        "jungle": {
+          "picks": 254,
+          "share": 0.984496,
+          "teams": 26,
+          "seasons": 6
+        },
+        "roam": {
+          "picks": 3,
+          "share": 0.011628,
+          "teams": 1,
+          "seasons": 1
+        }
+      },
+      "same_lane_second_ban_counterexamples": [
+        {
+          "season": "20250002",
+          "match_id": "2025071102",
+          "battle_id": "434127376_15_1752224495",
+          "bp_order": 12,
+          "locking_opponent_pick_ids": [
+            533
+          ]
+        },
+        {
+          "season": "20250003",
+          "match_id": "2025101701",
+          "battle_id": "870334992_12_1760702514",
+          "bp_order": 11,
+          "locking_opponent_pick_ids": [
+            533
+          ]
+        }
+      ]
+    },
+    {
+      "hero_id": 168,
+      "hero_name": "牛魔",
+      "primary_lane": "roam",
+      "lanes": [
+        "roam"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 22,
+      "lane_evidence": {
+        "roam": {
+          "picks": 22,
+          "share": 1.0,
+          "teams": 12,
+          "seasons": 5
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 169,
+      "hero_name": "后羿",
+      "primary_lane": "farm",
+      "lanes": [
+        "farm"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 125,
+      "lane_evidence": {
+        "farm": {
+          "picks": 123,
+          "share": 0.984,
+          "teams": 22,
+          "seasons": 6
+        },
+        "roam": {
+          "picks": 2,
+          "share": 0.016,
+          "teams": 1,
+          "seasons": 1
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 170,
+      "hero_name": "刘备",
+      "primary_lane": "jungle",
+      "lanes": [
+        "jungle"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 0,
+      "lane_evidence": {},
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 171,
+      "hero_name": "张飞",
+      "primary_lane": "roam",
+      "lanes": [
+        "roam"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 457,
+      "lane_evidence": {
+        "farm": {
+          "picks": 1,
+          "share": 0.002188,
+          "teams": 1,
+          "seasons": 1
+        },
+        "roam": {
+          "picks": 456,
+          "share": 0.997812,
+          "teams": 28,
+          "seasons": 6
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 172,
+      "hero_name": "蚩奼",
+      "primary_lane": "farm",
+      "lanes": [
+        "clash",
+        "farm"
+      ],
+      "classification": "flex",
+      "constraint_eligible": false,
+      "constraint_exemption_reason": "multi_lane",
+      "observed_pick_count": 300,
+      "lane_evidence": {
+        "clash": {
+          "picks": 66,
+          "share": 0.22,
+          "teams": 19,
+          "seasons": 4
+        },
+        "jungle": {
+          "picks": 7,
+          "share": 0.023333,
+          "teams": 4,
+          "seasons": 2
+        },
+        "farm": {
+          "picks": 226,
+          "share": 0.753333,
+          "teams": 22,
+          "seasons": 4
+        },
+        "roam": {
+          "picks": 1,
+          "share": 0.003333,
+          "teams": 1,
+          "seasons": 1
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 173,
+      "hero_name": "李元芳",
+      "primary_lane": "farm",
+      "lanes": [
+        "farm"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 26,
+      "lane_evidence": {
+        "farm": {
+          "picks": 26,
+          "share": 1.0,
+          "teams": 12,
+          "seasons": 5
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 174,
+      "hero_name": "虞姬",
+      "primary_lane": "farm",
+      "lanes": [
+        "farm"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 133,
+      "lane_evidence": {
+        "farm": {
+          "picks": 128,
+          "share": 0.962406,
+          "teams": 22,
+          "seasons": 6
+        },
+        "roam": {
+          "picks": 5,
+          "share": 0.037594,
+          "teams": 1,
+          "seasons": 3
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 175,
+      "hero_name": "钟馗",
+      "primary_lane": "mid",
+      "lanes": [
+        "mid",
+        "roam"
+      ],
+      "classification": "flex",
+      "constraint_eligible": false,
+      "constraint_exemption_reason": "multi_lane",
+      "observed_pick_count": 91,
+      "lane_evidence": {
+        "farm": {
+          "picks": 1,
+          "share": 0.010989,
+          "teams": 1,
+          "seasons": 1
+        },
+        "roam": {
+          "picks": 90,
+          "share": 0.989011,
+          "teams": 19,
+          "seasons": 6
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 176,
+      "hero_name": "杨玉环",
+      "primary_lane": "mid",
+      "lanes": [
+        "mid",
+        "roam"
+      ],
+      "classification": "flex",
+      "constraint_eligible": false,
+      "constraint_exemption_reason": "multi_lane",
+      "observed_pick_count": 267,
+      "lane_evidence": {
+        "mid": {
+          "picks": 131,
+          "share": 0.490637,
+          "teams": 20,
+          "seasons": 6
+        },
+        "jungle": {
+          "picks": 7,
+          "share": 0.026217,
+          "teams": 5,
+          "seasons": 1
+        },
+        "roam": {
+          "picks": 129,
+          "share": 0.483146,
+          "teams": 18,
+          "seasons": 6
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 177,
+      "hero_name": "苍",
+      "primary_lane": "farm",
+      "lanes": [
+        "farm"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 619,
+      "lane_evidence": {
+        "farm": {
+          "picks": 603,
+          "share": 0.974152,
+          "teams": 27,
+          "seasons": 6
+        },
+        "roam": {
+          "picks": 16,
+          "share": 0.025848,
+          "teams": 1,
+          "seasons": 5
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 178,
+      "hero_name": "杨戬",
+      "primary_lane": "clash",
+      "lanes": [
+        "clash",
+        "jungle"
+      ],
+      "classification": "flex",
+      "constraint_eligible": false,
+      "constraint_exemption_reason": "multi_lane",
+      "observed_pick_count": 374,
+      "lane_evidence": {
+        "clash": {
+          "picks": 73,
+          "share": 0.195187,
+          "teams": 16,
+          "seasons": 2
+        },
+        "jungle": {
+          "picks": 299,
+          "share": 0.799465,
+          "teams": 24,
+          "seasons": 5
+        },
+        "roam": {
+          "picks": 2,
+          "share": 0.005348,
+          "teams": 1,
+          "seasons": 1
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 179,
+      "hero_name": "女娲",
+      "primary_lane": "mid",
+      "lanes": [
+        "mid"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 454,
+      "lane_evidence": {
+        "mid": {
+          "picks": 454,
+          "share": 1.0,
+          "teams": 24,
+          "seasons": 6
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 180,
+      "hero_name": "哪吒",
+      "primary_lane": "clash",
+      "lanes": [
+        "clash",
+        "jungle"
+      ],
+      "classification": "flex",
+      "constraint_eligible": false,
+      "constraint_exemption_reason": "multi_lane",
+      "observed_pick_count": 152,
+      "lane_evidence": {
+        "clash": {
+          "picks": 12,
+          "share": 0.078947,
+          "teams": 3,
+          "seasons": 2
+        },
+        "jungle": {
+          "picks": 138,
+          "share": 0.907895,
+          "teams": 21,
+          "seasons": 6
+        },
+        "roam": {
+          "picks": 2,
+          "share": 0.013158,
+          "teams": 2,
+          "seasons": 2
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 182,
+      "hero_name": "干将莫邪",
+      "primary_lane": "mid",
+      "lanes": [
+        "mid"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 106,
+      "lane_evidence": {
+        "mid": {
+          "picks": 106,
+          "share": 1.0,
+          "teams": 20,
+          "seasons": 6
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 184,
+      "hero_name": "蔡文姬",
+      "primary_lane": "roam",
+      "lanes": [
+        "roam"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 41,
+      "lane_evidence": {
+        "roam": {
+          "picks": 41,
+          "share": 1.0,
+          "teams": 16,
+          "seasons": 3
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 186,
+      "hero_name": "太乙真人",
+      "primary_lane": "roam",
+      "lanes": [
+        "roam"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 537,
+      "lane_evidence": {
+        "roam": {
+          "picks": 537,
+          "share": 1.0,
+          "teams": 25,
+          "seasons": 6
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 187,
+      "hero_name": "东皇太一",
+      "primary_lane": "roam",
+      "lanes": [
+        "roam"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 23,
+      "lane_evidence": {
+        "roam": {
+          "picks": 23,
+          "share": 1.0,
+          "teams": 9,
+          "seasons": 6
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 188,
+      "hero_name": "大禹",
+      "primary_lane": "roam",
+      "lanes": [
+        "roam"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 63,
+      "lane_evidence": {
+        "roam": {
+          "picks": 63,
+          "share": 1.0,
+          "teams": 25,
+          "seasons": 3
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 189,
+      "hero_name": "鬼谷子",
+      "primary_lane": "roam",
+      "lanes": [
+        "roam"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 9,
+      "lane_evidence": {
+        "roam": {
+          "picks": 9,
+          "share": 1.0,
+          "teams": 5,
+          "seasons": 4
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 190,
+      "hero_name": "诸葛亮",
+      "primary_lane": "mid",
+      "lanes": [
+        "mid"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 3,
+      "lane_evidence": {
+        "mid": {
+          "picks": 1,
+          "share": 0.333333,
+          "teams": 1,
+          "seasons": 1
+        },
+        "jungle": {
+          "picks": 2,
+          "share": 0.666667,
+          "teams": 1,
+          "seasons": 1
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 191,
+      "hero_name": "大乔",
+      "primary_lane": "roam",
+      "lanes": [
+        "mid",
+        "roam"
+      ],
+      "classification": "flex",
+      "constraint_eligible": false,
+      "constraint_exemption_reason": "multi_lane",
+      "observed_pick_count": 190,
+      "lane_evidence": {
+        "mid": {
+          "picks": 90,
+          "share": 0.473684,
+          "teams": 18,
+          "seasons": 6
+        },
+        "roam": {
+          "picks": 100,
+          "share": 0.526316,
+          "teams": 19,
+          "seasons": 4
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 192,
+      "hero_name": "黄忠",
+      "primary_lane": "farm",
+      "lanes": [
+        "farm"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 8,
+      "lane_evidence": {
+        "farm": {
+          "picks": 8,
+          "share": 1.0,
+          "teams": 6,
+          "seasons": 4
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 193,
+      "hero_name": "铠",
+      "primary_lane": "jungle",
+      "lanes": [
+        "jungle"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": false,
+      "constraint_exemption_reason": "observed_same_lane_second_ban",
+      "observed_pick_count": 416,
+      "lane_evidence": {
+        "jungle": {
+          "picks": 408,
+          "share": 0.980769,
+          "teams": 26,
+          "seasons": 6
+        },
+        "roam": {
+          "picks": 8,
+          "share": 0.019231,
+          "teams": 1,
+          "seasons": 2
+        }
+      },
+      "same_lane_second_ban_counterexamples": [
+        {
+          "season": "20260003",
+          "match_id": "2026071601",
+          "battle_id": "48251408_19_1784189591",
+          "bp_order": 13,
+          "locking_opponent_pick_ids": [
+            502
+          ]
+        }
+      ]
+    },
+    {
+      "hero_id": 194,
+      "hero_name": "苏烈",
+      "primary_lane": "roam",
+      "lanes": [
+        "roam"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 566,
+      "lane_evidence": {
+        "farm": {
+          "picks": 1,
+          "share": 0.001767,
+          "teams": 1,
+          "seasons": 1
+        },
+        "roam": {
+          "picks": 565,
+          "share": 0.998233,
+          "teams": 27,
+          "seasons": 6
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 195,
+      "hero_name": "百里玄策",
+      "primary_lane": "jungle",
+      "lanes": [
+        "jungle"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 0,
+      "lane_evidence": {},
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 196,
+      "hero_name": "百里守约",
+      "primary_lane": "farm",
+      "lanes": [
+        "farm"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 187,
+      "lane_evidence": {
+        "farm": {
+          "picks": 184,
+          "share": 0.983957,
+          "teams": 22,
+          "seasons": 6
+        },
+        "roam": {
+          "picks": 3,
+          "share": 0.016043,
+          "teams": 1,
+          "seasons": 2
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 197,
+      "hero_name": "弈星",
+      "primary_lane": "mid",
+      "lanes": [
+        "mid"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 94,
+      "lane_evidence": {
+        "mid": {
+          "picks": 94,
+          "share": 1.0,
+          "teams": 20,
+          "seasons": 5
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 198,
+      "hero_name": "梦奇",
+      "primary_lane": "clash",
+      "lanes": [
+        "clash",
+        "jungle"
+      ],
+      "classification": "flex",
+      "constraint_eligible": false,
+      "constraint_exemption_reason": "multi_lane",
+      "observed_pick_count": 259,
+      "lane_evidence": {
+        "clash": {
+          "picks": 1,
+          "share": 0.003861,
+          "teams": 1,
+          "seasons": 1
+        },
+        "jungle": {
+          "picks": 246,
+          "share": 0.949807,
+          "teams": 20,
+          "seasons": 6
+        },
+        "roam": {
+          "picks": 12,
+          "share": 0.046332,
+          "teams": 3,
+          "seasons": 2
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 199,
+      "hero_name": "公孙离",
+      "primary_lane": "farm",
+      "lanes": [
+        "farm"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 648,
+      "lane_evidence": {
+        "jungle": {
+          "picks": 1,
+          "share": 0.001543,
+          "teams": 1,
+          "seasons": 1
+        },
+        "farm": {
+          "picks": 627,
+          "share": 0.967593,
+          "teams": 29,
+          "seasons": 6
+        },
+        "roam": {
+          "picks": 20,
+          "share": 0.030864,
+          "teams": 1,
+          "seasons": 4
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 312,
+      "hero_name": "沈梦溪",
+      "primary_lane": "mid",
+      "lanes": [
+        "mid"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 798,
+      "lane_evidence": {
+        "mid": {
+          "picks": 798,
+          "share": 1.0,
+          "teams": 26,
+          "seasons": 6
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 501,
+      "hero_name": "明世隐",
+      "primary_lane": "roam",
+      "lanes": [
+        "roam"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 84,
+      "lane_evidence": {
+        "roam": {
+          "picks": 84,
+          "share": 1.0,
+          "teams": 19,
+          "seasons": 3
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 502,
+      "hero_name": "裴擒虎",
+      "primary_lane": "jungle",
+      "lanes": [
+        "jungle"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": false,
+      "constraint_exemption_reason": "observed_same_lane_second_ban",
+      "observed_pick_count": 406,
+      "lane_evidence": {
+        "jungle": {
+          "picks": 400,
+          "share": 0.985222,
+          "teams": 26,
+          "seasons": 6
+        },
+        "roam": {
+          "picks": 6,
+          "share": 0.014778,
+          "teams": 2,
+          "seasons": 2
+        }
+      },
+      "same_lane_second_ban_counterexamples": [
+        {
+          "season": "20250002",
+          "match_id": "2025071703",
+          "battle_id": "501236240_3_1752755007",
+          "bp_order": 11,
+          "locking_opponent_pick_ids": [
+            533
+          ]
+        },
+        {
+          "season": "20250002",
+          "match_id": "2025071801",
+          "battle_id": "48251408_27_1752824062",
+          "bp_order": 15,
+          "locking_opponent_pick_ids": [
+            533
+          ]
+        },
+        {
+          "season": "20250003",
+          "match_id": "2025101002",
+          "battle_id": "501236240_107_1760093466",
+          "bp_order": 13,
+          "locking_opponent_pick_ids": [
+            533
+          ]
+        },
+        {
+          "season": "20250003",
+          "match_id": "2025101701",
+          "battle_id": "870334992_12_1760702514",
+          "bp_order": 13,
+          "locking_opponent_pick_ids": [
+            533
+          ]
+        }
+      ]
+    },
+    {
+      "hero_id": 503,
+      "hero_name": "狂铁",
+      "primary_lane": "clash",
+      "lanes": [
+        "clash"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 773,
+      "lane_evidence": {
+        "clash": {
+          "picks": 772,
+          "share": 0.998706,
+          "teams": 31,
+          "seasons": 6
+        },
+        "farm": {
+          "picks": 1,
+          "share": 0.001294,
+          "teams": 1,
+          "seasons": 1
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 507,
+      "hero_name": "李信",
+      "primary_lane": "clash",
+      "lanes": [
+        "clash"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 3,
+      "lane_evidence": {
+        "clash": {
+          "picks": 3,
+          "share": 1.0,
+          "teams": 3,
+          "seasons": 1
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 508,
+      "hero_name": "伽罗",
+      "primary_lane": "farm",
+      "lanes": [
+        "farm"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 35,
+      "lane_evidence": {
+        "farm": {
+          "picks": 34,
+          "share": 0.971429,
+          "teams": 14,
+          "seasons": 5
+        },
+        "roam": {
+          "picks": 1,
+          "share": 0.028571,
+          "teams": 1,
+          "seasons": 1
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 509,
+      "hero_name": "盾山",
+      "primary_lane": "roam",
+      "lanes": [
+        "roam"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 303,
+      "lane_evidence": {
+        "farm": {
+          "picks": 2,
+          "share": 0.006601,
+          "teams": 1,
+          "seasons": 1
+        },
+        "roam": {
+          "picks": 301,
+          "share": 0.993399,
+          "teams": 26,
+          "seasons": 5
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 510,
+      "hero_name": "孙策",
+      "primary_lane": "clash",
+      "lanes": [
+        "clash"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": false,
+      "constraint_exemption_reason": "observed_same_lane_second_ban",
+      "observed_pick_count": 145,
+      "lane_evidence": {
+        "clash": {
+          "picks": 144,
+          "share": 0.993103,
+          "teams": 20,
+          "seasons": 6
+        },
+        "roam": {
+          "picks": 1,
+          "share": 0.006897,
+          "teams": 1,
+          "seasons": 1
+        }
+      },
+      "same_lane_second_ban_counterexamples": [
+        {
+          "season": "20250003",
+          "match_id": "2025100703",
+          "battle_id": "501236240_83_1759848485",
+          "bp_order": 13,
+          "locking_opponent_pick_ids": [
+            503
+          ]
+        }
+      ]
+    },
+    {
+      "hero_id": 511,
+      "hero_name": "猪八戒",
+      "primary_lane": "clash",
+      "lanes": [
+        "clash",
+        "jungle"
+      ],
+      "classification": "flex",
+      "constraint_eligible": false,
+      "constraint_exemption_reason": "multi_lane",
+      "observed_pick_count": 83,
+      "lane_evidence": {
+        "clash": {
+          "picks": 13,
+          "share": 0.156627,
+          "teams": 6,
+          "seasons": 5
+        },
+        "jungle": {
+          "picks": 69,
+          "share": 0.831325,
+          "teams": 18,
+          "seasons": 6
+        },
+        "roam": {
+          "picks": 1,
+          "share": 0.012048,
+          "teams": 1,
+          "seasons": 1
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 513,
+      "hero_name": "上官婉儿",
+      "primary_lane": "mid",
+      "lanes": [
+        "mid"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 1,
+      "lane_evidence": {
+        "mid": {
+          "picks": 1,
+          "share": 1.0,
+          "teams": 1,
+          "seasons": 1
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 514,
+      "hero_name": "亚连",
+      "primary_lane": "clash",
+      "lanes": [
+        "clash"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 78,
+      "lane_evidence": {
+        "clash": {
+          "picks": 78,
+          "share": 1.0,
+          "teams": 17,
+          "seasons": 5
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 515,
+      "hero_name": "嫦娥",
+      "primary_lane": "mid",
+      "lanes": [
+        "mid"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 173,
+      "lane_evidence": {
+        "mid": {
+          "picks": 173,
+          "share": 1.0,
+          "teams": 23,
+          "seasons": 6
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 517,
+      "hero_name": "大司命",
+      "primary_lane": "jungle",
+      "lanes": [
+        "jungle"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": false,
+      "constraint_exemption_reason": "observed_same_lane_second_ban",
+      "observed_pick_count": 590,
+      "lane_evidence": {
+        "clash": {
+          "picks": 1,
+          "share": 0.001695,
+          "teams": 1,
+          "seasons": 1
+        },
+        "jungle": {
+          "picks": 576,
+          "share": 0.976271,
+          "teams": 25,
+          "seasons": 6
+        },
+        "roam": {
+          "picks": 13,
+          "share": 0.022034,
+          "teams": 2,
+          "seasons": 3
+        }
+      },
+      "same_lane_second_ban_counterexamples": [
+        {
+          "season": "20250002",
+          "match_id": "2025070902",
+          "battle_id": "48251408_47_1752070407",
+          "bp_order": 11,
+          "locking_opponent_pick_ids": [
+            533
+          ]
+        },
+        {
+          "season": "20250002",
+          "match_id": "2025080301",
+          "battle_id": "48251408_5_1754206819",
+          "bp_order": 14,
+          "locking_opponent_pick_ids": [
+            533
+          ]
+        },
+        {
+          "season": "20250002",
+          "match_id": "2025081702",
+          "battle_id": "48251408_40_1755427450",
+          "bp_order": 11,
+          "locking_opponent_pick_ids": [
+            533
+          ]
+        },
+        {
+          "season": "20250002",
+          "match_id": "2025083101",
+          "battle_id": "48251408_101_1756649124",
+          "bp_order": 16,
+          "locking_opponent_pick_ids": [
+            533
+          ]
+        },
+        {
+          "season": "20260001",
+          "match_id": "2026022802",
+          "battle_id": "434127376_16_1772274619",
+          "bp_order": 12,
+          "locking_opponent_pick_ids": [
+            163
+          ]
+        }
+      ]
+    },
+    {
+      "hero_id": 518,
+      "hero_name": "马超",
+      "primary_lane": "clash",
+      "lanes": [
+        "clash",
+        "jungle"
+      ],
+      "classification": "flex",
+      "constraint_eligible": false,
+      "constraint_exemption_reason": "multi_lane",
+      "observed_pick_count": 416,
+      "lane_evidence": {
+        "clash": {
+          "picks": 344,
+          "share": 0.826923,
+          "teams": 25,
+          "seasons": 6
+        },
+        "jungle": {
+          "picks": 72,
+          "share": 0.173077,
+          "teams": 20,
+          "seasons": 6
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 519,
+      "hero_name": "敖隐",
+      "primary_lane": "farm",
+      "lanes": [
+        "farm"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 624,
+      "lane_evidence": {
+        "farm": {
+          "picks": 602,
+          "share": 0.964744,
+          "teams": 32,
+          "seasons": 6
+        },
+        "roam": {
+          "picks": 22,
+          "share": 0.035256,
+          "teams": 1,
+          "seasons": 5
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 521,
+      "hero_name": "海月",
+      "primary_lane": "mid",
+      "lanes": [
+        "mid"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": false,
+      "constraint_exemption_reason": "observed_same_lane_second_ban",
+      "observed_pick_count": 395,
+      "lane_evidence": {
+        "mid": {
+          "picks": 395,
+          "share": 1.0,
+          "teams": 25,
+          "seasons": 6
+        }
+      },
+      "same_lane_second_ban_counterexamples": [
+        {
+          "season": "20250001",
+          "match_id": "2025042601",
+          "battle_id": "48251408_22_1745674879",
+          "bp_order": 11,
+          "locking_opponent_pick_ids": [
+            179
+          ]
+        },
+        {
+          "season": "20250001",
+          "match_id": "2025042601",
+          "battle_id": "48251408_23_1745676599",
+          "bp_order": 13,
+          "locking_opponent_pick_ids": [
+            523
+          ]
+        },
+        {
+          "season": "20250001",
+          "match_id": "2025050101",
+          "battle_id": "48251408_57_1746109197",
+          "bp_order": 14,
+          "locking_opponent_pick_ids": [
+            119
+          ]
+        }
+      ]
+    },
+    {
+      "hero_id": 522,
+      "hero_name": "曜",
+      "primary_lane": "jungle",
+      "lanes": [
+        "jungle"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 18,
+      "lane_evidence": {
+        "clash": {
+          "picks": 1,
+          "share": 0.055556,
+          "teams": 1,
+          "seasons": 1
+        },
+        "jungle": {
+          "picks": 17,
+          "share": 0.944444,
+          "teams": 6,
+          "seasons": 4
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 523,
+      "hero_name": "西施",
+      "primary_lane": "mid",
+      "lanes": [
+        "mid"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": false,
+      "constraint_exemption_reason": "observed_same_lane_second_ban",
+      "observed_pick_count": 180,
+      "lane_evidence": {
+        "mid": {
+          "picks": 178,
+          "share": 0.988889,
+          "teams": 21,
+          "seasons": 6
+        },
+        "roam": {
+          "picks": 2,
+          "share": 0.011111,
+          "teams": 2,
+          "seasons": 2
+        }
+      },
+      "same_lane_second_ban_counterexamples": [
+        {
+          "season": "20260001",
+          "match_id": "2026032901",
+          "battle_id": "48251408_26_1774783279",
+          "bp_order": 12,
+          "locking_opponent_pick_ids": [
+            127
+          ]
+        }
+      ]
+    },
+    {
+      "hero_id": 524,
+      "hero_name": "蒙犽",
+      "primary_lane": "farm",
+      "lanes": [
+        "farm"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 1,
+      "lane_evidence": {
+        "farm": {
+          "picks": 1,
+          "share": 1.0,
+          "teams": 1,
+          "seasons": 1
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 525,
+      "hero_name": "鲁班大师",
+      "primary_lane": "roam",
+      "lanes": [
+        "roam"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 452,
+      "lane_evidence": {
+        "clash": {
+          "picks": 1,
+          "share": 0.002212,
+          "teams": 1,
+          "seasons": 1
+        },
+        "farm": {
+          "picks": 1,
+          "share": 0.002212,
+          "teams": 1,
+          "seasons": 1
+        },
+        "roam": {
+          "picks": 450,
+          "share": 0.995575,
+          "teams": 24,
+          "seasons": 6
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 527,
+      "hero_name": "蒙恬",
+      "primary_lane": "clash",
+      "lanes": [
+        "clash"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 220,
+      "lane_evidence": {
+        "clash": {
+          "picks": 220,
+          "share": 1.0,
+          "teams": 21,
+          "seasons": 6
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 528,
+      "hero_name": "澜",
+      "primary_lane": "jungle",
+      "lanes": [
+        "jungle"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 23,
+      "lane_evidence": {
+        "jungle": {
+          "picks": 23,
+          "share": 1.0,
+          "teams": 11,
+          "seasons": 2
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 529,
+      "hero_name": "盘古",
+      "primary_lane": "jungle",
+      "lanes": [
+        "jungle"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": false,
+      "constraint_exemption_reason": "observed_same_lane_second_ban",
+      "observed_pick_count": 7,
+      "lane_evidence": {
+        "clash": {
+          "picks": 7,
+          "share": 1.0,
+          "teams": 4,
+          "seasons": 2
+        }
+      },
+      "same_lane_second_ban_counterexamples": [
+        {
+          "season": "20260001",
+          "match_id": "2026012101",
+          "battle_id": "48251408_7_1768981486",
+          "bp_order": 16,
+          "locking_opponent_pick_ids": [
+            533
+          ]
+        }
+      ]
+    },
+    {
+      "hero_id": 531,
+      "hero_name": "镜",
+      "primary_lane": "jungle",
+      "lanes": [
+        "jungle"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": false,
+      "constraint_exemption_reason": "observed_same_lane_second_ban",
+      "observed_pick_count": 366,
+      "lane_evidence": {
+        "jungle": {
+          "picks": 356,
+          "share": 0.972678,
+          "teams": 29,
+          "seasons": 6
+        },
+        "roam": {
+          "picks": 10,
+          "share": 0.027322,
+          "teams": 2,
+          "seasons": 3
+        }
+      },
+      "same_lane_second_ban_counterexamples": [
+        {
+          "season": "20250002",
+          "match_id": "2025080802",
+          "battle_id": "1038107152_6_1754660568",
+          "bp_order": 16,
+          "locking_opponent_pick_ids": [
+            533
+          ]
+        },
+        {
+          "season": "20250003",
+          "match_id": "2025092801",
+          "battle_id": "501236240_11_1759049058",
+          "bp_order": 11,
+          "locking_opponent_pick_ids": [
+            533
+          ]
+        },
+        {
+          "season": "20250003",
+          "match_id": "2025100203",
+          "battle_id": "501236240_11_1759409107",
+          "bp_order": 12,
+          "locking_opponent_pick_ids": [
+            533
+          ]
+        }
+      ]
+    },
+    {
+      "hero_id": 533,
+      "hero_name": "阿古朵",
+      "primary_lane": "jungle",
+      "lanes": [
+        "jungle"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": false,
+      "constraint_exemption_reason": "observed_same_lane_second_ban",
+      "observed_pick_count": 479,
+      "lane_evidence": {
+        "jungle": {
+          "picks": 443,
+          "share": 0.924843,
+          "teams": 22,
+          "seasons": 6
+        },
+        "farm": {
+          "picks": 18,
+          "share": 0.037578,
+          "teams": 8,
+          "seasons": 3
+        },
+        "roam": {
+          "picks": 18,
+          "share": 0.037578,
+          "teams": 3,
+          "seasons": 3
+        }
+      },
+      "same_lane_second_ban_counterexamples": [
+        {
+          "season": "20250002",
+          "match_id": "2025071303",
+          "battle_id": "1038107152_25_1752415817",
+          "bp_order": 14,
+          "locking_opponent_pick_ids": [
+            502
+          ]
+        }
+      ]
+    },
+    {
+      "hero_id": 534,
+      "hero_name": "桑启",
+      "primary_lane": "roam",
+      "lanes": [
+        "roam"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 67,
+      "lane_evidence": {
+        "roam": {
+          "picks": 67,
+          "share": 1.0,
+          "teams": 19,
+          "seasons": 5
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 536,
+      "hero_name": "夏洛特",
+      "primary_lane": "clash",
+      "lanes": [
+        "clash"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": false,
+      "constraint_exemption_reason": "observed_same_lane_second_ban",
+      "observed_pick_count": 751,
+      "lane_evidence": {
+        "clash": {
+          "picks": 751,
+          "share": 1.0,
+          "teams": 27,
+          "seasons": 6
+        }
+      },
+      "same_lane_second_ban_counterexamples": [
+        {
+          "season": "20250002",
+          "match_id": "2025080203",
+          "battle_id": "1038107152_7_1754144646",
+          "bp_order": 15,
+          "locking_opponent_pick_ids": [
+            510
+          ]
+        }
+      ]
+    },
+    {
+      "hero_id": 537,
+      "hero_name": "司空震",
+      "primary_lane": "clash",
+      "lanes": [
+        "clash"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": false,
+      "constraint_exemption_reason": "observed_same_lane_second_ban",
+      "observed_pick_count": 485,
+      "lane_evidence": {
+        "clash": {
+          "picks": 484,
+          "share": 0.997938,
+          "teams": 25,
+          "seasons": 6
+        },
+        "roam": {
+          "picks": 1,
+          "share": 0.002062,
+          "teams": 1,
+          "seasons": 1
+        }
+      },
+      "same_lane_second_ban_counterexamples": [
+        {
+          "season": "20260002",
+          "match_id": "2026043001",
+          "battle_id": "736117264_89_1777535191",
+          "bp_order": 12,
+          "locking_opponent_pick_ids": [
+            536
+          ]
+        }
+      ]
+    },
+    {
+      "hero_id": 538,
+      "hero_name": "云缨",
+      "primary_lane": "jungle",
+      "lanes": [
+        "jungle"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 156,
+      "lane_evidence": {
+        "jungle": {
+          "picks": 154,
+          "share": 0.987179,
+          "teams": 21,
+          "seasons": 4
+        },
+        "roam": {
+          "picks": 2,
+          "share": 0.012821,
+          "teams": 1,
+          "seasons": 1
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 540,
+      "hero_name": "金蝉",
+      "primary_lane": "mid",
+      "lanes": [
+        "mid"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": false,
+      "constraint_exemption_reason": "observed_same_lane_second_ban",
+      "observed_pick_count": 34,
+      "lane_evidence": {
+        "mid": {
+          "picks": 32,
+          "share": 0.941176,
+          "teams": 15,
+          "seasons": 5
+        },
+        "roam": {
+          "picks": 2,
+          "share": 0.058824,
+          "teams": 2,
+          "seasons": 2
+        }
+      },
+      "same_lane_second_ban_counterexamples": [
+        {
+          "season": "20250003",
+          "match_id": "2025101003",
+          "battle_id": "501236240_112_1760105619",
+          "bp_order": 15,
+          "locking_opponent_pick_ids": [
+            515
+          ]
+        }
+      ]
+    },
+    {
+      "hero_id": 542,
+      "hero_name": "暃",
+      "primary_lane": "jungle",
+      "lanes": [
+        "jungle"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": false,
+      "constraint_exemption_reason": "observed_same_lane_second_ban",
+      "observed_pick_count": 140,
+      "lane_evidence": {
+        "jungle": {
+          "picks": 140,
+          "share": 1.0,
+          "teams": 22,
+          "seasons": 6
+        }
+      },
+      "same_lane_second_ban_counterexamples": [
+        {
+          "season": "20250002",
+          "match_id": "2025071302",
+          "battle_id": "1222656528_17_1752397502",
+          "bp_order": 13,
+          "locking_opponent_pick_ids": [
+            533
+          ]
+        }
+      ]
+    },
+    {
+      "hero_id": 544,
+      "hero_name": "赵怀真",
+      "primary_lane": "clash",
+      "lanes": [
+        "clash",
+        "roam"
+      ],
+      "classification": "flex",
+      "constraint_eligible": false,
+      "constraint_exemption_reason": "multi_lane",
+      "observed_pick_count": 61,
+      "lane_evidence": {
+        "clash": {
+          "picks": 2,
+          "share": 0.032787,
+          "teams": 2,
+          "seasons": 2
+        },
+        "jungle": {
+          "picks": 1,
+          "share": 0.016393,
+          "teams": 1,
+          "seasons": 1
+        },
+        "farm": {
+          "picks": 1,
+          "share": 0.016393,
+          "teams": 1,
+          "seasons": 1
+        },
+        "roam": {
+          "picks": 57,
+          "share": 0.934426,
+          "teams": 17,
+          "seasons": 4
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 545,
+      "hero_name": "莱西奥",
+      "primary_lane": "farm",
+      "lanes": [
+        "farm"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 15,
+      "lane_evidence": {
+        "farm": {
+          "picks": 14,
+          "share": 0.933333,
+          "teams": 9,
+          "seasons": 2
+        },
+        "roam": {
+          "picks": 1,
+          "share": 0.066667,
+          "teams": 1,
+          "seasons": 1
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 548,
+      "hero_name": "戈娅",
+      "primary_lane": "farm",
+      "lanes": [
+        "farm"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 732,
+      "lane_evidence": {
+        "farm": {
+          "picks": 717,
+          "share": 0.979508,
+          "teams": 25,
+          "seasons": 6
+        },
+        "roam": {
+          "picks": 15,
+          "share": 0.020492,
+          "teams": 1,
+          "seasons": 5
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 549,
+      "hero_name": "心魔六耳",
+      "primary_lane": "jungle",
+      "lanes": [
+        "jungle"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": false,
+      "constraint_exemption_reason": "observed_same_lane_second_ban",
+      "observed_pick_count": 13,
+      "lane_evidence": {
+        "clash": {
+          "picks": 1,
+          "share": 0.076923,
+          "teams": 1,
+          "seasons": 1
+        },
+        "jungle": {
+          "picks": 12,
+          "share": 0.923077,
+          "teams": 10,
+          "seasons": 1
+        }
+      },
+      "same_lane_second_ban_counterexamples": [
+        {
+          "season": "20260003",
+          "match_id": "2026071902",
+          "battle_id": "836780560_9_1784453768",
+          "bp_order": 15,
+          "locking_opponent_pick_ids": [
+            517
+          ]
+        }
+      ]
+    },
+    {
+      "hero_id": 550,
+      "hero_name": "空空儿",
+      "primary_lane": "roam",
+      "lanes": [
+        "roam"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 333,
+      "lane_evidence": {
+        "roam": {
+          "picks": 333,
+          "share": 1.0,
+          "teams": 20,
+          "seasons": 5
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 558,
+      "hero_name": "影",
+      "primary_lane": "jungle",
+      "lanes": [
+        "clash",
+        "jungle"
+      ],
+      "classification": "flex",
+      "constraint_eligible": false,
+      "constraint_exemption_reason": "multi_lane",
+      "observed_pick_count": 265,
+      "lane_evidence": {
+        "clash": {
+          "picks": 254,
+          "share": 0.958491,
+          "teams": 21,
+          "seasons": 6
+        },
+        "jungle": {
+          "picks": 10,
+          "share": 0.037736,
+          "teams": 6,
+          "seasons": 2
+        },
+        "roam": {
+          "picks": 1,
+          "share": 0.003774,
+          "teams": 1,
+          "seasons": 1
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 563,
+      "hero_name": "海诺",
+      "primary_lane": "mid",
+      "lanes": [
+        "mid"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 155,
+      "lane_evidence": {
+        "mid": {
+          "picks": 155,
+          "share": 1.0,
+          "teams": 19,
+          "seasons": 6
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 564,
+      "hero_name": "姬小满",
+      "primary_lane": "clash",
+      "lanes": [
+        "clash"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 191,
+      "lane_evidence": {
+        "clash": {
+          "picks": 191,
+          "share": 1.0,
+          "teams": 19,
+          "seasons": 6
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 577,
+      "hero_name": "少司缘",
+      "primary_lane": "roam",
+      "lanes": [
+        "roam"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 651,
+      "lane_evidence": {
+        "clash": {
+          "picks": 1,
+          "share": 0.001536,
+          "teams": 1,
+          "seasons": 1
+        },
+        "farm": {
+          "picks": 1,
+          "share": 0.001536,
+          "teams": 1,
+          "seasons": 1
+        },
+        "roam": {
+          "picks": 649,
+          "share": 0.996928,
+          "teams": 26,
+          "seasons": 6
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 581,
+      "hero_name": "元流之子(坦克)",
+      "primary_lane": "jungle",
+      "lanes": [
+        "jungle"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": false,
+      "constraint_exemption_reason": "observed_same_lane_second_ban",
+      "observed_pick_count": 495,
+      "lane_evidence": {
+        "jungle": {
+          "picks": 486,
+          "share": 0.981818,
+          "teams": 24,
+          "seasons": 6
+        },
+        "roam": {
+          "picks": 9,
+          "share": 0.018182,
+          "teams": 2,
+          "seasons": 3
+        }
+      },
+      "same_lane_second_ban_counterexamples": [
+        {
+          "season": "20250002",
+          "match_id": "2025081502",
+          "battle_id": "1038107152_5_1755263529",
+          "bp_order": 14,
+          "locking_opponent_pick_ids": [
+            533
+          ]
+        }
+      ]
+    },
+    {
+      "hero_id": 582,
+      "hero_name": "元流之子(法师)",
+      "primary_lane": "mid",
+      "lanes": [
+        "mid"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 3,
+      "lane_evidence": {
+        "mid": {
+          "picks": 3,
+          "share": 1.0,
+          "teams": 2,
+          "seasons": 1
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 583,
+      "hero_name": "元流之子(刺客)",
+      "primary_lane": "jungle",
+      "lanes": [
+        "jungle"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 4,
+      "lane_evidence": {
+        "jungle": {
+          "picks": 4,
+          "share": 1.0,
+          "teams": 3,
+          "seasons": 2
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 584,
+      "hero_name": "元流之子(射手)",
+      "primary_lane": "farm",
+      "lanes": [
+        "farm"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 114,
+      "lane_evidence": {
+        "farm": {
+          "picks": 107,
+          "share": 0.938596,
+          "teams": 22,
+          "seasons": 5
+        },
+        "roam": {
+          "picks": 7,
+          "share": 0.061404,
+          "teams": 1,
+          "seasons": 1
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    },
+    {
+      "hero_id": 585,
+      "hero_name": "元流之子(辅助)",
+      "primary_lane": "roam",
+      "lanes": [
+        "roam"
+      ],
+      "classification": "single_lane",
+      "constraint_eligible": true,
+      "constraint_exemption_reason": null,
+      "observed_pick_count": 54,
+      "lane_evidence": {
+        "roam": {
+          "picks": 54,
+          "share": 1.0,
+          "teams": 19,
+          "seasons": 3
+        }
+      },
+      "same_lane_second_ban_counterexamples": []
+    }
+  ]
+}

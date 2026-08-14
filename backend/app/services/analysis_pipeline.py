@@ -79,6 +79,16 @@ class AnalysisPipeline:
                     str(ANALYSIS_DIR / "build_hero_draft_feature_vectors.py"),
                 ],
             )
+        if step == "sequence_draft_model":
+            commands.insert(
+                1,
+                [
+                    sys.executable,
+                    str(ANALYSIS_DIR / "build_hero_lane_profiles.py"),
+                    "--through-season",
+                    self.league_id,
+                ],
+            )
         started = time.monotonic()
         outputs: list[str] = []
         for command in commands:

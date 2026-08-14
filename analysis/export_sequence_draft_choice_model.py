@@ -15,6 +15,7 @@ from typing import Any
 MODEL_TYPE = "frozen_bag_gru_residual_choice"
 SCHEMA_VERSION = 3
 FEATURE_ARTIFACT_NAME = "hero_draft_feature_vectors.json"
+LANE_PROFILE_ARTIFACT_NAME = "hero_lane_profiles.json"
 
 
 def find_repo_root(start: Path) -> Path:
@@ -113,6 +114,9 @@ def main() -> None:
     feature_path = (
         args.feature_artifact or repo_root / "analysis" / FEATURE_ARTIFACT_NAME
     ).resolve()
+    lane_profile_path = repo_root / "analysis" / LANE_PROFILE_ARTIFACT_NAME
+    if not lane_profile_path.is_file():
+        raise FileNotFoundError(f"Hero lane profiles are missing: {lane_profile_path}")
     output_path = (
         args.output
         or repo_root
@@ -178,6 +182,8 @@ def main() -> None:
         "target_season": args.league_id,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "feature_artifact": feature_path.name,
+        "lane_profile_artifact": "hero_lane_profiles.json",
+        "lane_profile_sha256": hashlib.sha256(lane_profile_path.read_bytes()).hexdigest(),
         "feature_names": feature_names,
         "hero_ids": hero_ids,
         "hero_names": {

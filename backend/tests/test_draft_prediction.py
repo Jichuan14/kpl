@@ -41,7 +41,7 @@ class PredictNextActionTest(unittest.TestCase):
             "_hero_to_index": {101: 0, 102: 1, 103: 2},
             "_team_to_index": {"blue-team": 1, "red-team": 2},
             "_hero_lane_masks": {101: 1, 102: 1, 103: 2},
-            "feature_names": ["lane__farm", "lane__mid"],
+            "_constraint_eligible_hero_ids": frozenset({101, 102, 103}),
             "_prepared": {},
             "team_training_decisions": {},
         }

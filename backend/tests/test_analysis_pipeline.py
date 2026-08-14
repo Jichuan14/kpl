@@ -45,10 +45,13 @@ class AnalysisPipelineTests(unittest.TestCase):
                 )
 
         self.assertEqual(result["steps"][0]["step"], "sequence_draft_model")
-        self.assertEqual(run.call_count, 2)
+        self.assertEqual(run.call_count, 3)
         feature_command = run.call_args_list[0].args[0]
-        training_command = run.call_args_list[1].args[0]
+        lane_profile_command = run.call_args_list[1].args[0]
+        training_command = run.call_args_list[2].args[0]
         self.assertTrue(feature_command[1].endswith("build_hero_draft_feature_vectors.py"))
+        self.assertTrue(lane_profile_command[1].endswith("build_hero_lane_profiles.py"))
+        self.assertEqual(lane_profile_command[-2:], ["--through-season", "20260003"])
         self.assertTrue(training_command[1].endswith("train_sequence_draft_choice_model.py"))
         self.assertEqual(training_command[-2:], ["--league-id", "20260003"])
         self.assertNotIn("poc", str(training_command))

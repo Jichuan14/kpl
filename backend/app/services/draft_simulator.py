@@ -18,7 +18,7 @@ from app.services.sequence_model_runtime import (
     prepare_sequence_parameters,
     sequence_logits,
 )
-from app.services.draft_strategy import hero_lane_masks, second_ban_farm_conflicts
+from app.services.draft_strategy import hero_lane_profiles, second_ban_lane_conflicts
 
 _CACHE: dict[Path, tuple[int, dict[str, Any]]] = {}
 _LEARNABLE_CACHE: dict[Path, tuple[int, dict[str, Any]]] = {}
@@ -32,6 +32,7 @@ _TEAM_TENDENCY_CACHE: dict[
 ] = {}
 LEGACY_SPECIALTY_FEATURES_PATH = ANALYSIS_DIR / "hero_specialty_vectors_thermometer.json"
 DRAFT_FEATURES_PATH = ANALYSIS_DIR / "hero_draft_feature_vectors.json"
+LANE_PROFILES_PATH = ANALYSIS_DIR / "hero_lane_profiles.json"
 # Public requests and AI tool calls use this fixed, lowest supported rollout
 # count.  Keep the low-level ``simulate`` function parameterized for offline
 # analysis and deterministic unit tests, but do not expose that control at an
@@ -295,11 +296,24 @@ def load_sequence_model(league_id: str) -> dict[str, Any]:
     model["_hero_ids"] = hero_ids
     model["_hero_to_index"] = hero_to_index
     model["_team_to_index"] = team_to_index
-    model["_hero_lane_masks"] = hero_lane_masks(
-        hero_ids,
-        expected_feature_names,
-        feature_matrix,
-    )
+    if not LANE_PROFILES_PATH.is_file():
+        raise FileNotFoundError(f"Hero lane profiles are missing: {LANE_PROFILES_PATH}")
+    with LANE_PROFILES_PATH.open(encoding="utf-8") as source:
+        lane_profile_artifact = json.load(source)
+    expected_lane_profile_hash = model.get("lane_profile_sha256")
+    actual_lane_profile_hash = hashlib.sha256(
+        LANE_PROFILES_PATH.read_bytes()
+    ).hexdigest()
+    if (
+        expected_lane_profile_hash
+        and actual_lane_profile_hash != expected_lane_profile_hash
+    ):
+        raise ValueError("Sequence model lane profiles do not match the trained artifact")
+    lane_masks, constraint_eligible_ids = hero_lane_profiles(lane_profile_artifact)
+    if not set(hero_ids).issubset(lane_masks):
+        raise ValueError("Hero lane profiles do not cover the sequence vocabulary")
+    model["_hero_lane_masks"] = lane_masks
+    model["_constraint_eligible_hero_ids"] = constraint_eligible_ids
     model["_prepared"] = prepare_sequence_parameters(model, feature_matrix)
     _SEQUENCE_CACHE[path] = (modified, model)
     return model
@@ -752,13 +766,13 @@ def _predict_sequence(
     ]
     side = str(step["side"])
     opponent_side = "red" if side == "blue" else "blue"
-    strategic_conflicts = second_ban_farm_conflicts(
+    strategic_conflicts = second_ban_lane_conflicts(
         action=str(step["action"]),
         bp_order=int(step["bp_order"]),
         opponent_pick_ids=state.get(f"{opponent_side}_picks", []),
         candidate_ids=legal_hero_ids,
         lane_masks=sequence_model["_hero_lane_masks"],
-        feature_names=sequence_model["feature_names"],
+        constraint_eligible_ids=sequence_model["_constraint_eligible_hero_ids"],
     )
     strategically_legal_hero_ids = [
         hero_id for hero_id in legal_hero_ids if hero_id not in strategic_conflicts

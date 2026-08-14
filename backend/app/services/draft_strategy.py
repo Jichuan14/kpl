@@ -2,76 +2,78 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Mapping
+from typing import Any
 
 
-LANE_FEATURE_PREFIX = "lane__"
-FARM_LANE_FEATURE = "lane__farm"
+LANES = ("clash", "mid", "jungle", "farm", "roam")
 SECOND_BAN_ORDERS = frozenset(range(11, 17))
-STRATEGIC_CONSTRAINT_VERSION = 1
+STRATEGIC_CONSTRAINT_VERSION = 2
 
 
-def hero_lane_masks(
-    hero_ids: Sequence[int],
-    feature_names: Sequence[str],
-    feature_rows: Sequence[Sequence[float]],
-) -> dict[int, int]:
-    """Build compact canonical-lane masks from the draft feature artifact."""
-    if len(hero_ids) != len(feature_rows):
-        raise ValueError("Hero ids and feature rows must have matching lengths")
-    lane_indices = [
-        index
-        for index, feature_name in enumerate(feature_names)
-        if str(feature_name).startswith(LANE_FEATURE_PREFIX)
-    ]
-    if FARM_LANE_FEATURE not in feature_names:
-        raise ValueError("Draft features do not define the farm lane")
-    if any(len(row) != len(feature_names) for row in feature_rows):
-        raise ValueError("Draft feature rows have inconsistent widths")
-    return {
-        int(hero_id): sum(
-            1 << lane_index
-            for lane_index, feature_index in enumerate(lane_indices)
-            if float(feature_rows[row_index][feature_index]) > 0
-        )
-        for row_index, hero_id in enumerate(hero_ids)
-    }
+def hero_lane_profiles(
+    artifact: Mapping[str, Any],
+) -> tuple[dict[int, int], frozenset[int]]:
+    """Parse a versioned lane-profile artifact into masks and eligibility."""
+    if (
+        artifact.get("schema_version") != 1
+        or artifact.get("artifact_type") != "hero_lane_profiles"
+    ):
+        raise ValueError("Unsupported hero lane profile artifact")
+    lanes = tuple(str(lane) for lane in artifact.get("lanes", []))
+    if lanes != LANES:
+        raise ValueError("Hero lane profiles do not define the five canonical lanes")
+    lane_bits = {lane: 1 << index for index, lane in enumerate(lanes)}
+    masks: dict[int, int] = {}
+    eligible: set[int] = set()
+    for row in artifact.get("rows", []):
+        hero_id = int(row["hero_id"])
+        if hero_id in masks:
+            raise ValueError(f"Duplicate hero lane profile: {hero_id}")
+        row_lanes = [str(lane) for lane in row.get("lanes", [])]
+        if len(row_lanes) != len(set(row_lanes)) or any(
+            lane not in lane_bits for lane in row_lanes
+        ):
+            raise ValueError(f"Invalid lanes for hero {hero_id}")
+        mask = sum(lane_bits[lane] for lane in row_lanes)
+        masks[hero_id] = mask
+        if bool(row.get("constraint_eligible")):
+            if mask == 0 or mask & (mask - 1):
+                raise ValueError(f"Constraint-eligible hero {hero_id} is not single-lane")
+            eligible.add(hero_id)
+    return masks, frozenset(eligible)
 
 
-def second_ban_farm_conflicts(
+def second_ban_lane_conflicts(
     *,
     action: str,
     bp_order: int,
     opponent_pick_ids: Iterable[int],
     candidate_ids: Iterable[int],
     lane_masks: Mapping[int, int],
-    feature_names: Sequence[str],
+    constraint_eligible_ids: frozenset[int] | set[int],
 ) -> set[int]:
-    """Return farm-only bans made irrelevant by an opponent farm-only pick.
+    """Return strategically redundant single-lane bans in all five lanes.
 
-    These heroes remain legal under the game rules.  The constraint is limited
-    to the second ban phase and canonical farm-only heroes because historical
-    data contains real same-role bans for other lanes when picks flex between
-    roles.  Candidates with any non-farm lane remain available for that reason.
+    A lane is locked only by an opponent pick confidently classified as
+    single-lane. A candidate is removed only when it is also confidently
+    single-lane in a locked lane. Flexible and uncertain heroes are untouched.
     """
     if action != "ban" or int(bp_order) not in SECOND_BAN_ORDERS:
         return set()
-    lane_features = [
-        str(feature_name)
-        for feature_name in feature_names
-        if str(feature_name).startswith(LANE_FEATURE_PREFIX)
-    ]
-    try:
-        farm_bit = 1 << lane_features.index(FARM_LANE_FEATURE)
-    except ValueError as exc:
-        raise ValueError("Draft features do not define the farm lane") from exc
-    if not any(
-        lane_masks.get(int(hero_id), 0) == farm_bit
-        for hero_id in opponent_pick_ids
-    ):
+    eligible = constraint_eligible_ids
+    locked_lanes = 0
+    for hero_id_value in opponent_pick_ids:
+        hero_id = int(hero_id_value)
+        if hero_id in eligible:
+            locked_lanes |= lane_masks.get(hero_id, 0)
+    if not locked_lanes:
         return set()
     return {
-        int(hero_id)
-        for hero_id in candidate_ids
-        if lane_masks.get(int(hero_id), 0) == farm_bit
+        int(hero_id_value)
+        for hero_id_value in candidate_ids
+        if (
+            int(hero_id_value) in eligible
+            and lane_masks.get(int(hero_id_value), 0) & locked_lanes
+        )
     }
