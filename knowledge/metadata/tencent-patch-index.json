@@ -1,0 +1,2232 @@
+{
+  "schema_version": 1,
+  "source": "Tencent announcement API",
+  "source_class": "primary",
+  "since": "2025-01-01",
+  "until": "2026-08-14",
+  "collected_at": "2026-08-14T16:33:05-07:00",
+  "list_pages_scanned": 17,
+  "document_count": 222,
+  "documents": [
+    {
+      "announcement_id": "807106",
+      "title": "8月14日版本更新公告",
+      "published_at": "2026-08-13 18:23:24",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=807106",
+      "raw_payload": "raw/tencent-announcements/807106.json",
+      "raw_payload_sha256": "246d234ef6c1fef7a4d414010a28a127486c2713b6fc257a206f33e4cd495238",
+      "normalized_document": "sources/official/patches/2026-08-13-807106-8-14.md"
+    },
+    {
+      "announcement_id": "807018",
+      "title": "英雄平衡性调整 | 刘备平衡",
+      "published_at": "2026-08-12 15:20:55",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=807018",
+      "raw_payload": "raw/tencent-announcements/807018.json",
+      "raw_payload_sha256": "291c4de1ff719f3ddcdc7341206b2039a0999f9cd72aa7b87d67c0d8200959c3",
+      "normalized_document": "sources/official/patches/2026-08-12-807018-announcement-807018.md"
+    },
+    {
+      "announcement_id": "807017",
+      "title": "8月13日版本更新公告",
+      "published_at": "2026-08-12 15:18:29",
+      "game_version": "V114",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=807017",
+      "raw_payload": "raw/tencent-announcements/807017.json",
+      "raw_payload_sha256": "bf5dfb46504d5d2c09c9badbddbe890cb5b2187edee6f5dcc2a65a346e1bad2a",
+      "normalized_document": "sources/official/patches/2026-08-12-807017-8-13.md"
+    },
+    {
+      "announcement_id": "806689",
+      "title": "8月8日版本更新公告",
+      "published_at": "2026-08-07 17:32:03",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=806689",
+      "raw_payload": "raw/tencent-announcements/806689.json",
+      "raw_payload_sha256": "f1dfa2106e0fd8fdebf6f4cf627638b6cb389ef5dea0619a5bdad987341c7e6a",
+      "normalized_document": "sources/official/patches/2026-08-07-806689-8-8.md"
+    },
+    {
+      "announcement_id": "806616",
+      "title": "8月7日问题修复版本更新公告",
+      "published_at": "2026-08-06 20:11:52",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=806616",
+      "raw_payload": "raw/tencent-announcements/806616.json",
+      "raw_payload_sha256": "2bd6de0d44d3a8605fdd9973721b1d262e81362a8ea0bc1e8e26a95ca85eb527",
+      "normalized_document": "sources/official/patches/2026-08-06-806616-8-7.md"
+    },
+    {
+      "announcement_id": "806592",
+      "title": "8月6日问题修复版本更新公告",
+      "published_at": "2026-08-06 16:34:33",
+      "game_version": "V114",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=806592",
+      "raw_payload": "raw/tencent-announcements/806592.json",
+      "raw_payload_sha256": "bc5b942c5f9022ac0a0651bf48550f57cb5270faf0c8916f72cf5f046313e96b",
+      "normalized_document": "sources/official/patches/2026-08-06-806592-8-6.md"
+    },
+    {
+      "announcement_id": "806478",
+      "title": "8月6日版本更新公告",
+      "published_at": "2026-08-05 14:37:17",
+      "game_version": "V114",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=806478",
+      "raw_payload": "raw/tencent-announcements/806478.json",
+      "raw_payload_sha256": "75eb17098c1a649e5928228b5d0f8c863d34bae5b850c83f1128a834e3992a62",
+      "normalized_document": "sources/official/patches/2026-08-05-806478-8-6.md"
+    },
+    {
+      "announcement_id": "806061",
+      "title": "英雄平衡性调整 | 姜子牙增强",
+      "published_at": "2026-07-29 14:57:29",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=806061",
+      "raw_payload": "raw/tencent-announcements/806061.json",
+      "raw_payload_sha256": "f422ddf3e1dce42d0ebc488b1c75d18886df971685c96eeb41ff61431ef8a9b5",
+      "normalized_document": "sources/official/patches/2026-07-29-806061-announcement-806061.md"
+    },
+    {
+      "announcement_id": "806060",
+      "title": "7月30日版本更新公告",
+      "published_at": "2026-07-29 14:56:17",
+      "game_version": "V114",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=806060",
+      "raw_payload": "raw/tencent-announcements/806060.json",
+      "raw_payload_sha256": "4f1da7e9d8dfc0e17c1472abde5b8b3e873c4a912508451243c90780d7b13ccb",
+      "normalized_document": "sources/official/patches/2026-07-29-806060-7-30.md"
+    },
+    {
+      "announcement_id": "805746",
+      "title": "7月23日问题修复版本更新公告",
+      "published_at": "2026-07-23 14:21:43",
+      "game_version": "V114",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=805746",
+      "raw_payload": "raw/tencent-announcements/805746.json",
+      "raw_payload_sha256": "6af7e4cdda6f28aa3f9c69d4cdad13ee6b4139250be42af75ec64136621d5232",
+      "normalized_document": "sources/official/patches/2026-07-23-805746-7-23.md"
+    },
+    {
+      "announcement_id": "805672",
+      "title": "英雄平衡性调整 | 马超、李信平衡",
+      "published_at": "2026-07-22 14:27:35",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=805672",
+      "raw_payload": "raw/tencent-announcements/805672.json",
+      "raw_payload_sha256": "fb782c3013df7eb45eb077fceac0a45055a2ab3469bc74ee8f97b4054e09461c",
+      "normalized_document": "sources/official/patches/2026-07-22-805672-announcement-805672.md"
+    },
+    {
+      "announcement_id": "805671",
+      "title": "7月23日版本更新公告",
+      "published_at": "2026-07-22 14:04:43",
+      "game_version": "V114",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=805671",
+      "raw_payload": "raw/tencent-announcements/805671.json",
+      "raw_payload_sha256": "d982b356e2b9be500a1cc8eace9923ef4ada39c1e27c4ca8e417a7afa9208bb0",
+      "normalized_document": "sources/official/patches/2026-07-22-805671-7-23.md"
+    },
+    {
+      "announcement_id": "805238",
+      "title": "7月16日版本更新公告",
+      "published_at": "2026-07-15 14:44:20",
+      "game_version": "V114",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=805238",
+      "raw_payload": "raw/tencent-announcements/805238.json",
+      "raw_payload_sha256": "22950b5c4e0d9c5c667273768ed7ae97526edce534252982df9ea0471573f4ed",
+      "normalized_document": "sources/official/patches/2026-07-15-805238-7-16.md"
+    },
+    {
+      "announcement_id": "805236",
+      "title": "英雄平衡性调整丨李信、裴擒虎平衡",
+      "published_at": "2026-07-15 14:15:39",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=805236",
+      "raw_payload": "raw/tencent-announcements/805236.json",
+      "raw_payload_sha256": "fba0ac6fec3e0bcfe39ec99412aec9cbfb29479857d855be5400047a802d4867",
+      "normalized_document": "sources/official/patches/2026-07-15-805236-announcement-805236.md"
+    },
+    {
+      "announcement_id": "804753",
+      "title": "7月9日版本更新公告",
+      "published_at": "2026-07-08 15:20:43",
+      "game_version": "V114",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=804753",
+      "raw_payload": "raw/tencent-announcements/804753.json",
+      "raw_payload_sha256": "b88779bfb1771869cad3ebef1d8971dba52f3c1b167236e445d34591f5a2ae6b",
+      "normalized_document": "sources/official/patches/2026-07-08-804753-7-9.md"
+    },
+    {
+      "announcement_id": "804752",
+      "title": "英雄平衡性调整 | 鲁班大师增强",
+      "published_at": "2026-07-08 15:20:08",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=804752",
+      "raw_payload": "raw/tencent-announcements/804752.json",
+      "raw_payload_sha256": "5b761de63bd5e5035146934f077e07c7b78ca23a0604eb052ddb29abb93d87d1",
+      "normalized_document": "sources/official/patches/2026-07-08-804752-announcement-804752.md"
+    },
+    {
+      "announcement_id": "804182",
+      "title": "7月2日版本更新公告",
+      "published_at": "2026-07-01 14:13:41",
+      "game_version": "V114",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=804182",
+      "raw_payload": "raw/tencent-announcements/804182.json",
+      "raw_payload_sha256": "7a2d1448d91ea84c7ed8bd8a8127b771525f0002f483d3c88ced6967596c0a61",
+      "normalized_document": "sources/official/patches/2026-07-01-804182-7-2.md"
+    },
+    {
+      "announcement_id": "803559",
+      "title": "6月25日王者荣耀小游戏版本更新公告",
+      "published_at": "2026-06-26 16:05:40",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=803559",
+      "raw_payload": "raw/tencent-announcements/803559.json",
+      "raw_payload_sha256": "81108c6a54fa5c1bfea5a2d1c5bc1703a4f53939a4c7f5e12e2247f7ecb05393",
+      "normalized_document": "sources/official/patches/2026-06-26-803559-6-25.md"
+    },
+    {
+      "announcement_id": "803146",
+      "title": "6月26日版本更新公告",
+      "published_at": "2026-06-25 14:26:50",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=803146",
+      "raw_payload": "raw/tencent-announcements/803146.json",
+      "raw_payload_sha256": "859e127f3521af7d30aa3a4bf2f6ee222d694dad9323623e38783903163c5184",
+      "normalized_document": "sources/official/patches/2026-06-25-803146-6-26.md"
+    },
+    {
+      "announcement_id": "802692",
+      "title": "6月25日正式服S44赛季「不拘命格」版本更新公告",
+      "published_at": "2026-06-22 17:44:21",
+      "game_version": "V114",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=802692",
+      "raw_payload": "raw/tencent-announcements/802692.json",
+      "raw_payload_sha256": "78f47ae581e98bf7f1bf6ebc8848e17c8404e394cb61de2b604980955d481d4f",
+      "normalized_document": "sources/official/patches/2026-06-22-802692-6-25-s44.md"
+    },
+    {
+      "announcement_id": "802498",
+      "title": "6月18日抢先服版本更新公告",
+      "published_at": "2026-06-17 14:26:49",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=802498",
+      "raw_payload": "raw/tencent-announcements/802498.json",
+      "raw_payload_sha256": "913b6dca1510e4449c67338fb9a7b9d66ffe28ce417cc6f745d41f51e63b0c20",
+      "normalized_document": "sources/official/patches/2026-06-17-802498-6-18.md"
+    },
+    {
+      "announcement_id": "802470",
+      "title": "6月18日版本更新公告",
+      "published_at": "2026-06-16 19:50:57",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=802470",
+      "raw_payload": "raw/tencent-announcements/802470.json",
+      "raw_payload_sha256": "500beadac483d854b5c1345fdcf2e8f3a552cecf186dcf3e312e400fae7009a5",
+      "normalized_document": "sources/official/patches/2026-06-16-802470-6-18.md"
+    },
+    {
+      "announcement_id": "802437",
+      "title": "6月17日抢先服S44赛季版本更新公告",
+      "published_at": "2026-06-16 10:10:32",
+      "game_version": "V114",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=802437",
+      "raw_payload": "raw/tencent-announcements/802437.json",
+      "raw_payload_sha256": "9aadc2edeb470f0a897616a5a845731927f29a35573fd7a659e766f5fee01cb7",
+      "normalized_document": "sources/official/patches/2026-06-16-802437-6-17-s44.md"
+    },
+    {
+      "announcement_id": "802399",
+      "title": "6月16日版本更新公告",
+      "published_at": "2026-06-15 18:08:15",
+      "game_version": "V113",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=802399",
+      "raw_payload": "raw/tencent-announcements/802399.json",
+      "raw_payload_sha256": "fb52faadf914671108804e1932841efe1e552a9abbdc804d74c5fb37d56b5ca7",
+      "normalized_document": "sources/official/patches/2026-06-15-802399-6-16.md"
+    },
+    {
+      "announcement_id": "802357",
+      "title": "6月15日版本更新公告",
+      "published_at": "2026-06-14 15:49:37",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=802357",
+      "raw_payload": "raw/tencent-announcements/802357.json",
+      "raw_payload_sha256": "48e29841082888e730e5d3d1c6fa9b626a9ad830e7ec088f4838f1b1bcf4654c",
+      "normalized_document": "sources/official/patches/2026-06-14-802357-6-15.md"
+    },
+    {
+      "announcement_id": "802259",
+      "title": "英雄平衡性调整 | 鲁班大师玩法升级",
+      "published_at": "2026-06-11 15:14:16",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=802259",
+      "raw_payload": "raw/tencent-announcements/802259.json",
+      "raw_payload_sha256": "13939b4fc1785b9bdd64a349f3b04cb2d8e1270e3760e3b7ad14177b9d394f2e",
+      "normalized_document": "sources/official/patches/2026-06-11-802259-announcement-802259.md"
+    },
+    {
+      "announcement_id": "802258",
+      "title": "6月12日版本更新公告",
+      "published_at": "2026-06-11 15:12:46",
+      "game_version": "V113",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=802258",
+      "raw_payload": "raw/tencent-announcements/802258.json",
+      "raw_payload_sha256": "391251fdb92c6c5ea6301fa9d6f26698f53a236048903102405a047b04b02fa0",
+      "normalized_document": "sources/official/patches/2026-06-11-802258-6-12.md"
+    },
+    {
+      "announcement_id": "801933",
+      "title": "英雄平衡性调整 | 孙尚香、鲁班七号增强",
+      "published_at": "2026-06-02 15:21:55",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=801933",
+      "raw_payload": "raw/tencent-announcements/801933.json",
+      "raw_payload_sha256": "ac008af4c016276ae273992826a9eb84a36a19515616b838c2dee186df513cd1",
+      "normalized_document": "sources/official/patches/2026-06-02-801933-announcement-801933.md"
+    },
+    {
+      "announcement_id": "801930",
+      "title": "6月3日版本更新公告",
+      "published_at": "2026-06-02 14:07:38",
+      "game_version": "V113",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=801930",
+      "raw_payload": "raw/tencent-announcements/801930.json",
+      "raw_payload_sha256": "b9c2b162f978e70a64cda4852ff83f0cc6e601654e70b1edf7d62e34368453be",
+      "normalized_document": "sources/official/patches/2026-06-02-801930-6-3.md"
+    },
+    {
+      "announcement_id": "801704",
+      "title": "英雄平衡性调整 | 马超、少司缘平衡",
+      "published_at": "2026-05-27 16:01:45",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=801704",
+      "raw_payload": "raw/tencent-announcements/801704.json",
+      "raw_payload_sha256": "ccc6cf5988750d63ab10cab709cf2402094c593b0f7491779d27dfa41b737c10",
+      "normalized_document": "sources/official/patches/2026-05-27-801704-announcement-801704.md"
+    },
+    {
+      "announcement_id": "801703",
+      "title": "5月28日版本更新公告",
+      "published_at": "2026-05-27 16:00:22",
+      "game_version": "V113",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=801703",
+      "raw_payload": "raw/tencent-announcements/801703.json",
+      "raw_payload_sha256": "80b0f84ce11356d162fbd0e400131a7aeb0a3d36088934bca7a528d1b79af773",
+      "normalized_document": "sources/official/patches/2026-05-27-801703-5-28.md"
+    },
+    {
+      "announcement_id": "801369",
+      "title": "5月21日版本更新公告",
+      "published_at": "2026-05-20 16:24:17",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=801369",
+      "raw_payload": "raw/tencent-announcements/801369.json",
+      "raw_payload_sha256": "03d0c1f64946fc0d627f6f0e3db16e26dd9588bc8b84041cc68602424b428b88",
+      "normalized_document": "sources/official/patches/2026-05-20-801369-5-21.md"
+    },
+    {
+      "announcement_id": "801279",
+      "title": "英雄平衡性调整 | 阿古朵平衡",
+      "published_at": "2026-05-19 16:07:36",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=801279",
+      "raw_payload": "raw/tencent-announcements/801279.json",
+      "raw_payload_sha256": "bc32c2f1f4527b160464990e98533181adf87d65de2f76504a448893ecd30e97",
+      "normalized_document": "sources/official/patches/2026-05-19-801279-announcement-801279.md"
+    },
+    {
+      "announcement_id": "801278",
+      "title": "5月20日版本更新公告",
+      "published_at": "2026-05-19 16:01:57",
+      "game_version": "V113",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=801278",
+      "raw_payload": "raw/tencent-announcements/801278.json",
+      "raw_payload_sha256": "d96de72775b613acb727dbac3454d5d9f966656ba96d43e1ae8fb942570c21a9",
+      "normalized_document": "sources/official/patches/2026-05-19-801278-5-20.md"
+    },
+    {
+      "announcement_id": "801020",
+      "title": "5月14日版本更新公告",
+      "published_at": "2026-05-13 15:45:13",
+      "game_version": "V113",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=801020",
+      "raw_payload": "raw/tencent-announcements/801020.json",
+      "raw_payload_sha256": "a6e93e809cd6ad41646ef9e5058880382f31a284ed69dcba8d178b4aaa91778d",
+      "normalized_document": "sources/official/patches/2026-05-13-801020-5-14.md"
+    },
+    {
+      "announcement_id": "800790",
+      "title": "英雄平衡性调整 | 元流之子法师降温",
+      "published_at": "2026-05-07 15:18:38",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=800790",
+      "raw_payload": "raw/tencent-announcements/800790.json",
+      "raw_payload_sha256": "83fc539c850083448dfbe20956c8683a953db1f721b67b2087a7d502b2bc4f46",
+      "normalized_document": "sources/official/patches/2026-05-07-800790-announcement-800790.md"
+    },
+    {
+      "announcement_id": "800789",
+      "title": "5月8日版本更新公告",
+      "published_at": "2026-05-07 15:13:31",
+      "game_version": "V113",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=800789",
+      "raw_payload": "raw/tencent-announcements/800789.json",
+      "raw_payload_sha256": "593457c1988044ceb70ba6a678c668039985dba7d2136f61246d54c5c2f2adde",
+      "normalized_document": "sources/official/patches/2026-05-07-800789-5-8.md"
+    },
+    {
+      "announcement_id": "800261",
+      "title": "英雄平衡性调整 | 孙膑、吕布增强",
+      "published_at": "2026-04-28 15:20:07",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=800261",
+      "raw_payload": "raw/tencent-announcements/800261.json",
+      "raw_payload_sha256": "e9a55622ac8545e24743fcb11978e419b7a096f7196a58e1d201e0f23b9e1995",
+      "normalized_document": "sources/official/patches/2026-04-28-800261-announcement-800261.md"
+    },
+    {
+      "announcement_id": "800260",
+      "title": "4月29日版本更新公告",
+      "published_at": "2026-04-28 15:18:48",
+      "game_version": "V113",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=800260",
+      "raw_payload": "raw/tencent-announcements/800260.json",
+      "raw_payload_sha256": "462021d44d3c1b228e256cbfc0cd822f76b65e13081f8eeabe3e955e14d0d804",
+      "normalized_document": "sources/official/patches/2026-04-28-800260-4-29.md"
+    },
+    {
+      "announcement_id": "799875",
+      "title": "4月23日问题修复版本更新公告",
+      "published_at": "2026-04-22 16:19:48",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=799875",
+      "raw_payload": "raw/tencent-announcements/799875.json",
+      "raw_payload_sha256": "16945c583eb8a9b112a19239e28dd389482fb59396aad8e73c7a4cc57e7da591",
+      "normalized_document": "sources/official/patches/2026-04-22-799875-4-23.md"
+    },
+    {
+      "announcement_id": "799788",
+      "title": "4月22日版本更新公告",
+      "published_at": "2026-04-21 15:10:48",
+      "game_version": "V113",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=799788",
+      "raw_payload": "raw/tencent-announcements/799788.json",
+      "raw_payload_sha256": "b119f49d0eaa4ea7220baf123a696ce08fdd6ed56a05bab12fc30b0509557e65",
+      "normalized_document": "sources/official/patches/2026-04-21-799788-4-22.md"
+    },
+    {
+      "announcement_id": "799576",
+      "title": "4月16日问题修复版本更新公告",
+      "published_at": "2026-04-16 15:03:17",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=799576",
+      "raw_payload": "raw/tencent-announcements/799576.json",
+      "raw_payload_sha256": "9e5b3357450952c6db0b2626e0b92b216e38c875bf9d91112c64bf90e8203eec",
+      "normalized_document": "sources/official/patches/2026-04-16-799576-4-16.md"
+    },
+    {
+      "announcement_id": "799520",
+      "title": "4月16日版本更新公告",
+      "published_at": "2026-04-15 18:13:31",
+      "game_version": "V113",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=799520",
+      "raw_payload": "raw/tencent-announcements/799520.json",
+      "raw_payload_sha256": "799a92226c211c7d83463eaa11f8d3a5b56643d09310927e35aa84f0e3517275",
+      "normalized_document": "sources/official/patches/2026-04-15-799520-4-16.md"
+    },
+    {
+      "announcement_id": "799512",
+      "title": "英雄平衡性调整 | 孙尚香、百里守约增强",
+      "published_at": "2026-04-15 17:14:43",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=799512",
+      "raw_payload": "raw/tencent-announcements/799512.json",
+      "raw_payload_sha256": "977b01171d0ae0e81630ab33f74b639068dddd26da4f2268a951cdb47907149f",
+      "normalized_document": "sources/official/patches/2026-04-15-799512-announcement-799512.md"
+    },
+    {
+      "announcement_id": "799120",
+      "title": "英雄平衡性调整 | 少司缘平衡",
+      "published_at": "2026-04-09 14:55:30",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=799120",
+      "raw_payload": "raw/tencent-announcements/799120.json",
+      "raw_payload_sha256": "03dc7dad07735b5d95fa7c5315e23ef48a66f2fb6ccfeea67132d6ee1b8fb969",
+      "normalized_document": "sources/official/patches/2026-04-09-799120-announcement-799120.md"
+    },
+    {
+      "announcement_id": "799119",
+      "title": "4月10日版本更新公告",
+      "published_at": "2026-04-09 14:54:04",
+      "game_version": "V113",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=799119",
+      "raw_payload": "raw/tencent-announcements/799119.json",
+      "raw_payload_sha256": "3fc1ad34925d973097d280698d56f55ca6e712b22e2dab3996c499cd2f1f0dea",
+      "normalized_document": "sources/official/patches/2026-04-09-799119-4-10.md"
+    },
+    {
+      "announcement_id": "798390",
+      "title": "4月3日问题修复版本更新公告",
+      "published_at": "2026-04-02 18:18:52",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=798390",
+      "raw_payload": "raw/tencent-announcements/798390.json",
+      "raw_payload_sha256": "24ec874ca6027916fb5bf79118304db2f6df61f5264a048c3f1a8b120c54ea39",
+      "normalized_document": "sources/official/patches/2026-04-02-798390-4-3.md"
+    },
+    {
+      "announcement_id": "798075",
+      "title": "4月2日问题修复版本更新公告",
+      "published_at": "2026-04-01 16:10:24",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=798075",
+      "raw_payload": "raw/tencent-announcements/798075.json",
+      "raw_payload_sha256": "5b0291aea31ad9254528a1f83ca1f186f4e241bea98eca2ead77506859ca0ce2",
+      "normalized_document": "sources/official/patches/2026-04-01-798075-4-2.md"
+    },
+    {
+      "announcement_id": "797710",
+      "title": "4月1日正式服S43赛季「陌上相逢」版本更新公告",
+      "published_at": "2026-03-30 12:01:18",
+      "game_version": "V113",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=797710",
+      "raw_payload": "raw/tencent-announcements/797710.json",
+      "raw_payload_sha256": "87937bdafdc7b926f42fe3dfae8cd605657c1cf6e3d4331a6de610ff4dd6baa2",
+      "normalized_document": "sources/official/patches/2026-03-30-797710-4-1-s43.md"
+    },
+    {
+      "announcement_id": "797463",
+      "title": "3月25日抢先服S43赛季版本更新公告",
+      "published_at": "2026-03-23 16:40:16",
+      "game_version": "V113",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=797463",
+      "raw_payload": "raw/tencent-announcements/797463.json",
+      "raw_payload_sha256": "1162c587926d6287a287d13161f3f9b7889afcae32a2fce2cfdb547d61a221e2",
+      "normalized_document": "sources/official/patches/2026-03-23-797463-3-25-s43.md"
+    },
+    {
+      "announcement_id": "797208",
+      "title": "英雄平衡性调整 | 哪吒平衡",
+      "published_at": "2026-03-18 10:59:00",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=797208",
+      "raw_payload": "raw/tencent-announcements/797208.json",
+      "raw_payload_sha256": "8c71d7874aba5bc3d5c1ee5839d8dd8896dbed1cfc6013e30b4b1eebc7526505",
+      "normalized_document": "sources/official/patches/2026-03-18-797208-announcement-797208.md"
+    },
+    {
+      "announcement_id": "797207",
+      "title": "3月19日版本更新公告",
+      "published_at": "2026-03-18 10:56:38",
+      "game_version": "V112",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=797207",
+      "raw_payload": "raw/tencent-announcements/797207.json",
+      "raw_payload_sha256": "b898b63cce92288dcad7d50f3d972b12d7b63adafefc16d4a1132c6a89c1793b",
+      "normalized_document": "sources/official/patches/2026-03-18-797207-3-19.md"
+    },
+    {
+      "announcement_id": "796835",
+      "title": "英雄平衡性调整 | 赵云、诸葛亮平衡",
+      "published_at": "2026-03-11 11:23:18",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=796835",
+      "raw_payload": "raw/tencent-announcements/796835.json",
+      "raw_payload_sha256": "7e3d45ea892e487729b1c2d26065e46cc0bafa8f26708a317fe00d378cf8cb29",
+      "normalized_document": "sources/official/patches/2026-03-11-796835-announcement-796835.md"
+    },
+    {
+      "announcement_id": "796833",
+      "title": "3月12日版本更新公告",
+      "published_at": "2026-03-11 10:31:52",
+      "game_version": "V112",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=796833",
+      "raw_payload": "raw/tencent-announcements/796833.json",
+      "raw_payload_sha256": "7e12e8061e8711c1615b8c101645c52d20d5c8a52ce45beb1409529935e3316c",
+      "normalized_document": "sources/official/patches/2026-03-11-796833-3-12.md"
+    },
+    {
+      "announcement_id": "796773",
+      "title": "3月10日体验服版本更新延迟公告",
+      "published_at": "2026-03-10 11:57:38",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=796773",
+      "raw_payload": "raw/tencent-announcements/796773.json",
+      "raw_payload_sha256": "abc69927cd266368ec3c4ce8f5e3c5ff923ed14a6fcb5b27d77dff8e4ee262b1",
+      "normalized_document": "sources/official/patches/2026-03-10-796773-3-10.md"
+    },
+    {
+      "announcement_id": "796430",
+      "title": "英雄平衡性调整 | 大禹玩法升级",
+      "published_at": "2026-03-04 11:45:09",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=796430",
+      "raw_payload": "raw/tencent-announcements/796430.json",
+      "raw_payload_sha256": "86690b3607fb060205364e62efa2a1a4de6429844702635cfdf591df58fd1595",
+      "normalized_document": "sources/official/patches/2026-03-04-796430-announcement-796430.md"
+    },
+    {
+      "announcement_id": "796429",
+      "title": "3月5日版本更新公告",
+      "published_at": "2026-03-04 11:42:50",
+      "game_version": "V112",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=796429",
+      "raw_payload": "raw/tencent-announcements/796429.json",
+      "raw_payload_sha256": "527cdc1fa86032ed6d3629f17f8c83d478d0e41c9ab6772ac46bf880c75533f5",
+      "normalized_document": "sources/official/patches/2026-03-04-796429-3-5.md"
+    },
+    {
+      "announcement_id": "796189",
+      "title": "2月28日问题修复版本更新公告",
+      "published_at": "2026-02-27 19:47:36",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=796189",
+      "raw_payload": "raw/tencent-announcements/796189.json",
+      "raw_payload_sha256": "a5aad43eb680c962b0d6ed7b04329ecdfe6b3c6d65853421cafe967bccf93ae4",
+      "normalized_document": "sources/official/patches/2026-02-27-796189-2-28.md"
+    },
+    {
+      "announcement_id": "796074",
+      "title": "英雄平衡性调整 | 芈月玩法升级",
+      "published_at": "2026-02-26 14:51:12",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=796074",
+      "raw_payload": "raw/tencent-announcements/796074.json",
+      "raw_payload_sha256": "dc22ad5f1ae88f9d7310c78a7ee8a3f730f12d030c5efdcf134632058bb39fda",
+      "normalized_document": "sources/official/patches/2026-02-26-796074-announcement-796074.md"
+    },
+    {
+      "announcement_id": "796073",
+      "title": "2月27日版本更新公告",
+      "published_at": "2026-02-26 14:40:10",
+      "game_version": "V112",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=796073",
+      "raw_payload": "raw/tencent-announcements/796073.json",
+      "raw_payload_sha256": "497165575043955c3c733f4181c0612008cf9ad2b222868b596c8860043f8bdb",
+      "normalized_document": "sources/official/patches/2026-02-26-796073-2-27.md"
+    },
+    {
+      "announcement_id": "795728",
+      "title": "2月19日问题修复版本更新公告",
+      "published_at": "2026-02-18 18:43:51",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=795728",
+      "raw_payload": "raw/tencent-announcements/795728.json",
+      "raw_payload_sha256": "7f3f86b96cf66ae12b4a042b4b3dcad8051b97532af832ad83bc1a70eb19bdfd",
+      "normalized_document": "sources/official/patches/2026-02-18-795728-2-19.md"
+    },
+    {
+      "announcement_id": "795223",
+      "title": "2月13日问题修复版本更新公告",
+      "published_at": "2026-02-12 21:31:02",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=795223",
+      "raw_payload": "raw/tencent-announcements/795223.json",
+      "raw_payload_sha256": "475e5b7fd7c6d4dcfb542a60554dcfbcdf32bca954e07e2f1adf1bda1430d983",
+      "normalized_document": "sources/official/patches/2026-02-12-795223-2-13.md"
+    },
+    {
+      "announcement_id": "795163",
+      "title": "2月12日问题修复版本更新公告",
+      "published_at": "2026-02-12 11:36:45",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=795163",
+      "raw_payload": "raw/tencent-announcements/795163.json",
+      "raw_payload_sha256": "0ea4e1824b39bacf42397f1a5c6649f0173658fc33acde9b827a1cb7dd91dbf4",
+      "normalized_document": "sources/official/patches/2026-02-12-795163-2-12.md"
+    },
+    {
+      "announcement_id": "795084",
+      "title": "2月12日王者荣耀新春版本更新公告",
+      "published_at": "2026-02-11 18:13:56",
+      "game_version": "V112",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=795084",
+      "raw_payload": "raw/tencent-announcements/795084.json",
+      "raw_payload_sha256": "e32764a7c4bf3ebe4ead15bbf62e2ddcf9d0615fd64868e16cb3f77442923dc0",
+      "normalized_document": "sources/official/patches/2026-02-11-795084-2-12.md"
+    },
+    {
+      "announcement_id": "794400",
+      "title": "英雄平衡性调整 | 达摩增强",
+      "published_at": "2026-02-04 15:25:56",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=794400",
+      "raw_payload": "raw/tencent-announcements/794400.json",
+      "raw_payload_sha256": "ae5e086f358dbf2b443aca160c0c5daea4cfd10cf18351bceaef511240529341",
+      "normalized_document": "sources/official/patches/2026-02-04-794400-announcement-794400.md"
+    },
+    {
+      "announcement_id": "794397",
+      "title": "2月5日版本更新公告",
+      "published_at": "2026-02-04 14:37:21",
+      "game_version": "V112",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=794397",
+      "raw_payload": "raw/tencent-announcements/794397.json",
+      "raw_payload_sha256": "729edcca5250e4e2be26d57ca376b67b6f8db3b19e368568108f0e638d7b3701",
+      "normalized_document": "sources/official/patches/2026-02-04-794397-2-5.md"
+    },
+    {
+      "announcement_id": "794007",
+      "title": "1月30日问题修复版本更新公告",
+      "published_at": "2026-01-29 20:23:29",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=794007",
+      "raw_payload": "raw/tencent-announcements/794007.json",
+      "raw_payload_sha256": "4c25d81075fef8597e9278997a9a38fb9d66b8ea7d218be329c0fdc4702864d2",
+      "normalized_document": "sources/official/patches/2026-01-29-794007-1-30.md"
+    },
+    {
+      "announcement_id": "793900",
+      "title": "1月29日版本更新公告",
+      "published_at": "2026-01-28 18:34:37",
+      "game_version": "V112",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=793900",
+      "raw_payload": "raw/tencent-announcements/793900.json",
+      "raw_payload_sha256": "2c075edc49499dddf32c9fc239f172f0a84392c17546c8f40626a35e2cc882ba",
+      "normalized_document": "sources/official/patches/2026-01-28-793900-1-29.md"
+    },
+    {
+      "announcement_id": "793570",
+      "title": "1月24日卡顿优化版本更新公告",
+      "published_at": "2026-01-23 16:44:08",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=793570",
+      "raw_payload": "raw/tencent-announcements/793570.json",
+      "raw_payload_sha256": "629adc1ea2a288f0cf5bb21b83cdd980124f5312b15019f1f825334308b6ddd4",
+      "normalized_document": "sources/official/patches/2026-01-23-793570-1-24.md"
+    },
+    {
+      "announcement_id": "793492",
+      "title": "1月23日问题修复版本更新公告",
+      "published_at": "2026-01-22 17:45:07",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=793492",
+      "raw_payload": "raw/tencent-announcements/793492.json",
+      "raw_payload_sha256": "85aba396f036a6df08b44168408a51aea413476ef29fdd3184c73fd041ad21d8",
+      "normalized_document": "sources/official/patches/2026-01-22-793492-1-23.md"
+    },
+    {
+      "announcement_id": "793368",
+      "title": "英雄平衡性调整 | 明世隐、大禹平衡",
+      "published_at": "2026-01-21 15:26:53",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=793368",
+      "raw_payload": "raw/tencent-announcements/793368.json",
+      "raw_payload_sha256": "7e650f2e7bc8ac30f47e3e7d61eef2772cf6cc337c6e2068319d4c7945fce06b",
+      "normalized_document": "sources/official/patches/2026-01-21-793368-announcement-793368.md"
+    },
+    {
+      "announcement_id": "793367",
+      "title": "1月22日版本更新公告",
+      "published_at": "2026-01-21 15:24:42",
+      "game_version": "V112",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=793367",
+      "raw_payload": "raw/tencent-announcements/793367.json",
+      "raw_payload_sha256": "728e4c30aa15df7570f2eb6a131ff1d665add904222f488b871fc03047be4288",
+      "normalized_document": "sources/official/patches/2026-01-21-793367-1-22.md"
+    },
+    {
+      "announcement_id": "792963",
+      "title": "1月16日问题修复版本更新公告",
+      "published_at": "2026-01-15 21:07:14",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=792963",
+      "raw_payload": "raw/tencent-announcements/792963.json",
+      "raw_payload_sha256": "1427f98c42b54d9b771dfa5c4ffa8496db42f98c89d5f48f0a5087cf3afe172d",
+      "normalized_document": "sources/official/patches/2026-01-15-792963-1-16.md"
+    },
+    {
+      "announcement_id": "792800",
+      "title": "英雄平衡性调整 | 大禹增强",
+      "published_at": "2026-01-14 15:10:48",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=792800",
+      "raw_payload": "raw/tencent-announcements/792800.json",
+      "raw_payload_sha256": "9a7c4d64b52ff005bba28cee37f309a9cba238ec032a23838bbbbfe4025459b7",
+      "normalized_document": "sources/official/patches/2026-01-14-792800-announcement-792800.md"
+    },
+    {
+      "announcement_id": "792798",
+      "title": "1月15日版本更新公告",
+      "published_at": "2026-01-14 14:57:00",
+      "game_version": "V112",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=792798",
+      "raw_payload": "raw/tencent-announcements/792798.json",
+      "raw_payload_sha256": "008b08d687c0f7f2ee0b64b493abbbf79e04d79f960c823fc1f884323e35885a",
+      "normalized_document": "sources/official/patches/2026-01-14-792798-1-15.md"
+    },
+    {
+      "announcement_id": "792252",
+      "title": "1月10日问题修复版本更新公告",
+      "published_at": "2026-01-09 17:43:43",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=792252",
+      "raw_payload": "raw/tencent-announcements/792252.json",
+      "raw_payload_sha256": "9402db524d3fcb27d7ae4344d5d2a5b2dbe26a7457aa2735d54ca9d3381423b2",
+      "normalized_document": "sources/official/patches/2026-01-09-792252-1-10.md"
+    },
+    {
+      "announcement_id": "791983",
+      "title": "1月9日问题修复版本更新公告",
+      "published_at": "2026-01-08 16:22:03",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=791983",
+      "raw_payload": "raw/tencent-announcements/791983.json",
+      "raw_payload_sha256": "50a5d80ff01248115372cf8e22a31f8c7d50548f5bec74d0d7115e3d3b5c9932",
+      "normalized_document": "sources/official/patches/2026-01-08-791983-1-9.md"
+    },
+    {
+      "announcement_id": "791692",
+      "title": "1月8日正式服S42赛季「神佑建木」版本更新公告",
+      "published_at": "2026-01-06 10:38:50",
+      "game_version": "V112",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=791692",
+      "raw_payload": "raw/tencent-announcements/791692.json",
+      "raw_payload_sha256": "9c361041e72111f1e95abd14a021d13948c6cbe7e3a1b6304c2c1e67eb5a92e8",
+      "normalized_document": "sources/official/patches/2026-01-06-791692-1-8-s42.md"
+    },
+    {
+      "announcement_id": "791201",
+      "title": "12月30日抢先服S42赛季「神佑建木」版本更新公告",
+      "published_at": "2025-12-29 11:19:34",
+      "game_version": "V112",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=791201",
+      "raw_payload": "raw/tencent-announcements/791201.json",
+      "raw_payload_sha256": "ecc01e1f8a82fc4240c0c04950d19741ae2f35e047d50394cad368233de06385",
+      "normalized_document": "sources/official/patches/2025-12-29-791201-12-30-s42.md"
+    },
+    {
+      "announcement_id": "791195",
+      "title": "英雄平衡性调整 | 孙悟空增强",
+      "published_at": "2025-12-29 09:43:33",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=791195",
+      "raw_payload": "raw/tencent-announcements/791195.json",
+      "raw_payload_sha256": "b085c0694fbbd60ff302cbc3df5e272a2c7b46b2f549891ad4ba51636d821bf4",
+      "normalized_document": "sources/official/patches/2025-12-29-791195-announcement-791195.md"
+    },
+    {
+      "announcement_id": "791192",
+      "title": "12月30日版本更新公告",
+      "published_at": "2025-12-29 09:30:33",
+      "game_version": "V111",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=791192",
+      "raw_payload": "raw/tencent-announcements/791192.json",
+      "raw_payload_sha256": "dcc1ee14d31157bbb58a3b61d6cb81acfc3dc5a668d6badbad852980a21142f8",
+      "normalized_document": "sources/official/patches/2025-12-29-791192-12-30.md"
+    },
+    {
+      "announcement_id": "790723",
+      "title": "12月18日版本更新公告",
+      "published_at": "2025-12-17 14:41:57",
+      "game_version": "V111",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=790723",
+      "raw_payload": "raw/tencent-announcements/790723.json",
+      "raw_payload_sha256": "929810a21d0fd23bb03bd4cb57b390a74b74a86f3e8247f3b48dd99b1094b926",
+      "normalized_document": "sources/official/patches/2025-12-17-790723-12-18.md"
+    },
+    {
+      "announcement_id": "790722",
+      "title": "英雄平衡性调整 | 孙悟空玩法升级",
+      "published_at": "2025-12-17 14:40:40",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=790722",
+      "raw_payload": "raw/tencent-announcements/790722.json",
+      "raw_payload_sha256": "d32aff872204c9b10bbc2f96612a6ec30a113297f75183a58b9647b55bc8c71e",
+      "normalized_document": "sources/official/patches/2025-12-17-790722-announcement-790722.md"
+    },
+    {
+      "announcement_id": "790521",
+      "title": "12月11日抢先服问题修复版本更新公告",
+      "published_at": "2025-12-11 20:11:05",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=790521",
+      "raw_payload": "raw/tencent-announcements/790521.json",
+      "raw_payload_sha256": "d8512edb64ef8d3f5044b44ee4bf7468d9db1e0fc573ccdcfa767cc3f8499c49",
+      "normalized_document": "sources/official/patches/2025-12-11-790521-12-11.md"
+    },
+    {
+      "announcement_id": "790455",
+      "title": "英雄平衡性调整 | 女娲降温",
+      "published_at": "2025-12-10 15:20:34",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=790455",
+      "raw_payload": "raw/tencent-announcements/790455.json",
+      "raw_payload_sha256": "2fd2c06e05c92fe029df0feacfad97f5f84967ae99dc0ba6c967691f199a8ed3",
+      "normalized_document": "sources/official/patches/2025-12-10-790455-announcement-790455.md"
+    },
+    {
+      "announcement_id": "790454",
+      "title": "12月11日版本更新公告",
+      "published_at": "2025-12-10 15:04:07",
+      "game_version": "V111",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=790454",
+      "raw_payload": "raw/tencent-announcements/790454.json",
+      "raw_payload_sha256": "6e99c90643e13ece262dc66827bad4cb2fa6a979584015012db7e7d798f64d6d",
+      "normalized_document": "sources/official/patches/2025-12-10-790454-12-11.md"
+    },
+    {
+      "announcement_id": "790183",
+      "title": "12月5日卡顿优化版本更新公告",
+      "published_at": "2025-12-04 17:43:40",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=790183",
+      "raw_payload": "raw/tencent-announcements/790183.json",
+      "raw_payload_sha256": "30ce9e370db7c1349bf253901bcf72404b63c471f886df7374e4b1155c421652",
+      "normalized_document": "sources/official/patches/2025-12-04-790183-12-5.md"
+    },
+    {
+      "announcement_id": "790085",
+      "title": "英雄平衡性调整 | 王昭君增强",
+      "published_at": "2025-12-03 14:58:06",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=790085",
+      "raw_payload": "raw/tencent-announcements/790085.json",
+      "raw_payload_sha256": "d84fe3ed877dd72656182d0234f14158c8a35b3baae4972dd6a4be054c5475d0",
+      "normalized_document": "sources/official/patches/2025-12-03-790085-announcement-790085.md"
+    },
+    {
+      "announcement_id": "790084",
+      "title": "12月4日版本更新公告",
+      "published_at": "2025-12-03 14:53:56",
+      "game_version": "V111",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=790084",
+      "raw_payload": "raw/tencent-announcements/790084.json",
+      "raw_payload_sha256": "40c784fedce5a57a12be1e7ef6cd3f02e8cb75172d8ece014b4fe363649fd40d",
+      "normalized_document": "sources/official/patches/2025-12-03-790084-12-4.md"
+    },
+    {
+      "announcement_id": "789988",
+      "title": "12月2日版本更新公告",
+      "published_at": "2025-12-01 19:59:04",
+      "game_version": "V111",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=789988",
+      "raw_payload": "raw/tencent-announcements/789988.json",
+      "raw_payload_sha256": "4c8e8d5b4f8e9bd441f682043eaf4710fb066ead0f7dde82114f55572223aead",
+      "normalized_document": "sources/official/patches/2025-12-01-789988-12-2.md"
+    },
+    {
+      "announcement_id": "789823",
+      "title": "11月27日问题修复版本更新公告",
+      "published_at": "2025-11-27 18:14:35",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=789823",
+      "raw_payload": "raw/tencent-announcements/789823.json",
+      "raw_payload_sha256": "6f90c0b3d29a154530bfb28b484e788a4f618ded81273aff95996178f63fb92d",
+      "normalized_document": "sources/official/patches/2025-11-27-789823-11-27.md"
+    },
+    {
+      "announcement_id": "789764",
+      "title": "英雄平衡性调整丨哪吒玩法升级",
+      "published_at": "2025-11-26 15:09:17",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=789764",
+      "raw_payload": "raw/tencent-announcements/789764.json",
+      "raw_payload_sha256": "a3380642d98de932acb9c303881fb7f8231a6dcc98c7ce3e5c1c20636e71aa06",
+      "normalized_document": "sources/official/patches/2025-11-26-789764-announcement-789764.md"
+    },
+    {
+      "announcement_id": "789763",
+      "title": "11月27日版本更新公告",
+      "published_at": "2025-11-26 15:07:43",
+      "game_version": "V111",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=789763",
+      "raw_payload": "raw/tencent-announcements/789763.json",
+      "raw_payload_sha256": "3a1e1e01a3f78e5411764c7adcea589e415586a25f779ad35b7d0c133bd2f605",
+      "normalized_document": "sources/official/patches/2025-11-26-789763-11-27.md"
+    },
+    {
+      "announcement_id": "789442",
+      "title": "英雄平衡性调整 | 狄仁杰增强",
+      "published_at": "2025-11-19 15:22:14",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=789442",
+      "raw_payload": "raw/tencent-announcements/789442.json",
+      "raw_payload_sha256": "5995f67125dcd3a5bcfd4b53291bb962aae2dfb1a8cacada1e092aaa1ffd91d7",
+      "normalized_document": "sources/official/patches/2025-11-19-789442-announcement-789442.md"
+    },
+    {
+      "announcement_id": "789441",
+      "title": "11月20日版本更新公告",
+      "published_at": "2025-11-19 15:20:43",
+      "game_version": "V111",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=789441",
+      "raw_payload": "raw/tencent-announcements/789441.json",
+      "raw_payload_sha256": "78570387f5236c939de385bae31d1da0676d7575e594b2c44a748fb3e9c2e22a",
+      "normalized_document": "sources/official/patches/2025-11-19-789441-11-20.md"
+    },
+    {
+      "announcement_id": "789090",
+      "title": "英雄平衡性调整 | 云缨增强",
+      "published_at": "2025-11-12 16:35:11",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=789090",
+      "raw_payload": "raw/tencent-announcements/789090.json",
+      "raw_payload_sha256": "adc69185d23675c13fd3a6872ae5a4dedad5d13b3f13f941dd3f1215f7043c2b",
+      "normalized_document": "sources/official/patches/2025-11-12-789090-announcement-789090.md"
+    },
+    {
+      "announcement_id": "789089",
+      "title": "11月13日版本更新公告",
+      "published_at": "2025-11-12 16:07:30",
+      "game_version": "V111",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=789089",
+      "raw_payload": "raw/tencent-announcements/789089.json",
+      "raw_payload_sha256": "0b812ce046391e8e81e3c9f20d9474ec289d34bb008388e99bbedb0c4a2677c8",
+      "normalized_document": "sources/official/patches/2025-11-12-789089-11-13.md"
+    },
+    {
+      "announcement_id": "788900",
+      "title": "11月9日版本更新公告",
+      "published_at": "2025-11-09 00:21:44",
+      "game_version": "V111",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=788900",
+      "raw_payload": "raw/tencent-announcements/788900.json",
+      "raw_payload_sha256": "1bf5c5637cd2e085d095aa88e9c3d7536110e0007d3bee0d2d3391ece33281c8",
+      "normalized_document": "sources/official/patches/2025-11-09-788900-11-9.md"
+    },
+    {
+      "announcement_id": "788688",
+      "title": "英雄平衡性调整 | 元流之子（辅助）玩法升级、花木兰增强",
+      "published_at": "2025-11-05 16:02:51",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=788688",
+      "raw_payload": "raw/tencent-announcements/788688.json",
+      "raw_payload_sha256": "ecfa9b6b519b7081e8156d7e9f533e8b27609d9479c7996913d0e5436688baf4",
+      "normalized_document": "sources/official/patches/2025-11-05-788688-announcement-788688.md"
+    },
+    {
+      "announcement_id": "788687",
+      "title": "11月6日版本更新公告",
+      "published_at": "2025-11-05 15:55:26",
+      "game_version": "V111",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=788687",
+      "raw_payload": "raw/tencent-announcements/788687.json",
+      "raw_payload_sha256": "c39c0086998aedad08254da2c47e3db9b5ab3f464f3184ebc9c54d4af65e0eaa",
+      "normalized_document": "sources/official/patches/2025-11-05-788687-11-6.md"
+    },
+    {
+      "announcement_id": "788326",
+      "title": "10月30日版本更新公告",
+      "published_at": "2025-10-29 15:51:27",
+      "game_version": "V111",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=788326",
+      "raw_payload": "raw/tencent-announcements/788326.json",
+      "raw_payload_sha256": "d778f9fc3c3595e3b89b6e45354af3b070b2193a0f7ca16132c76656711165dc",
+      "normalized_document": "sources/official/patches/2025-10-29-788326-10-30.md"
+    },
+    {
+      "announcement_id": "788064",
+      "title": "10月24日问题修复版本更新公告",
+      "published_at": "2025-10-24 17:55:04",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=788064",
+      "raw_payload": "raw/tencent-announcements/788064.json",
+      "raw_payload_sha256": "940a446c29f1408c4d15890078258e8a6d0c2a228cc1f7106ef8b4907e640cfb",
+      "normalized_document": "sources/official/patches/2025-10-24-788064-10-24.md"
+    },
+    {
+      "announcement_id": "787946",
+      "title": "10月24日问题修复版本更新公告",
+      "published_at": "2025-10-23 17:00:32",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=787946",
+      "raw_payload": "raw/tencent-announcements/787946.json",
+      "raw_payload_sha256": "8e215723efb4fae9c38adabbb67b05b819e35529fc6d95ba4ef9b49f5f9dcc2c",
+      "normalized_document": "sources/official/patches/2025-10-23-787946-10-24.md"
+    },
+    {
+      "announcement_id": "787859",
+      "title": "10月23日版本更新公告-欢迎来到王者荣耀十周年庆！",
+      "published_at": "2025-10-22 16:28:28",
+      "game_version": "V111",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=787859",
+      "raw_payload": "raw/tencent-announcements/787859.json",
+      "raw_payload_sha256": "d2693223a6061202216e5dd8cbd32fee068d35f43af561073b360eb05f47d508",
+      "normalized_document": "sources/official/patches/2025-10-22-787859-10-23.md"
+    },
+    {
+      "announcement_id": "787858",
+      "title": "10月23日英雄平衡性调整|盾山削弱",
+      "published_at": "2025-10-22 16:28:00",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=787858",
+      "raw_payload": "raw/tencent-announcements/787858.json",
+      "raw_payload_sha256": "71ebe7d9e7c91a647eda6070137e68cb5974a11edc79d29f4176f12876041602",
+      "normalized_document": "sources/official/patches/2025-10-22-787858-10-23.md"
+    },
+    {
+      "announcement_id": "787460",
+      "title": "10月16日问题修复版本更新公告",
+      "published_at": "2025-10-16 14:19:41",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=787460",
+      "raw_payload": "raw/tencent-announcements/787460.json",
+      "raw_payload_sha256": "be024009f71bc19241f5c9d65ff64a66351e55348b361f6960edd478518a20bb",
+      "normalized_document": "sources/official/patches/2025-10-16-787460-10-16.md"
+    },
+    {
+      "announcement_id": "787397",
+      "title": "10月15日限时点券商城优化版本更新公告",
+      "published_at": "2025-10-15 15:15:23",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=787397",
+      "raw_payload": "raw/tencent-announcements/787397.json",
+      "raw_payload_sha256": "aaad64bb7d3fbd77a4ecdc1b99242d5484d2c6209fb5fe0f1d46436a2229b4b5",
+      "normalized_document": "sources/official/patches/2025-10-15-787397-10-15.md"
+    },
+    {
+      "announcement_id": "787279",
+      "title": "10月15日版本更新公告",
+      "published_at": "2025-10-14 17:44:11",
+      "game_version": "V111",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=787279",
+      "raw_payload": "raw/tencent-announcements/787279.json",
+      "raw_payload_sha256": "1e261bac7e7e492dd1e211dfb567079be92d4db16b8263f187bb564668777f59",
+      "normalized_document": "sources/official/patches/2025-10-14-787279-10-15.md"
+    },
+    {
+      "announcement_id": "786939",
+      "title": "10月11日问题修复版本更新公告",
+      "published_at": "2025-10-10 17:45:16",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=786939",
+      "raw_payload": "raw/tencent-announcements/786939.json",
+      "raw_payload_sha256": "5fba5e227a2d0a6d439bdada51645687614fc88b1de0fcf5f115e685c1a87890",
+      "normalized_document": "sources/official/patches/2025-10-10-786939-10-11.md"
+    },
+    {
+      "announcement_id": "786844",
+      "title": "10月10日问题修复版本更新公告",
+      "published_at": "2025-10-09 16:44:41",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=786844",
+      "raw_payload": "raw/tencent-announcements/786844.json",
+      "raw_payload_sha256": "ad23d7e845a1a69bb035c8ed20a0558685fe1ea429cefa297a88fb66958f8544",
+      "normalized_document": "sources/official/patches/2025-10-09-786844-10-10.md"
+    },
+    {
+      "announcement_id": "786195",
+      "title": "10月9日英雄平衡性调整",
+      "published_at": "2025-09-30 17:28:35",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=786195",
+      "raw_payload": "raw/tencent-announcements/786195.json",
+      "raw_payload_sha256": "2a4561aecd74391db723ddf088e2cb906ad93793d6a59707a5a438af8f7319cb",
+      "normalized_document": "sources/official/patches/2025-09-30-786195-10-9.md"
+    },
+    {
+      "announcement_id": "786193",
+      "title": "10月9日版本更新公告",
+      "published_at": "2025-09-30 17:14:47",
+      "game_version": "V111",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=786193",
+      "raw_payload": "raw/tencent-announcements/786193.json",
+      "raw_payload_sha256": "c3b51bbfa8a8092ee90ac3da963184b743f5e2b8a7cc461fe9a4cd292ada42ea",
+      "normalized_document": "sources/official/patches/2025-09-30-786193-10-9.md"
+    },
+    {
+      "announcement_id": "785950",
+      "title": "9月29日版本更新公告",
+      "published_at": "2025-09-28 17:33:18",
+      "game_version": "V111",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=785950",
+      "raw_payload": "raw/tencent-announcements/785950.json",
+      "raw_payload_sha256": "a7598d6dc472d9f0bd85b41981e2b67b59b557f9af4094302e610a43b5363d54",
+      "normalized_document": "sources/official/patches/2025-09-28-785950-9-29.md"
+    },
+    {
+      "announcement_id": "785537",
+      "title": "9月26日问题修复版本更新公告",
+      "published_at": "2025-09-26 00:15:52",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=785537",
+      "raw_payload": "raw/tencent-announcements/785537.json",
+      "raw_payload_sha256": "f7466b0fc9ba294ef25d113a394b4d7c5c4c383ff6e52fd16cc11fff54908710",
+      "normalized_document": "sources/official/patches/2025-09-26-785537-9-26.md"
+    },
+    {
+      "announcement_id": "785255",
+      "title": "9月25日问题修复版本更新公告",
+      "published_at": "2025-09-25 14:52:53",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=785255",
+      "raw_payload": "raw/tencent-announcements/785255.json",
+      "raw_payload_sha256": "e9a81d69f73aefd9bdeb337e673e5604d07aed6b57de8a601586828638eba42b",
+      "normalized_document": "sources/official/patches/2025-09-25-785255-9-25.md"
+    },
+    {
+      "announcement_id": "784649",
+      "title": "9月25日正式服S41赛季「天元」版本更新公告",
+      "published_at": "2025-09-18 15:40:03",
+      "game_version": "V111",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=784649",
+      "raw_payload": "raw/tencent-announcements/784649.json",
+      "raw_payload_sha256": "faa64920962711bee8bec83d75299a873e9c51ed04c232bc988bb4e54155a095",
+      "normalized_document": "sources/official/patches/2025-09-18-784649-9-25-s41.md"
+    },
+    {
+      "announcement_id": "784615",
+      "title": "9月17日抢先服机型优化版本更新公告",
+      "published_at": "2025-09-17 19:55:09",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=784615",
+      "raw_payload": "raw/tencent-announcements/784615.json",
+      "raw_payload_sha256": "7a045e30cec829f53a80632eddc17db149aeafa9a35a7fd9e6db0c7f89caeb00",
+      "normalized_document": "sources/official/patches/2025-09-17-784615-9-17.md"
+    },
+    {
+      "announcement_id": "784495",
+      "title": "9月17日抢先服S41赛季版本更新公告",
+      "published_at": "2025-09-15 18:34:49",
+      "game_version": "V111",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=784495",
+      "raw_payload": "raw/tencent-announcements/784495.json",
+      "raw_payload_sha256": "9dd12d8c525ca33ba100d31f3260bdcef764605af96eaa0b4a3af535b870b224",
+      "normalized_document": "sources/official/patches/2025-09-15-784495-9-17-s41.md"
+    },
+    {
+      "announcement_id": "784296",
+      "title": "9月12日问题修复版本更新公告",
+      "published_at": "2025-09-11 18:25:19",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=784296",
+      "raw_payload": "raw/tencent-announcements/784296.json",
+      "raw_payload_sha256": "c935f95d8f5dfcf5980f6002897addd0e5cf14e24f435a3491a4f29fa7203d29",
+      "normalized_document": "sources/official/patches/2025-09-11-784296-9-12.md"
+    },
+    {
+      "announcement_id": "784253",
+      "title": "英雄平衡性调整 | 海月平衡",
+      "published_at": "2025-09-11 07:59:18",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=784253",
+      "raw_payload": "raw/tencent-announcements/784253.json",
+      "raw_payload_sha256": "de680a5e202e8b13c393da07f6fbd5ba8c870b2bd47a2744a077f84920bb3ebf",
+      "normalized_document": "sources/official/patches/2025-09-11-784253-announcement-784253.md"
+    },
+    {
+      "announcement_id": "784192",
+      "title": "9月11日版本更新公告",
+      "published_at": "2025-09-10 16:07:49",
+      "game_version": "V104",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=784192",
+      "raw_payload": "raw/tencent-announcements/784192.json",
+      "raw_payload_sha256": "eded6cef78d1f89a3b3b984ed20043fe0c40e8f432f01cd04ebf40e11a857242",
+      "normalized_document": "sources/official/patches/2025-09-10-784192-9-11.md"
+    },
+    {
+      "announcement_id": "783642",
+      "title": "9月4日版本更新公告",
+      "published_at": "2025-09-02 14:54:09",
+      "game_version": "V104",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=783642",
+      "raw_payload": "raw/tencent-announcements/783642.json",
+      "raw_payload_sha256": "e04119b550b72abe6905fb3b366ad52a043b3ef464983c8c5707411bd09fec5c",
+      "normalized_document": "sources/official/patches/2025-09-02-783642-9-4.md"
+    },
+    {
+      "announcement_id": "783218",
+      "title": "英雄平衡性调整 | 杨戬降温",
+      "published_at": "2025-08-27 17:59:47",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=783218",
+      "raw_payload": "raw/tencent-announcements/783218.json",
+      "raw_payload_sha256": "4697f9faf0261bb8c2c16683100f051dc61e656b7b5aae195e561500ee1a52f8",
+      "normalized_document": "sources/official/patches/2025-08-27-783218-announcement-783218.md"
+    },
+    {
+      "announcement_id": "783216",
+      "title": "8月28日版本更新公告",
+      "published_at": "2025-08-27 17:53:36",
+      "game_version": "V104",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=783216",
+      "raw_payload": "raw/tencent-announcements/783216.json",
+      "raw_payload_sha256": "01165f91ab940d0a34e5a8d479fd4c8c332b65d7aaeaa6ff99967d4deeada63b",
+      "normalized_document": "sources/official/patches/2025-08-27-783216-8-28.md"
+    },
+    {
+      "announcement_id": "782836",
+      "title": "8月21日问题修复版本更新公告",
+      "published_at": "2025-08-21 11:50:50",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=782836",
+      "raw_payload": "raw/tencent-announcements/782836.json",
+      "raw_payload_sha256": "b22875c08eeaa2c5d734cbcb02eace84e09a8f69476f2320908bf6659c26b623",
+      "normalized_document": "sources/official/patches/2025-08-21-782836-8-21.md"
+    },
+    {
+      "announcement_id": "782762",
+      "title": "英雄平衡性调整 | 赵云、元流之子(坦克)增强",
+      "published_at": "2025-08-20 16:50:03",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=782762",
+      "raw_payload": "raw/tencent-announcements/782762.json",
+      "raw_payload_sha256": "ab890d34012ef8cdab07f6697ab1a0123d2099559af067cab8c2d216b824df0b",
+      "normalized_document": "sources/official/patches/2025-08-20-782762-announcement-782762.md"
+    },
+    {
+      "announcement_id": "782760",
+      "title": "8月21日版本更新公告",
+      "published_at": "2025-08-20 16:49:50",
+      "game_version": "V104",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=782760",
+      "raw_payload": "raw/tencent-announcements/782760.json",
+      "raw_payload_sha256": "5fda54e7989de88a612567990c7ff6be16f75289fb47ddcaa6765b40c04c0f04",
+      "normalized_document": "sources/official/patches/2025-08-20-782760-8-21.md"
+    },
+    {
+      "announcement_id": "782400",
+      "title": "8月14日问题修复版本更新公告",
+      "published_at": "2025-08-14 16:24:07",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=782400",
+      "raw_payload": "raw/tencent-announcements/782400.json",
+      "raw_payload_sha256": "42325550b7705d9dfe93e0196bc8ba44fdb7b315722e5e04a5d577c2fb7a8650",
+      "normalized_document": "sources/official/patches/2025-08-14-782400-8-14.md"
+    },
+    {
+      "announcement_id": "782274",
+      "title": "英雄平衡性调整 | 元歌、空空儿平衡",
+      "published_at": "2025-08-13 16:46:42",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=782274",
+      "raw_payload": "raw/tencent-announcements/782274.json",
+      "raw_payload_sha256": "3a4b7ea0ce6c922ee5c854c74c7f902725039f39ff4f162e2d23bbc85e052938",
+      "normalized_document": "sources/official/patches/2025-08-13-782274-announcement-782274.md"
+    },
+    {
+      "announcement_id": "782273",
+      "title": "8月14日版本更新公告",
+      "published_at": "2025-08-13 16:44:59",
+      "game_version": "V104",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=782273",
+      "raw_payload": "raw/tencent-announcements/782273.json",
+      "raw_payload_sha256": "da73401656de3c9c9019dde03bd106c3b46ad9ba6e51b842e854b9f276cd5ea9",
+      "normalized_document": "sources/official/patches/2025-08-13-782273-8-14.md"
+    },
+    {
+      "announcement_id": "781825",
+      "title": "8月7日问题修复版本更新公告",
+      "published_at": "2025-08-06 16:53:26",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=781825",
+      "raw_payload": "raw/tencent-announcements/781825.json",
+      "raw_payload_sha256": "d20cc5c4450bdcb739185c6df3895b4ad7659ddff8d876464bbf4bfc18ac18c4",
+      "normalized_document": "sources/official/patches/2025-08-06-781825-8-7.md"
+    },
+    {
+      "announcement_id": "781727",
+      "title": "英雄平衡性调整 | 司马懿、亚连增强",
+      "published_at": "2025-08-05 18:13:59",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=781727",
+      "raw_payload": "raw/tencent-announcements/781727.json",
+      "raw_payload_sha256": "f30277126c939addd162102cdc4fefd8764df2242c62dedd44deb4218a2dd248",
+      "normalized_document": "sources/official/patches/2025-08-05-781727-announcement-781727.md"
+    },
+    {
+      "announcement_id": "781724",
+      "title": "8月6日版本更新公告",
+      "published_at": "2025-08-05 17:52:25",
+      "game_version": "V104",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=781724",
+      "raw_payload": "raw/tencent-announcements/781724.json",
+      "raw_payload_sha256": "b4c4c13676bcfd93652975f71c15051a09c72790c9658786a10e6664e69d9f62",
+      "normalized_document": "sources/official/patches/2025-08-05-781724-8-6.md"
+    },
+    {
+      "announcement_id": "781368",
+      "title": "8月1日问题修复版本更新公告",
+      "published_at": "2025-07-31 14:26:10",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=781368",
+      "raw_payload": "raw/tencent-announcements/781368.json",
+      "raw_payload_sha256": "66883d8865355ff1b9b8aa3d7eedb774f18f9dbe7ec84fa33f2e110909f270ed",
+      "normalized_document": "sources/official/patches/2025-07-31-781368-8-1.md"
+    },
+    {
+      "announcement_id": "781250",
+      "title": "英雄平衡性调整 | 司马懿玩法升级",
+      "published_at": "2025-07-30 19:18:57",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=781250",
+      "raw_payload": "raw/tencent-announcements/781250.json",
+      "raw_payload_sha256": "47193051f2276dc09adc0d5673518372ef3a0fa5f5416e2c281c195ac013ed72",
+      "normalized_document": "sources/official/patches/2025-07-30-781250-announcement-781250.md"
+    },
+    {
+      "announcement_id": "781248",
+      "title": "7月31日版本更新公告",
+      "published_at": "2025-07-30 19:16:02",
+      "game_version": "V104",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=781248",
+      "raw_payload": "raw/tencent-announcements/781248.json",
+      "raw_payload_sha256": "8cfa6a953fe27d6e0162fe87477341b004a4e4fb7c098e2e99115dba8fee4325",
+      "normalized_document": "sources/official/patches/2025-07-30-781248-7-31.md"
+    },
+    {
+      "announcement_id": "780900",
+      "title": "7月25日问题修复版本更新公告",
+      "published_at": "2025-07-24 17:59:08",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=780900",
+      "raw_payload": "raw/tencent-announcements/780900.json",
+      "raw_payload_sha256": "9089d0b5e43f4ac91cd0ddc904fe2ebc3ea700b5c5b249354396cd59453892ba",
+      "normalized_document": "sources/official/patches/2025-07-24-780900-7-25.md"
+    },
+    {
+      "announcement_id": "780825",
+      "title": "英雄平衡性调整 | 蒙恬、弈星增强",
+      "published_at": "2025-07-23 17:12:50",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=780825",
+      "raw_payload": "raw/tencent-announcements/780825.json",
+      "raw_payload_sha256": "691ec66c31139f00c72f1bca70422cbe8b7730ac2959a42877a594af26da9cfd",
+      "normalized_document": "sources/official/patches/2025-07-23-780825-announcement-780825.md"
+    },
+    {
+      "announcement_id": "780822",
+      "title": "7月24日版本更新公告",
+      "published_at": "2025-07-23 17:09:03",
+      "game_version": "V104",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=780822",
+      "raw_payload": "raw/tencent-announcements/780822.json",
+      "raw_payload_sha256": "fe2bc28095155174e1e6d019580736c379b477adec3a2f334462a1fb12cb5322",
+      "normalized_document": "sources/official/patches/2025-07-23-780822-7-24.md"
+    },
+    {
+      "announcement_id": "780316",
+      "title": "英雄平衡性调整 | 赵云增强",
+      "published_at": "2025-07-16 17:10:47",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=780316",
+      "raw_payload": "raw/tencent-announcements/780316.json",
+      "raw_payload_sha256": "ea9e0434a5ccf6d339f38c6c4a2242e93096da57dea42d38f9bba90def8301f6",
+      "normalized_document": "sources/official/patches/2025-07-16-780316-announcement-780316.md"
+    },
+    {
+      "announcement_id": "780311",
+      "title": "7月17日版本更新公告",
+      "published_at": "2025-07-16 16:46:04",
+      "game_version": "V104",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=780311",
+      "raw_payload": "raw/tencent-announcements/780311.json",
+      "raw_payload_sha256": "c3dbd8716bc08c3f4640bcff237812aebf0a9a341c7f66624a79eb3edfbbce14",
+      "normalized_document": "sources/official/patches/2025-07-16-780311-7-17.md"
+    },
+    {
+      "announcement_id": "779978",
+      "title": "7月12日版本更新公告",
+      "published_at": "2025-07-11 17:58:37",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=779978",
+      "raw_payload": "raw/tencent-announcements/779978.json",
+      "raw_payload_sha256": "5fb08cbe12b3e36e79518682eda0bc509888719273cb01b4b80dad1a83a2baa0",
+      "normalized_document": "sources/official/patches/2025-07-11-779978-7-12.md"
+    },
+    {
+      "announcement_id": "779712",
+      "title": "英雄平衡性调整 |曹操、诸葛亮增强",
+      "published_at": "2025-07-09 16:42:33",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=779712",
+      "raw_payload": "raw/tencent-announcements/779712.json",
+      "raw_payload_sha256": "8ebde8a07531a5297cdaf606b8130e206f6381cef87cb2aba510baff8c94f179",
+      "normalized_document": "sources/official/patches/2025-07-09-779712-announcement-779712.md"
+    },
+    {
+      "announcement_id": "779708",
+      "title": "7月10日版本更新公告",
+      "published_at": "2025-07-09 16:34:27",
+      "game_version": "V104",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=779708",
+      "raw_payload": "raw/tencent-announcements/779708.json",
+      "raw_payload_sha256": "5da6ca9811afd87b43b6d797fbb256db49dbf172169c6c53f8861fe6606fd067",
+      "normalized_document": "sources/official/patches/2025-07-09-779708-7-10.md"
+    },
+    {
+      "announcement_id": "779322",
+      "title": "7月7日问题修复版本更新公告",
+      "published_at": "2025-07-06 20:09:31",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=779322",
+      "raw_payload": "raw/tencent-announcements/779322.json",
+      "raw_payload_sha256": "5040b731234ff7b923b08dcafc32ff110f9d98c49c20a47b0f73e9b636295103",
+      "normalized_document": "sources/official/patches/2025-07-06-779322-7-7.md"
+    },
+    {
+      "announcement_id": "778885",
+      "title": "7月4日版本更新公告",
+      "published_at": "2025-07-03 17:00:39",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=778885",
+      "raw_payload": "raw/tencent-announcements/778885.json",
+      "raw_payload_sha256": "0bd1d98c55bacff0000eb29ee57ca3595a2d8db72da67478e69adcf6561cc958",
+      "normalized_document": "sources/official/patches/2025-07-03-778885-7-4.md"
+    },
+    {
+      "announcement_id": "778770",
+      "title": "7月3日问题修复版本更新公告",
+      "published_at": "2025-07-03 06:30:45",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=778770",
+      "raw_payload": "raw/tencent-announcements/778770.json",
+      "raw_payload_sha256": "75bb8c306949c5c6d9aea1cb9bcddc923580020a3e93aabecc761e6a01c876ee",
+      "normalized_document": "sources/official/patches/2025-07-03-778770-7-3.md"
+    },
+    {
+      "announcement_id": "778658",
+      "title": "7月2日问题修复版本更新公告",
+      "published_at": "2025-07-02 14:08:22",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=778658",
+      "raw_payload": "raw/tencent-announcements/778658.json",
+      "raw_payload_sha256": "7774cd282f4a7a79c98f35a588d259a7e4161bf97095d45cde6ac91ad376e995",
+      "normalized_document": "sources/official/patches/2025-07-02-778658-7-2.md"
+    },
+    {
+      "announcement_id": "778598",
+      "title": "7月3日正式服S40赛季“命若星火”版本更新公告",
+      "published_at": "2025-07-01 16:44:39",
+      "game_version": "V104",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=778598",
+      "raw_payload": "raw/tencent-announcements/778598.json",
+      "raw_payload_sha256": "4ace6e09af86c4692eba8f618e3b6c83bc4f7ee5bade306f4969a1759169bfad",
+      "normalized_document": "sources/official/patches/2025-07-01-778598-7-3-s40.md"
+    },
+    {
+      "announcement_id": "778308",
+      "title": "6月26日版本更新公告",
+      "published_at": "2025-06-25 16:59:15",
+      "game_version": "V103",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=778308",
+      "raw_payload": "raw/tencent-announcements/778308.json",
+      "raw_payload_sha256": "5538ff2a6a46e85854a49e96c088fd51a312bf15a41276b5879a4af2ada20329",
+      "normalized_document": "sources/official/patches/2025-06-25-778308-6-26.md"
+    },
+    {
+      "announcement_id": "778265",
+      "title": "6月26日抢先服S40赛季版本更新公告",
+      "published_at": "2025-06-24 19:31:19",
+      "game_version": "V104",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=778265",
+      "raw_payload": "raw/tencent-announcements/778265.json",
+      "raw_payload_sha256": "b5c566c643db7046dd9253ed5c9c50422b9be2c6e2fc249de82fd758d5a19b27",
+      "normalized_document": "sources/official/patches/2025-06-24-778265-6-26-s40.md"
+    },
+    {
+      "announcement_id": "777672",
+      "title": "6月19日版本更新公告",
+      "published_at": "2025-06-18 16:09:11",
+      "game_version": "V103",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=777672",
+      "raw_payload": "raw/tencent-announcements/777672.json",
+      "raw_payload_sha256": "ccf2df624fb11c249825b928191d21adfcfd453e8727fd4b1dea3934eddf43fa",
+      "normalized_document": "sources/official/patches/2025-06-18-777672-6-19.md"
+    },
+    {
+      "announcement_id": "776986",
+      "title": "英雄平衡性调整 | 杨戬玩法升级",
+      "published_at": "2025-06-11 17:06:41",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=776986",
+      "raw_payload": "raw/tencent-announcements/776986.json",
+      "raw_payload_sha256": "3a43467bc7f2334e2d35b5799de01f18f74f857f274b0a6b080409f7ddb67bbc",
+      "normalized_document": "sources/official/patches/2025-06-11-776986-announcement-776986.md"
+    },
+    {
+      "announcement_id": "776984",
+      "title": "6月12日版本更新公告",
+      "published_at": "2025-06-11 17:04:04",
+      "game_version": "V103",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=776984",
+      "raw_payload": "raw/tencent-announcements/776984.json",
+      "raw_payload_sha256": "8fbde85d823e6a088ad06b61d3898a342a2f7cc4616e965633c2707ffdaec699",
+      "normalized_document": "sources/official/patches/2025-06-11-776984-6-12.md"
+    },
+    {
+      "announcement_id": "774594",
+      "title": "英雄平衡性调整 | 云缨、阿古朵平衡",
+      "published_at": "2025-06-03 15:56:15",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=774594",
+      "raw_payload": "raw/tencent-announcements/774594.json",
+      "raw_payload_sha256": "7dd356d932b227a9764bb9e7c5953a44b7afb3dc889650fe3982d245af020423",
+      "normalized_document": "sources/official/patches/2025-06-03-774594-announcement-774594.md"
+    },
+    {
+      "announcement_id": "774591",
+      "title": "6月5日版本更新公告",
+      "published_at": "2025-06-03 15:45:14",
+      "game_version": "V103",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=774591",
+      "raw_payload": "raw/tencent-announcements/774591.json",
+      "raw_payload_sha256": "6c5d20d68ecd42113b3e221f8906565c76d47fc92b0c3b706265d4d5587db99c",
+      "normalized_document": "sources/official/patches/2025-06-03-774591-6-5.md"
+    },
+    {
+      "announcement_id": "774289",
+      "title": "5月29日问题修复版本更新公告",
+      "published_at": "2025-05-29 10:13:22",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=774289",
+      "raw_payload": "raw/tencent-announcements/774289.json",
+      "raw_payload_sha256": "1818b4a0e8a00a5a24b3134d3ed71a27a2e27541956300cde0f87f5d8ef88550",
+      "normalized_document": "sources/official/patches/2025-05-29-774289-5-29.md"
+    },
+    {
+      "announcement_id": "774183",
+      "title": "英雄平衡性调整 |   阿古朵、空空儿玩法升级",
+      "published_at": "2025-05-27 17:53:27",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=774183",
+      "raw_payload": "raw/tencent-announcements/774183.json",
+      "raw_payload_sha256": "4a9076c766123fdb696ee6e64af460df4fd186befad6a5b60e36f4ff6296c9de",
+      "normalized_document": "sources/official/patches/2025-05-27-774183-announcement-774183.md"
+    },
+    {
+      "announcement_id": "774181",
+      "title": "5月28日版本更新公告",
+      "published_at": "2025-05-27 17:38:51",
+      "game_version": "V103",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=774181",
+      "raw_payload": "raw/tencent-announcements/774181.json",
+      "raw_payload_sha256": "7b533b4aa233530d5cb31ab5a511c19f365c2416948dd70b7d48569406f4b42f",
+      "normalized_document": "sources/official/patches/2025-05-27-774181-5-28.md"
+    },
+    {
+      "announcement_id": "773406",
+      "title": "英雄平衡性调整 |  镜、曜平衡",
+      "published_at": "2025-05-19 18:21:35",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=773406",
+      "raw_payload": "raw/tencent-announcements/773406.json",
+      "raw_payload_sha256": "ad1f356fd3cd60db6fb7c18d7786364d3f0280522f63c503b65de505635e1476",
+      "normalized_document": "sources/official/patches/2025-05-19-773406-announcement-773406.md"
+    },
+    {
+      "announcement_id": "773383",
+      "title": "5月20日版本更新公告",
+      "published_at": "2025-05-19 11:56:50",
+      "game_version": "V103",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=773383",
+      "raw_payload": "raw/tencent-announcements/773383.json",
+      "raw_payload_sha256": "77451a7e3fe9ae533e7d4603525c962e845ae1987ede24e58aa6846e53ea7892",
+      "normalized_document": "sources/official/patches/2025-05-19-773383-5-20.md"
+    },
+    {
+      "announcement_id": "772767",
+      "title": "英雄平衡性调整 | 雅典娜、沈梦溪平衡",
+      "published_at": "2025-05-13 16:40:37",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=772767",
+      "raw_payload": "raw/tencent-announcements/772767.json",
+      "raw_payload_sha256": "c33ec20d68f812d454419f4dfeafdbfcadae67829630b4ab5a93bd2192c89586",
+      "normalized_document": "sources/official/patches/2025-05-13-772767-announcement-772767.md"
+    },
+    {
+      "announcement_id": "772759",
+      "title": "5月14日版本更新公告",
+      "published_at": "2025-05-13 16:06:07",
+      "game_version": "V103",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=772759",
+      "raw_payload": "raw/tencent-announcements/772759.json",
+      "raw_payload_sha256": "a2d24fd4f9510048939a2d5431d958109ceadc3238d56fb4e7faa511278f200e",
+      "normalized_document": "sources/official/patches/2025-05-13-772759-5-14.md"
+    },
+    {
+      "announcement_id": "772340",
+      "title": "5月9日问题修复版本更新公告",
+      "published_at": "2025-05-09 10:54:32",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=772340",
+      "raw_payload": "raw/tencent-announcements/772340.json",
+      "raw_payload_sha256": "fb49f26d204f508fe7c94627194984d1adb78536cd12335851e43f1d3ec81bcd",
+      "normalized_document": "sources/official/patches/2025-05-09-772340-5-9.md"
+    },
+    {
+      "announcement_id": "768130",
+      "title": "5月8日版本更新公告",
+      "published_at": "2025-05-07 17:22:14",
+      "game_version": "V103",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=768130",
+      "raw_payload": "raw/tencent-announcements/768130.json",
+      "raw_payload_sha256": "46d54a7129fe2c3d3a6d8c97d587c50c430f1605aebdfbbe119a1a43390077ac",
+      "normalized_document": "sources/official/patches/2025-05-07-768130-5-8.md"
+    },
+    {
+      "announcement_id": "761867",
+      "title": "5月2日版本更新公告",
+      "published_at": "2025-05-01 21:17:56",
+      "game_version": "V103",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=761867",
+      "raw_payload": "raw/tencent-announcements/761867.json",
+      "raw_payload_sha256": "6d12fefc4384660465896e50dcde775278c043c09c746f416d4e7cde09de2820",
+      "normalized_document": "sources/official/patches/2025-05-01-761867-5-2.md"
+    },
+    {
+      "announcement_id": "761637",
+      "title": "4月30日问题修复版本更新公告",
+      "published_at": "2025-04-29 18:32:17",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=761637",
+      "raw_payload": "raw/tencent-announcements/761637.json",
+      "raw_payload_sha256": "5e70b4ca5fa2d534a2615734d8438b3223e1dac691fdc0c827c459ceb479a786",
+      "normalized_document": "sources/official/patches/2025-04-29-761637-4-30.md"
+    },
+    {
+      "announcement_id": "723473",
+      "title": "英雄平衡性调整 | 大司命、元流射手增强",
+      "published_at": "2025-04-27 18:09:22",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=723473",
+      "raw_payload": "raw/tencent-announcements/723473.json",
+      "raw_payload_sha256": "5d6654a19d8559ad7bec034bd321455e3a4ec306cf3cef231be467938798e2f7",
+      "normalized_document": "sources/official/patches/2025-04-27-723473-announcement-723473.md"
+    },
+    {
+      "announcement_id": "723143",
+      "title": "4月28日版本更新公告",
+      "published_at": "2025-04-27 18:01:31",
+      "game_version": "V103",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=723143",
+      "raw_payload": "raw/tencent-announcements/723143.json",
+      "raw_payload_sha256": "b421a5a776d8c8a17391d5f80b1bac2bb3ccb908b9fde6b6d5b4c77e7fafd7d8",
+      "normalized_document": "sources/official/patches/2025-04-27-723143-4-28.md"
+    },
+    {
+      "announcement_id": "655848",
+      "title": "4月24日问题修复版本更新公告",
+      "published_at": "2025-04-23 16:46:18",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=655848",
+      "raw_payload": "raw/tencent-announcements/655848.json",
+      "raw_payload_sha256": "cc91f6ae9f3b6fc6ea246ebdec541a8f12c8aa55ad12578a37a7a16c99c49ce4",
+      "normalized_document": "sources/official/patches/2025-04-23-655848-4-24.md"
+    },
+    {
+      "announcement_id": "650511",
+      "title": "英雄平衡性调整 | 大司命、上官婉儿平衡",
+      "published_at": "2025-04-22 18:25:35",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=650511",
+      "raw_payload": "raw/tencent-announcements/650511.json",
+      "raw_payload_sha256": "ecb1ddc25e3c0dd72162e2f35015a034a6e158273f30c63aeb9719f4aac13fa4",
+      "normalized_document": "sources/official/patches/2025-04-22-650511-announcement-650511.md"
+    },
+    {
+      "announcement_id": "650509",
+      "title": "4月23日版本更新公告",
+      "published_at": "2025-04-22 18:21:47",
+      "game_version": "V103",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=650509",
+      "raw_payload": "raw/tencent-announcements/650509.json",
+      "raw_payload_sha256": "31f783283785fd403d509ae8f4f86c893892f9834b1fc059bcece58a99ae4df7",
+      "normalized_document": "sources/official/patches/2025-04-22-650509-4-23.md"
+    },
+    {
+      "announcement_id": "648405",
+      "title": "4月18日问题修复版本更新公告",
+      "published_at": "2025-04-17 18:12:48",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=648405",
+      "raw_payload": "raw/tencent-announcements/648405.json",
+      "raw_payload_sha256": "fcd5d8977e30b9a778a9567248c6c684147b9dab1d1f378aed0d43d9b7581a2d",
+      "normalized_document": "sources/official/patches/2025-04-17-648405-4-18.md"
+    },
+    {
+      "announcement_id": "648134",
+      "title": "英雄平衡性调整 | 司空震降温",
+      "published_at": "2025-04-16 16:30:00",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=648134",
+      "raw_payload": "raw/tencent-announcements/648134.json",
+      "raw_payload_sha256": "91c41275fa51153e8a9698127c7a37131b85890587534ae3827e855cb8fdb351",
+      "normalized_document": "sources/official/patches/2025-04-16-648134-announcement-648134.md"
+    },
+    {
+      "announcement_id": "648133",
+      "title": "4月17日版本更新公告",
+      "published_at": "2025-04-16 16:28:55",
+      "game_version": "V103",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=648133",
+      "raw_payload": "raw/tencent-announcements/648133.json",
+      "raw_payload_sha256": "285b4bc04f094d35664ae0d4c2b155d3c5b4bb7c00965d87ee347294549a48d0",
+      "normalized_document": "sources/official/patches/2025-04-16-648133-4-17.md"
+    },
+    {
+      "announcement_id": "648050",
+      "title": "4月16日问题修复版本更新公告",
+      "published_at": "2025-04-16 11:28:38",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=648050",
+      "raw_payload": "raw/tencent-announcements/648050.json",
+      "raw_payload_sha256": "f79d90bbbb79cf1c7f6fd69a9f8ded91310167e5a67e95ca37e1be97b648a8ea",
+      "normalized_document": "sources/official/patches/2025-04-16-648050-4-16.md"
+    },
+    {
+      "announcement_id": "647274",
+      "title": "4月11日问题修复版本更新公告",
+      "published_at": "2025-04-10 16:36:03",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=647274",
+      "raw_payload": "raw/tencent-announcements/647274.json",
+      "raw_payload_sha256": "c4336522a6ca2fb46cdc804377adf9a5be37180a2e9d40abf60327adf68c02cf",
+      "normalized_document": "sources/official/patches/2025-04-10-647274-4-11.md"
+    },
+    {
+      "announcement_id": "647048",
+      "title": "英雄平衡性调整 | 干将莫邪、亚连平衡",
+      "published_at": "2025-04-09 17:07:11",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=647048",
+      "raw_payload": "raw/tencent-announcements/647048.json",
+      "raw_payload_sha256": "b26061d67c9c76164b71efc95d1c526f8109e4d138c1b9690fb94d426355168a",
+      "normalized_document": "sources/official/patches/2025-04-09-647048-announcement-647048.md"
+    },
+    {
+      "announcement_id": "647044",
+      "title": "4月10日版本更新公告",
+      "published_at": "2025-04-09 16:39:12",
+      "game_version": "V103",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=647044",
+      "raw_payload": "raw/tencent-announcements/647044.json",
+      "raw_payload_sha256": "6cc78df1d48945902a53bd8b94e1d4baee2a4e8471eba99a7a60dba3b2d64dbe",
+      "normalized_document": "sources/official/patches/2025-04-09-647044-4-10.md"
+    },
+    {
+      "announcement_id": "646700",
+      "title": "4月5日部分机型优化版本更新公告",
+      "published_at": "2025-04-04 19:34:50",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=646700",
+      "raw_payload": "raw/tencent-announcements/646700.json",
+      "raw_payload_sha256": "0bdebda8164ce73c964d52a212a6b6c42a5d08dcfe4c49411d20f1fa62b621e0",
+      "normalized_document": "sources/official/patches/2025-04-04-646700-4-5.md"
+    },
+    {
+      "announcement_id": "646505",
+      "title": "英雄平衡性调整 | 项羽增强、空空儿降温",
+      "published_at": "2025-04-02 18:22:59",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=646505",
+      "raw_payload": "raw/tencent-announcements/646505.json",
+      "raw_payload_sha256": "79ea9f349d7f5e98290dbd133364c63b4ea9c434f7e91e8a204db4fd8c005e41",
+      "normalized_document": "sources/official/patches/2025-04-02-646505-announcement-646505.md"
+    },
+    {
+      "announcement_id": "646501",
+      "title": "4月3日版本更新公告",
+      "published_at": "2025-04-02 18:19:33",
+      "game_version": "V103",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=646501",
+      "raw_payload": "raw/tencent-announcements/646501.json",
+      "raw_payload_sha256": "bb80b7c95fe6d34358f2d4823f5c2dc703935ca8602ad7ac34cb93b4b6bbb0d3",
+      "normalized_document": "sources/official/patches/2025-04-02-646501-4-3.md"
+    },
+    {
+      "announcement_id": "646394",
+      "title": "4月1日问题修复版本更新公告",
+      "published_at": "2025-04-01 15:50:05",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=646394",
+      "raw_payload": "raw/tencent-announcements/646394.json",
+      "raw_payload_sha256": "339410ef827c056715383d90a760085a397f579bf25b3ee6b87d3b4a7dcd28ff",
+      "normalized_document": "sources/official/patches/2025-04-01-646394-4-1.md"
+    },
+    {
+      "announcement_id": "646138",
+      "title": "3月29日妙手空空活动优化版本更新公告",
+      "published_at": "2025-03-29 13:59:46",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=646138",
+      "raw_payload": "raw/tencent-announcements/646138.json",
+      "raw_payload_sha256": "cda483f2863c81670d472b6e680cec16d07a742dfb1dd2514745f1e1622eacf6",
+      "normalized_document": "sources/official/patches/2025-03-29-646138-3-29.md"
+    },
+    {
+      "announcement_id": "646032",
+      "title": "3月28日问题修复版本更新公告",
+      "published_at": "2025-03-28 15:59:24",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=646032",
+      "raw_payload": "raw/tencent-announcements/646032.json",
+      "raw_payload_sha256": "4183c9f36c0a73d21edded7b328cf3db1bc70b1e89778462c55d0b7a18e63eac",
+      "normalized_document": "sources/official/patches/2025-03-28-646032-3-28.md"
+    },
+    {
+      "announcement_id": "645809",
+      "title": "3月27日问题修复版本更新公告",
+      "published_at": "2025-03-27 16:23:57",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=645809",
+      "raw_payload": "raw/tencent-announcements/645809.json",
+      "raw_payload_sha256": "a9d2711d218d54e178c02f20e8410055c2c30e33e2961119e85b669bf356fe71",
+      "normalized_document": "sources/official/patches/2025-03-27-645809-3-27.md"
+    },
+    {
+      "announcement_id": "645513",
+      "title": "3月27日正式服S39赛季“妙手空空”版本更新公告",
+      "published_at": "2025-03-24 19:07:47",
+      "game_version": "V103",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=645513",
+      "raw_payload": "raw/tencent-announcements/645513.json",
+      "raw_payload_sha256": "6d327a2562b78769a635aa1a152f4df2c7f30a313e5113eb596f8824e85a6271",
+      "normalized_document": "sources/official/patches/2025-03-24-645513-3-27-s39.md"
+    },
+    {
+      "announcement_id": "645281",
+      "title": "3月20日抢先服问题修复版本更新公告",
+      "published_at": "2025-03-20 18:37:21",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=645281",
+      "raw_payload": "raw/tencent-announcements/645281.json",
+      "raw_payload_sha256": "236691bf7fec3ea1c577c9424a6153d9e31a9ada7680f799a0f6e7fcadecccf1",
+      "normalized_document": "sources/official/patches/2025-03-20-645281-3-20.md"
+    },
+    {
+      "announcement_id": "645170",
+      "title": "3月20日抢先服S39赛季“妙手空空”版本更新公告",
+      "published_at": "2025-03-18 19:00:01",
+      "game_version": "V103",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=645170",
+      "raw_payload": "raw/tencent-announcements/645170.json",
+      "raw_payload_sha256": "7d8cf7ebec01aac49b7a3c4aaf88183a7b131f8696cf923631454fe01891996c",
+      "normalized_document": "sources/official/patches/2025-03-18-645170-3-20-s39.md"
+    },
+    {
+      "announcement_id": "644990",
+      "title": "3月17日版本更新公告",
+      "published_at": "2025-03-14 18:04:05",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=644990",
+      "raw_payload": "raw/tencent-announcements/644990.json",
+      "raw_payload_sha256": "23fee46157b7809e3cd40e775be3daed40c066aea20179706fb2da299be1d1c5",
+      "normalized_document": "sources/official/patches/2025-03-14-644990-3-17.md"
+    },
+    {
+      "announcement_id": "644877",
+      "title": "3月13日版本更新公告",
+      "published_at": "2025-03-12 15:08:59",
+      "game_version": "V102",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=644877",
+      "raw_payload": "raw/tencent-announcements/644877.json",
+      "raw_payload_sha256": "16e80129317ebd5a1276357b791f046ed187dedc420999c5cb97223807555f9c",
+      "normalized_document": "sources/official/patches/2025-03-12-644877-3-13.md"
+    },
+    {
+      "announcement_id": "644486",
+      "title": "英雄平衡性调整 | 妲己降温",
+      "published_at": "2025-03-05 16:28:18",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=644486",
+      "raw_payload": "raw/tencent-announcements/644486.json",
+      "raw_payload_sha256": "1ac80ec27e95f26eb1ba197dc0f2b1ef228b08d10e3f75712579a3bc378fd461",
+      "normalized_document": "sources/official/patches/2025-03-05-644486-announcement-644486.md"
+    },
+    {
+      "announcement_id": "644483",
+      "title": "3月6日版本更新公告",
+      "published_at": "2025-03-05 15:48:14",
+      "game_version": "V102",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=644483",
+      "raw_payload": "raw/tencent-announcements/644483.json",
+      "raw_payload_sha256": "59379271ec83821253415ccfd2019873f8fd80c15f33d4ba3b5fa4ac6b716a8a",
+      "normalized_document": "sources/official/patches/2025-03-05-644483-3-6.md"
+    },
+    {
+      "announcement_id": "644254",
+      "title": "3月1日服务器优化版本更新公告",
+      "published_at": "2025-03-01 11:05:41",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=644254",
+      "raw_payload": "raw/tencent-announcements/644254.json",
+      "raw_payload_sha256": "af7f12c1571281288873993940bcc60d1241dd0568e272b44dee330087cf61f5",
+      "normalized_document": "sources/official/patches/2025-03-01-644254-3-1.md"
+    },
+    {
+      "announcement_id": "644143",
+      "title": "2月27日问题修复版本更新公告",
+      "published_at": "2025-02-27 17:24:43",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=644143",
+      "raw_payload": "raw/tencent-announcements/644143.json",
+      "raw_payload_sha256": "c41aee020249a89a666a590b0e566e2909f864352919b8cca1fe8d995bd88126",
+      "normalized_document": "sources/official/patches/2025-02-27-644143-2-27.md"
+    },
+    {
+      "announcement_id": "644041",
+      "title": "英雄平衡性调整 | 少司缘，瑶平衡",
+      "published_at": "2025-02-26 17:24:13",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=644041",
+      "raw_payload": "raw/tencent-announcements/644041.json",
+      "raw_payload_sha256": "ea112a52a71fec5033bab5dba917f759776af825d28dd2f5963ea8630a736e5d",
+      "normalized_document": "sources/official/patches/2025-02-26-644041-announcement-644041.md"
+    },
+    {
+      "announcement_id": "644039",
+      "title": "2月27日版本更新公告",
+      "published_at": "2025-02-26 17:21:48",
+      "game_version": "V102",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=644039",
+      "raw_payload": "raw/tencent-announcements/644039.json",
+      "raw_payload_sha256": "380c30c5256133ea6271c9d1aa0c96bb6dce5812b560868c75ce7fca1f0cf273",
+      "normalized_document": "sources/official/patches/2025-02-26-644039-2-27.md"
+    },
+    {
+      "announcement_id": "643756",
+      "title": "2月21日问题修复版本更新公告",
+      "published_at": "2025-02-21 14:25:23",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=643756",
+      "raw_payload": "raw/tencent-announcements/643756.json",
+      "raw_payload_sha256": "dab278e74e1e33a120ab1313419a6d067eb322bfa688c620e0d196c0bc9ea072",
+      "normalized_document": "sources/official/patches/2025-02-21-643756-2-21.md"
+    },
+    {
+      "announcement_id": "643596",
+      "title": "英雄平衡性调整 | 元流之子（法师）、典韦平衡",
+      "published_at": "2025-02-19 16:05:08",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=643596",
+      "raw_payload": "raw/tencent-announcements/643596.json",
+      "raw_payload_sha256": "3f6e0f876cd949f3d8f8b21f902d70d70cb3f067f5290a3570e64373d2e0ee55",
+      "normalized_document": "sources/official/patches/2025-02-19-643596-announcement-643596.md"
+    },
+    {
+      "announcement_id": "643595",
+      "title": "2月20日版本更新公告",
+      "published_at": "2025-02-19 15:54:15",
+      "game_version": "V102",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=643595",
+      "raw_payload": "raw/tencent-announcements/643595.json",
+      "raw_payload_sha256": "b1bc92ada250d0eddc4746fd8c308c74995ed247b9d2c432bd312ef8371decf8",
+      "normalized_document": "sources/official/patches/2025-02-19-643595-2-20.md"
+    },
+    {
+      "announcement_id": "643314",
+      "title": "2月14日问题修复版本更新公告",
+      "published_at": "2025-02-14 11:29:11",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=643314",
+      "raw_payload": "raw/tencent-announcements/643314.json",
+      "raw_payload_sha256": "a45d86b9392fc5a41029fa872b71b640ec90963dcf79d9e8d415639696ece318",
+      "normalized_document": "sources/official/patches/2025-02-14-643314-2-14.md"
+    },
+    {
+      "announcement_id": "643272",
+      "title": "2月14日问题修复版本更新公告",
+      "published_at": "2025-02-13 18:31:14",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=643272",
+      "raw_payload": "raw/tencent-announcements/643272.json",
+      "raw_payload_sha256": "4d4401295ffa25744e8bc4fc74a4d05f11dfa168be5d94c839a6a39d41763313",
+      "normalized_document": "sources/official/patches/2025-02-13-643272-2-14.md"
+    },
+    {
+      "announcement_id": "643259",
+      "title": "2月13日问题修复版本更新公告",
+      "published_at": "2025-02-13 15:30:26",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=643259",
+      "raw_payload": "raw/tencent-announcements/643259.json",
+      "raw_payload_sha256": "7dfbf89e26c28eba9f114961a7cfe2dd02f03c35f66cc52e9c12455a4eca7920",
+      "normalized_document": "sources/official/patches/2025-02-13-643259-2-13.md"
+    },
+    {
+      "announcement_id": "643194",
+      "title": "2月13日版本更新公告",
+      "published_at": "2025-02-12 16:26:28",
+      "game_version": "V102",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=643194",
+      "raw_payload": "raw/tencent-announcements/643194.json",
+      "raw_payload_sha256": "e4f28c3c2a1a99feafe92f70f8920d283a0026e760ea4bf56825957cd370a271",
+      "normalized_document": "sources/official/patches/2025-02-12-643194-2-13.md"
+    },
+    {
+      "announcement_id": "642842",
+      "title": "2月7日版本更新公告",
+      "published_at": "2025-02-06 15:58:41",
+      "game_version": "V102",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=642842",
+      "raw_payload": "raw/tencent-announcements/642842.json",
+      "raw_payload_sha256": "26abc93bf611a26125619aef0219cdd8fe9f614cc94f60413e59230d5e61a1fc",
+      "normalized_document": "sources/official/patches/2025-02-06-642842-2-7.md"
+    },
+    {
+      "announcement_id": "642279",
+      "title": "1月26日服务器优化版本更新公告",
+      "published_at": "2025-01-26 10:02:55",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=642279",
+      "raw_payload": "raw/tencent-announcements/642279.json",
+      "raw_payload_sha256": "43ac5ef97083015711fb4bfeb9a7806e021319e6da315b9d83777329b0ae5728",
+      "normalized_document": "sources/official/patches/2025-01-26-642279-1-26.md"
+    },
+    {
+      "announcement_id": "642218",
+      "title": "1月25日问题修复版本更新公告",
+      "published_at": "2025-01-25 14:37:46",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=642218",
+      "raw_payload": "raw/tencent-announcements/642218.json",
+      "raw_payload_sha256": "5ab09e87b34dcd77f3de0898c8ff9093758117fca4cfa85edc6b9784b7397f93",
+      "normalized_document": "sources/official/patches/2025-01-25-642218-1-25.md"
+    },
+    {
+      "announcement_id": "642191",
+      "title": "1月25日问题修复版本更新公告",
+      "published_at": "2025-01-25 04:02:08",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=642191",
+      "raw_payload": "raw/tencent-announcements/642191.json",
+      "raw_payload_sha256": "7b4da13d8475830fd1d75be174076735253286fb5d9a1d81614ea636010c3a3c",
+      "normalized_document": "sources/official/patches/2025-01-25-642191-1-25.md"
+    },
+    {
+      "announcement_id": "642114",
+      "title": "1月24日问题修复版本更新公告",
+      "published_at": "2025-01-24 00:43:38",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=642114",
+      "raw_payload": "raw/tencent-announcements/642114.json",
+      "raw_payload_sha256": "76710f711a952ddd8602e54811050ab7c7a0efac26e3d2a1a830f6e82a1323c5",
+      "normalized_document": "sources/official/patches/2025-01-24-642114-1-24.md"
+    },
+    {
+      "announcement_id": "642075",
+      "title": "1月24日问题修复版本更新公告",
+      "published_at": "2025-01-23 18:34:16",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=642075",
+      "raw_payload": "raw/tencent-announcements/642075.json",
+      "raw_payload_sha256": "a2ef78c435f43925c16899ddfbb7e10c4025aa01d88d8c72a2d1b02e7e825df3",
+      "normalized_document": "sources/official/patches/2025-01-23-642075-1-24.md"
+    },
+    {
+      "announcement_id": "641960",
+      "title": "1月23日新春版本更新公告",
+      "published_at": "2025-01-22 16:15:16",
+      "game_version": "V102",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=641960",
+      "raw_payload": "raw/tencent-announcements/641960.json",
+      "raw_payload_sha256": "5f5f4bd743850a01dc3fc3e7daae8c8ccb958d4971145d21b506f4ec604d7a61",
+      "normalized_document": "sources/official/patches/2025-01-22-641960-1-23.md"
+    },
+    {
+      "announcement_id": "641492",
+      "title": "1月16日问题修复版本更新公告",
+      "published_at": "2025-01-16 17:29:16",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=641492",
+      "raw_payload": "raw/tencent-announcements/641492.json",
+      "raw_payload_sha256": "be25ea74eeff99c6e6b8e4a11cdc78651100f04ceda2d9fad762ebaa9948741a",
+      "normalized_document": "sources/official/patches/2025-01-16-641492-1-16.md"
+    },
+    {
+      "announcement_id": "641396",
+      "title": "英雄平衡性调整 | 女娲、沈梦溪平衡",
+      "published_at": "2025-01-15 17:38:29",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=641396",
+      "raw_payload": "raw/tencent-announcements/641396.json",
+      "raw_payload_sha256": "81c2ff9603beab75c03b496dba6111eb7204ca9331a7ba959c96e4272f3b8e75",
+      "normalized_document": "sources/official/patches/2025-01-15-641396-announcement-641396.md"
+    },
+    {
+      "announcement_id": "641385",
+      "title": "1月16日版本更新公告",
+      "published_at": "2025-01-15 16:11:09",
+      "game_version": "V102",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=641385",
+      "raw_payload": "raw/tencent-announcements/641385.json",
+      "raw_payload_sha256": "de983db3b81f3d55c4b5037657643b803cac84583dd4eb079331d8ca88ccd70e",
+      "normalized_document": "sources/official/patches/2025-01-15-641385-1-16.md"
+    },
+    {
+      "announcement_id": "641247",
+      "title": "1月13日问题修复版本更新公告",
+      "published_at": "2025-01-13 11:22:34",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=641247",
+      "raw_payload": "raw/tencent-announcements/641247.json",
+      "raw_payload_sha256": "f57cdfac7ef1c138ae2c3706084c5f7bd23d15bfd07c61199bcb078276326911",
+      "normalized_document": "sources/official/patches/2025-01-13-641247-1-13.md"
+    },
+    {
+      "announcement_id": "641161",
+      "title": "1月12日服务器优化版本更新公告",
+      "published_at": "2025-01-11 19:46:16",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=641161",
+      "raw_payload": "raw/tencent-announcements/641161.json",
+      "raw_payload_sha256": "fc614f4643d5838391646ec0a52d2be34df30174a3e70c631d20a8a393094781",
+      "normalized_document": "sources/official/patches/2025-01-11-641161-1-12.md"
+    },
+    {
+      "announcement_id": "641082",
+      "title": "1月10日问题修复版本更新公告",
+      "published_at": "2025-01-10 11:58:17",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=641082",
+      "raw_payload": "raw/tencent-announcements/641082.json",
+      "raw_payload_sha256": "1c938e1c3b393a940da83ce63578f980d50d065d4fd1b1cea933ad0ca22f3190",
+      "normalized_document": "sources/official/patches/2025-01-10-641082-1-10.md"
+    },
+    {
+      "announcement_id": "641037",
+      "title": "1月10日问题修复版本更新公告",
+      "published_at": "2025-01-09 17:33:51",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=641037",
+      "raw_payload": "raw/tencent-announcements/641037.json",
+      "raw_payload_sha256": "ebfebdc9e8b7189c5eebf40e2fea75e5f57bf3b55d33f1be2238d87bc35ba0a7",
+      "normalized_document": "sources/official/patches/2025-01-09-641037-1-10.md"
+    },
+    {
+      "announcement_id": "641025",
+      "title": "1月9日问题修复版本更新公告",
+      "published_at": "2025-01-09 15:33:10",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=641025",
+      "raw_payload": "raw/tencent-announcements/641025.json",
+      "raw_payload_sha256": "ee72ed481f455debc402f196fe769d0030c80e2307053d1039c2ec24f47b6087",
+      "normalized_document": "sources/official/patches/2025-01-09-641025-1-9.md"
+    },
+    {
+      "announcement_id": "640921",
+      "title": "英雄平衡性调整 | 司空震、达摩增强",
+      "published_at": "2025-01-08 16:08:09",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=640921",
+      "raw_payload": "raw/tencent-announcements/640921.json",
+      "raw_payload_sha256": "6b8fcc89eaa1dac2677e4ab825e32adecd8d1fa929692a7d10c5cdef334c23f5",
+      "normalized_document": "sources/official/patches/2025-01-08-640921-announcement-640921.md"
+    },
+    {
+      "announcement_id": "640920",
+      "title": "1月9日版本更新公告",
+      "published_at": "2025-01-08 15:50:23",
+      "game_version": "V102",
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=640920",
+      "raw_payload": "raw/tencent-announcements/640920.json",
+      "raw_payload_sha256": "9db998652b5f615b62aca924823196d383229663e0040de822dc94a0a8b2f259",
+      "normalized_document": "sources/official/patches/2025-01-08-640920-1-9.md"
+    },
+    {
+      "announcement_id": "640620",
+      "title": "1月3日问题修复版本更新公告",
+      "published_at": "2025-01-02 23:25:07",
+      "game_version": null,
+      "source_url": "https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id=640620",
+      "raw_payload": "raw/tencent-announcements/640620.json",
+      "raw_payload_sha256": "5f7a15559f1e0348827d66e763f5a891e42ff7964a24956034c70bf068dc6272",
+      "normalized_document": "sources/official/patches/2025-01-02-640620-1-3.md"
+    }
+  ]
+}

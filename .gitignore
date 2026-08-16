@@ -22,6 +22,9 @@ analysis/outputs/*/draft_model.json
 !analysis/hero_ability_mechanics.json
 !analysis/hero_draft_feature_vectors.json
 !analysis/hero_tactical_roles.json
+# These are versioned RAG corpus inputs, not generated runtime data.
+!knowledge/metadata/tencent-patch-index.json
+!knowledge/sources/official/herolist.json
 *.gz
 # Hero artwork under frontend/public/assets/heroes is a deployable source asset.
 # Do not ignore it: a clean checkout must include the icons used by heroAssets.js.
