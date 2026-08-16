@@ -1,10 +1,15 @@
 import unittest
+from datetime import datetime
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.models import BattlePlayer, Team
-from app.services.season_teams import list_season_teams, validate_season_team_pair
+from app.models import BattlePlayer, Match, Team
+from app.services.season_teams import (
+    list_season_teams,
+    next_scheduled_match,
+    validate_season_team_pair,
+)
 
 
 class SeasonTeamsTest(unittest.TestCase):
@@ -12,6 +17,7 @@ class SeasonTeamsTest(unittest.TestCase):
         self.engine = create_engine("sqlite:///:memory:")
         Team.__table__.create(self.engine)
         BattlePlayer.__table__.create(self.engine)
+        Match.__table__.create(self.engine)
         self.factory = sessionmaker(bind=self.engine)
         with self.factory() as db:
             db.add_all(
@@ -70,6 +76,42 @@ class SeasonTeamsTest(unittest.TestCase):
                 validate_season_team_pair(db, "season-1", "wolves", "wolves")
             with self.assertRaisesRegex(ValueError, "not part of this season"):
                 validate_season_team_pair(db, "season-1", "wolves", "old")
+
+    def test_uses_china_time_to_find_the_next_selectable_fixture(self) -> None:
+        with self.factory() as db:
+            db.add_all(
+                [
+                    Match(
+                        match_id="past",
+                        league_id="season-1",
+                        camp1_team_id="wolves",
+                        camp1_team_name="Wolves",
+                        camp2_team_id="ag",
+                        camp2_team_name="AG",
+                        start_time="2026-08-16 13:00:00",
+                    ),
+                    Match(
+                        match_id="next",
+                        league_id="season-1",
+                        camp1_team_id="wolves",
+                        camp1_team_name="Wolves",
+                        camp2_team_id="ag",
+                        camp2_team_name="AG",
+                        start_time="2026-08-16 20:00:00",
+                    ),
+                ]
+            )
+            db.commit()
+            fixture = next_scheduled_match(
+                db,
+                "season-1",
+                selectable_team_ids={"wolves", "ag"},
+                as_of_china=datetime(2026, 8, 16, 14, 0, 0),
+            )
+
+        self.assertEqual(fixture["match_id"], "next")
+        self.assertEqual(fixture["start_time"], "2026-08-16 20:00:00")
+        self.assertEqual(fixture["timezone"], "Asia/Shanghai")
 
 
 if __name__ == "__main__":

@@ -2,8 +2,10 @@ import unittest
 from unittest.mock import Mock, patch
 
 from fastapi.testclient import TestClient
+from starlette.requests import Request
 
 from app.agent.service import CoachLoopLimitError, KimiConfigurationError
+from app.api.coach import _is_direct_loopback_request
 from app.main import app
 from app.services.coach_rate_limit import CoachRateLimiter
 
@@ -144,6 +146,53 @@ class CoachApiTest(unittest.TestCase):
         self.assertEqual(response.json()["detail"]["code"], "coach_rate_limited")
         self.assertGreaterEqual(int(response.headers["Retry-After"]), 1)
         self.assertEqual(service.ask.call_count, 1)
+
+    def test_direct_loopback_bypasses_the_coach_rate_limiter(self) -> None:
+        limiter = CoachRateLimiter(
+            per_ip_per_minute=1,
+            per_ip_per_day=1,
+            server_per_minute=1,
+            server_per_day=1,
+            max_active_per_ip=1,
+            max_active_server=1,
+        )
+        service = Mock()
+        service.ask.return_value = {
+            "request_id": "request-from-service",
+            "model": "kimi-k2.6",
+            "answer": "Answer.",
+            "tool_calls": [],
+            "usage": {},
+        }
+        request = Request(
+            {
+                "type": "http",
+                "scheme": "http",
+                "method": "POST",
+                "path": "/api/coach",
+                "query_string": b"",
+                "server": ("127.0.0.1", 8000),
+                "client": ("127.0.0.1", 50000),
+                "headers": [(b"host", b"127.0.0.1:8000")],
+            }
+        )
+        self.assertTrue(_is_direct_loopback_request(request))
+        with (
+            patch("app.api.coach.rate_limiter", limiter),
+            patch("app.api.coach.KimiCoachService", return_value=service),
+            patch("app.api.coach._is_direct_loopback_request", return_value=True),
+        ):
+            first = self.client.post(
+                "/api/coach", json={"message": "One", "league_id": "20260002"}
+            )
+            second = self.client.post(
+                "/api/coach", json={"message": "Two", "league_id": "20260002"}
+            )
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(service.ask.call_count, 2)
+        self.assertEqual(limiter.usage()["accepted_since_start"], 0)
 
     def test_usage_endpoint_exposes_no_client_identifiers(self) -> None:
         response = self.client.get("/api/coach/usage")

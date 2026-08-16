@@ -36,7 +36,7 @@ class AgentToolRegistryTest(unittest.TestCase):
     def test_definitions_expose_only_registered_tools(self) -> None:
         definitions = available_tool_definitions()
 
-        self.assertEqual(len(definitions), 13)
+        self.assertEqual(len(definitions), 14)
         functions = {
             definition["function"]["name"]: definition["function"]
             for definition in definitions
@@ -57,6 +57,7 @@ class AgentToolRegistryTest(unittest.TestCase):
                 "get_team_combo_performance",
                 "get_player_hero_pool",
                 "get_recent_team_trends",
+                "search_patch_notes",
             },
         )
         function = functions["predict_next_draft_action"]
@@ -72,6 +73,9 @@ class AgentToolRegistryTest(unittest.TestCase):
         self.assertNotIn("team_name", player_schema["required"])
         simulation_schema = functions["simulate_future_draft"]["parameters"]
         self.assertNotIn("rollouts", simulation_schema["properties"])
+        patch_schema = functions["search_patch_notes"]["parameters"]
+        self.assertIn("query", patch_schema["required"])
+        self.assertNotIn("league_id", patch_schema["properties"])
 
     def test_dispatch_validates_and_calls_fast_prediction(self) -> None:
         expected = {

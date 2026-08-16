@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from ipaddress import ip_address
 from typing import NoReturn
 from uuid import uuid4
 
@@ -22,6 +23,7 @@ from app.agent.service import (
     KimiCoachService,
     KimiConfigurationError,
 )
+from app.agent.scout_report import ScoutReportInput, ScoutReportService
 from app.database import get_db
 from app.config import get_settings
 from app.schemas import ApiResponse, CoachLimitsUpdate
@@ -57,6 +59,29 @@ def _client_key(request: Request) -> str:
     )
 
 
+def _is_direct_loopback_request(request: Request) -> bool:
+    """Bypass development limits only for a direct localhost request.
+
+    A public deployment can legitimately have a loopback reverse proxy, so a
+    trusted-proxy deployment never receives this bypass. Requiring both a
+    loopback peer and loopback Host also avoids treating proxied public traffic
+    as local testing traffic.
+    """
+    if get_settings().coach_trust_proxy_headers:
+        return False
+    peer = request.client.host if request.client else ""
+    host = request.url.hostname or ""
+    try:
+        peer_is_loopback = ip_address(peer).is_loopback
+    except ValueError:
+        peer_is_loopback = False
+    try:
+        host_is_loopback = ip_address(host).is_loopback
+    except ValueError:
+        host_is_loopback = host.casefold() == "localhost"
+    return peer_is_loopback and host_is_loopback
+
+
 def _http_error(
     *,
     status_code: int,
@@ -82,22 +107,26 @@ def ask_coach(
 ) -> ApiResponse:
     """Answer one question with Kimi and approved local evidence tools."""
     request_id = uuid4().hex
-    client_key = _client_key(request)
-    decision = rate_limiter.acquire(client_key)
-    if not decision.allowed:
-        logger.warning(
-            "coach_api_rate_limited",
-            extra={"request_id": request_id, "limit": decision.code},
-        )
-        raise HTTPException(
-            status_code=429,
-            detail={
-                "code": "coach_rate_limited",
-                "message": "The Draft Coach is busy. Try again shortly.",
-                "request_id": request_id,
-            },
-            headers={"Retry-After": str(decision.retry_after_seconds)},
-        )
+    rate_limit_bypassed = _is_direct_loopback_request(request)
+    client_identity = _client_key(request)
+    if not rate_limit_bypassed:
+        decision = rate_limiter.acquire(client_identity)
+        if not decision.allowed:
+            logger.warning(
+                "coach_api_rate_limited",
+                extra={"request_id": request_id, "limit": decision.code},
+            )
+            raise HTTPException(
+                status_code=429,
+                detail={
+                    "code": "coach_rate_limited",
+                    "message": "The Draft Coach is busy. Try again shortly.",
+                    "request_id": request_id,
+                },
+                headers={"Retry-After": str(decision.retry_after_seconds)},
+            )
+    else:
+        logger.info("coach_api_loopback_rate_limit_bypassed", extra={"request_id": request_id})
     try:
         if body.draft_state is not None:
             teams = validate_season_team_pair(
@@ -192,7 +221,8 @@ def ask_coach(
             request_id=request_id,
         )
     finally:
-        rate_limiter.release(client_key)
+        if not rate_limit_bypassed:
+            rate_limiter.release(client_identity)
 
     evidence: list[dict[str, object]] = []
     warnings: list[str] = []
@@ -216,6 +246,106 @@ def ask_coach(
             "evidence": evidence,
             "warnings": warnings,
             "usage": result["usage"],
+        },
+    )
+
+
+@router.post("/scout-report")
+def prepare_scout_report(
+    body: ScoutReportInput,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> ApiResponse:
+    """Build a fixed, evidence-backed preparation report for the selected matchup."""
+    request_id = uuid4().hex
+    rate_limit_bypassed = _is_direct_loopback_request(request)
+    client_identity = _client_key(request)
+    if not rate_limit_bypassed:
+        decision = rate_limiter.acquire(client_identity)
+        if not decision.allowed:
+            raise HTTPException(
+                status_code=429,
+                detail={
+                    "code": "coach_rate_limited",
+                    "message": "The Draft Coach is busy. Try again shortly.",
+                    "request_id": request_id,
+                },
+                headers={"Retry-After": str(decision.retry_after_seconds)},
+            )
+    try:
+        teams = validate_season_team_pair(
+            db,
+            body.league_id,
+            body.blue_team_id,
+            body.red_team_id,
+        )
+        # Names always come from the selected season, never from the browser.
+        trusted_body = body.model_copy(
+            update={
+                "blue_team_name": str(teams["blue"]["team_name"]),
+                "red_team_name": str(teams["red"]["team_name"]),
+            }
+        )
+        result = ScoutReportService().generate(trusted_body, request_id=request_id)
+    except ValueError as exc:
+        _http_error(
+            status_code=422,
+            code="invalid_team_context",
+            message=str(exc),
+            request_id=request_id,
+        )
+    except (KimiConfigurationError, AuthenticationError) as exc:
+        logger.error("scout_report_unavailable", extra={"request_id": request_id, "error_type": type(exc).__name__})
+        _http_error(
+            status_code=503,
+            code="coach_unavailable",
+            message="The Draft Coach provider is not configured or authenticated.",
+            request_id=request_id,
+        )
+    except RateLimitError as exc:
+        logger.warning("scout_report_rate_limited", extra={"request_id": request_id, "error_type": type(exc).__name__})
+        _http_error(
+            status_code=429,
+            code="coach_rate_limited",
+            message="The Draft Coach provider is temporarily rate limited. Try again later.",
+            request_id=request_id,
+        )
+    except APITimeoutError as exc:
+        logger.warning("scout_report_timeout", extra={"request_id": request_id, "error_type": type(exc).__name__})
+        _http_error(status_code=504, code="coach_timeout", message="The Draft Coach provider timed out. Try again.", request_id=request_id)
+    except (APIConnectionError, APIStatusError) as exc:
+        logger.warning("scout_report_provider_failure", extra={"request_id": request_id, "error_type": type(exc).__name__})
+        _http_error(status_code=502, code="coach_provider_error", message="The Draft Coach provider could not complete the request.", request_id=request_id)
+    except RuntimeError as exc:
+        logger.warning("scout_report_incomplete", extra={"request_id": request_id, "error_type": type(exc).__name__})
+        _http_error(status_code=502, code="coach_incomplete", message="The Draft Coach could not finish the report.", request_id=request_id)
+    except Exception as exc:
+        logger.error("scout_report_internal_failure", extra={"request_id": request_id, "error_type": type(exc).__name__})
+        _http_error(status_code=500, code="coach_internal_error", message="The Draft Coach encountered an internal error.", request_id=request_id)
+    finally:
+        if not rate_limit_bypassed:
+            rate_limiter.release(client_identity)
+
+    evidence = [
+        {"tool": call["name"], "subject": call["subject"], "data": call["result"]}
+        for call in result["tool_calls"]
+        if call["success"]
+    ]
+    warnings = [*result["warnings"], *[
+        f"{call['subject']}: {call['error']}"
+        for call in result["tool_calls"]
+        if not call["success"]
+    ]]
+    return ApiResponse(
+        message="scout report completed",
+        data={
+            "request_id": result["request_id"],
+            "model": result["model"],
+            "answer": result["answer"],
+            "evidence": evidence,
+            "warnings": warnings,
+            "usage": result["usage"],
+            "priority_heroes": result["priority_heroes"],
         },
     )
 

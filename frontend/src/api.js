@@ -71,6 +71,22 @@ export function fetchSeasonTeams(leagueId) {
   return request(`/api/leagues/${encodeURIComponent(leagueId)}/teams`);
 }
 
+export function fetchUpcomingMatch(leagueId) {
+  return request(`/api/leagues/${encodeURIComponent(leagueId)}/upcoming-match`);
+}
+
+export function fetchLiveMatch({ leagueId, teamAId, teamBId }) {
+  const params = new URLSearchParams({ team_a_id: teamAId, team_b_id: teamBId });
+  return request(`/api/leagues/${encodeURIComponent(leagueId)}/live-match?${params}`);
+}
+
+export function refreshLiveMatch({ leagueId, teamAId, teamBId }) {
+  const params = new URLSearchParams({ team_a_id: teamAId, team_b_id: teamBId });
+  return request(`/api/leagues/${encodeURIComponent(leagueId)}/live-match/refresh?${params}`, {
+    method: "POST",
+  });
+}
+
 export function fetchVisualizationSeasons() {
   return staticData("/assets/data/seasons.json");
 }
@@ -146,6 +162,13 @@ export function fetchSelectionCommentary(state) {
 
 export function askDraftCoach(payload) {
   return request("/api/coach", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function prepareScoutReport(payload) {
+  return request("/api/coach/scout-report", {
     method: "POST",
     body: JSON.stringify(payload),
   });
