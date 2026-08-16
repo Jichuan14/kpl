@@ -518,16 +518,9 @@ function startLiveMatchPolling() {
 }
 
 function completedGameSignature(state) {
-  const games = (state?.completed_games || [])
-    .map((game) => {
-      const picks = Object.entries(game.used_hero_ids_by_team || {})
-        .sort(([left], [right]) => left.localeCompare(right))
-        .map(([teamId, heroIds]) => `${teamId}:${(heroIds || []).join(",")}`)
-        .join(";");
-      return `${game.battle_id}:${game.game}:${picks}`;
-    })
+  return (state?.completed_games || [])
+    .map((game) => `${game.battle_id}:${game.game}`)
     .join(",");
-  return `${state?.match?.status || ""}|${games}`;
 }
 
 function isOfficialSeriesComplete(state) {
@@ -643,8 +636,9 @@ async function refreshLiveMatch(manual = false) {
     }
     const gameSignature = completedGameSignature(state);
     if (gameSignature !== liveAppliedGameSignature.value) {
-      // Only a newly completed official game replaces the temporary local BP
-      // board. Polls while the same game is in progress leave it untouched.
+      // Only a newly completed official battle replaces the temporary local BP
+      // board. Late hero-detail updates for that battle keep the same stable
+      // battle signature and therefore leave the current game's BP untouched.
       await applyLiveMatchState(state);
       liveAppliedGameSignature.value = gameSignature;
     }
