@@ -500,7 +500,7 @@ function scheduleLiveScheduleClock() {
 
 function scheduleLiveMatchCheck() {
   stopLiveMatchCheckSchedule();
-  if (!teamsReady.value || !selectedTeamsMatchFixture() || !liveFollowing.value) return;
+  if (!teamsReady.value || !selectedTeamsMatchFixture()) return;
   const delay = scheduledLiveCheckDelay(upcomingMatch.value);
   if (delay === null) return;
   const wait = Math.max(0, delay);
@@ -528,6 +528,16 @@ function completedGameSignature(state) {
     })
     .join(",");
   return `${state?.match?.status || ""}|${games}`;
+}
+
+function isOfficialSeriesComplete(state) {
+  if (state?.is_finished) return true;
+  const bestOf = Number(state?.match?.bo || 0);
+  if (bestOf < 1) return false;
+  const winsNeeded = Math.ceil(bestOf / 2);
+  return (state?.match?.teams || []).some(
+    (team) => Number(team.score || 0) >= winsNeeded
+  );
 }
 
 async function applyLiveMatchState(state) {
@@ -558,6 +568,45 @@ async function applyLiveMatchState(state) {
   await forecast();
 }
 
+async function moveToNextScheduledFixture() {
+  let fixture;
+  try {
+    fixture = await fetchUpcomingMatch(leagueId.value, { nextOnly: true });
+  } catch {
+    return;
+  }
+  if (!fixture || String(fixture.match_id || "") === String(liveMatch.value?.match?.match_id || "")) {
+    return;
+  }
+  const fixtureTeams = (fixture.teams || [])
+    .map((fixtureTeam) =>
+      seasonTeams.value.find(
+        (team) => String(team.team_id) === String(fixtureTeam.team_id)
+      )
+    )
+    .filter(Boolean);
+  if (fixtureTeams.length !== 2 || String(fixtureTeams[0].team_id) === String(fixtureTeams[1].team_id)) {
+    return;
+  }
+  upcomingMatch.value = fixture;
+  seasonTeams.value = teamsWithUpcomingFixtureFirst(seasonTeams.value, fixture);
+  globalMode.value = "match";
+  seriesGame.value = 1;
+  if ([5, 7].includes(Number(fixture.bo))) bestOf.value = Number(fixture.bo);
+  resetSeriesTeams();
+  board.value = emptyBoard();
+  history.value = [];
+  bpOrder.value = 1;
+  result.value = null;
+  commentary.value = null;
+  liveMatch.value = null;
+  liveFollowDismissed.value = false;
+  selectedTeamIds.value = {
+    [TEAM_A]: String(fixtureTeams[0].team_id),
+    [TEAM_B]: String(fixtureTeams[1].team_id),
+  };
+}
+
 async function refreshLiveMatch(manual = false) {
   if (!leagueId.value || !teamsReady.value) return;
   const requestNumber = ++liveMatchRequestNumber;
@@ -577,19 +626,26 @@ async function refreshLiveMatch(manual = false) {
       await followLiveMatch({ persist: false });
       return;
     }
-    if (!liveFollowing.value) return;
+    if (isOfficialSeriesComplete(state)) {
+      if (liveFollowing.value) await applyLiveMatchState(state);
+      stopFollowingLiveMatch();
+      stopLiveMatchPolling();
+      stopLiveMatchCheckSchedule();
+      await moveToNextScheduledFixture();
+      return;
+    }
+    if (!liveFollowing.value) {
+      // This lightweight monitor only advances the scheduled matchup. It does
+      // not apply heroes or alter the visitor's local draft board.
+      startLiveMatchPolling();
+      return;
+    }
     const gameSignature = completedGameSignature(state);
     if (gameSignature !== liveAppliedGameSignature.value) {
       // Only a newly completed official game replaces the temporary local BP
       // board. Polls while the same game is in progress leave it untouched.
       await applyLiveMatchState(state);
       liveAppliedGameSignature.value = gameSignature;
-    }
-    if (state.is_finished) {
-      // A completed official series has no next BP to follow. Preserve the
-      // final hero context already applied above, but stop all live activity.
-      stopFollowingLiveMatch();
-      return;
     }
     startLiveMatchPolling();
   } catch {
@@ -618,8 +674,6 @@ function stopFollowingLiveMatch({ forget = true } = {}) {
   liveFollowFinished.value = false;
   liveAppliedGameSignature.value = "";
   if (forget) clearLiveFollowPreference();
-  stopLiveMatchPolling();
-  stopLiveMatchCheckSchedule();
 }
 
 async function loadSeasons() {
@@ -637,6 +691,7 @@ async function loadModel() {
   seasonTeams.value = [];
   upcomingMatch.value = null;
   stopFollowingLiveMatch({ forget: false });
+  stopLiveMatchPolling();
   stopLiveMatchCheckSchedule();
   stopLiveScheduleClock();
   liveMatch.value = null;
@@ -878,6 +933,7 @@ watch(
   selectedTeamIds,
   async () => {
     stopFollowingLiveMatch({ forget: false });
+    stopLiveMatchPolling();
     liveMatch.value = null;
     liveFollowDismissed.value = false;
     liveAppliedGameSignature.value = "";

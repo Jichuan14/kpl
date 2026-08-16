@@ -71,8 +71,9 @@ export function fetchSeasonTeams(leagueId) {
   return request(`/api/leagues/${encodeURIComponent(leagueId)}/teams`);
 }
 
-export function fetchUpcomingMatch(leagueId) {
-  return request(`/api/leagues/${encodeURIComponent(leagueId)}/upcoming-match`);
+export function fetchUpcomingMatch(leagueId, { nextOnly = false } = {}) {
+  const query = nextOnly ? "?next_only=true" : "";
+  return request(`/api/leagues/${encodeURIComponent(leagueId)}/upcoming-match${query}`);
 }
 
 export function fetchLiveMatch({ leagueId, teamAId, teamBId }) {

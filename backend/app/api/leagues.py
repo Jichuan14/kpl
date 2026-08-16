@@ -6,7 +6,11 @@ from app.database import get_db
 from app.models import League
 from app.schemas import ApiResponse, LeagueOut
 from app.services.sync import SyncService
-from app.services.season_teams import current_or_next_scheduled_match, list_season_teams
+from app.services.season_teams import (
+    current_or_next_scheduled_match,
+    list_season_teams,
+    next_scheduled_match,
+)
 from app.services.live_match import LiveMatchService
 
 router = APIRouter(prefix="/api/leagues", tags=["leagues"])
@@ -58,6 +62,7 @@ def season_teams(
 @router.get("/{league_id}/upcoming-match")
 def upcoming_match(
     league_id: str,
+    next_only: bool = Query(default=False),
     db: Session = Depends(get_db),
 ) -> ApiResponse:
     """Return local catalogue timing for the current or next fixture.
@@ -70,10 +75,18 @@ def upcoming_match(
         raise HTTPException(status_code=404, detail="League not found")
     teams = list_season_teams(db, league_id)
     selectable_team_ids = {str(team["team_id"]) for team in teams}
-    fixture = current_or_next_scheduled_match(
-        db,
-        league_id,
-        selectable_team_ids=selectable_team_ids,
+    fixture = (
+        next_scheduled_match(
+            db,
+            league_id,
+            selectable_team_ids=selectable_team_ids,
+        )
+        if next_only
+        else current_or_next_scheduled_match(
+            db,
+            league_id,
+            selectable_team_ids=selectable_team_ids,
+        )
     )
     if fixture is not None:
         fixture["fixture_status"] = "scheduled"
