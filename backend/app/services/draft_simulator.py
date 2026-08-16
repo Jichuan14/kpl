@@ -421,6 +421,19 @@ def _roles_are_feasible(model: dict[str, Any], hero_ids: list[int]) -> bool:
     return bool(_role_assignment_masks(model, hero_ids))
 
 
+def _heroes_that_fit_open_roles(
+    model: dict[str, Any], hero_ids: list[int], candidates: list[int]
+) -> list[int]:
+    """Keep candidates that can complete a distinct-role assignment for a team."""
+    assignments = _role_assignment_masks(model, hero_ids)
+    role_masks = model["_hero_role_masks"]
+    return [
+        hero_id
+        for hero_id in candidates
+        if any(role_masks.get(hero_id, 0) & ~assignment for assignment in assignments)
+    ]
+
+
 def _legal_heroes(
     model: dict[str, Any], state: dict[str, Any], step: dict[str, Any]
 ) -> list[int]:
@@ -435,21 +448,24 @@ def _legal_heroes(
         )
     else:
         candidates = [hero_id for hero_id in model["hero_ids"] if hero_id not in used]
-    if step["action"] != "pick":
-        return candidates
+    side = str(step["side"])
+    if step["action"] == "ban":
+        # A ban is only strategically relevant when the opposing side can
+        # still use the hero in one of its unfilled roles.  This prevents, for
+        # example, a pure mid hero from being forecast as a ban after the
+        # opponent has already locked its only mid assignment.
+        opponent = "red" if side == "blue" else "blue"
+        opponent_picks = [
+            int(hero_id) for hero_id in state.get(f"{opponent}_picks", [])
+        ]
+        return _heroes_that_fit_open_roles(model, opponent_picks, candidates)
     previous_match_used = {
         int(hero_id)
-        for hero_id in state.get(f"{step['side']}_used_previous_battles", [])
+        for hero_id in state.get(f"{side}_used_previous_battles", [])
     }
     candidates = [hero_id for hero_id in candidates if hero_id not in previous_match_used]
-    team_picks = [int(hero_id) for hero_id in state.get(f"{step['side']}_picks", [])]
-    assignments = _role_assignment_masks(model, team_picks)
-    role_masks = model["_hero_role_masks"]
-    return [
-        hero_id
-        for hero_id in candidates
-        if any(role_masks.get(hero_id, 0) & ~assignment for assignment in assignments)
-    ]
+    team_picks = [int(hero_id) for hero_id in state.get(f"{side}_picks", [])]
+    return _heroes_that_fit_open_roles(model, team_picks, candidates)
 
 
 def _visible_sources(state: dict[str, Any], side: str) -> list[tuple[str, int]]:

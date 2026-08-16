@@ -352,7 +352,9 @@ the candidate list is restricted to that list.
 For a pick, the backend simulator additionally removes the acting side's
 `{blue|red}_used_previous_battles`, enforcing Global BP. It then checks role
 feasibility: all current and prospective picks must admit a one-to-one
-assignment to their observed eligible role IDs. Bans have no role check.
+assignment to their observed eligible role IDs. For a ban, the candidate must
+still fit at least one unfilled eligible role on the opposing side; this avoids
+forecasting bans of a pure-role hero after that role has already been filled.
 
 The offline command-line simulator also prevents reused board heroes and
 enforces distinct roles, but does not accept/apply the previous-battle fields;

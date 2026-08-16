@@ -30,6 +30,25 @@ def model_fixture() -> dict:
 
 
 class PredictNextActionTest(unittest.TestCase):
+    def test_ban_candidates_exclude_roles_already_filled_by_opponent(self) -> None:
+        model = {
+            "hero_ids": [101, 102, 103, 104],
+            # 101 and 103 are mid; 102 is farm; 104 can play either lane.
+            "_hero_role_masks": {101: 1, 102: 2, 103: 1, 104: 3},
+        }
+        state = {
+            "blue_picks": [],
+            "red_picks": [101],
+            "blue_bans": [],
+            "red_bans": [],
+        }
+        blue_ban = {"side": "blue", "action": "ban"}
+
+        self.assertEqual(
+            draft_simulator._legal_heroes(model, state, blue_ban),
+            [102, 104],
+        )
+
     def test_sequence_loader_rejects_a_bad_parameter_checksum(self) -> None:
         artifact = {
             "schema_version": 3,
