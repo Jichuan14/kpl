@@ -608,7 +608,7 @@ async function moveToNextScheduledFixture() {
 }
 
 async function refreshLiveMatch(manual = false) {
-  if (!leagueId.value || !teamsReady.value) return;
+  if (!leagueId.value || !teamsReady.value || !upcomingMatch.value?.match_id) return;
   const requestNumber = ++liveMatchRequestNumber;
   liveMatchLoading.value = true;
   try {
@@ -616,6 +616,7 @@ async function refreshLiveMatch(manual = false) {
       leagueId: leagueId.value,
       teamAId: String(selectedTeamIds.value[TEAM_A]),
       teamBId: String(selectedTeamIds.value[TEAM_B]),
+      matchId: String(upcomingMatch.value.match_id),
     };
     const state = manual
       ? await requestLiveMatchRefresh(payload)

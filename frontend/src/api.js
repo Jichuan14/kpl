@@ -76,13 +76,13 @@ export function fetchUpcomingMatch(leagueId, { nextOnly = false } = {}) {
   return request(`/api/leagues/${encodeURIComponent(leagueId)}/upcoming-match${query}`);
 }
 
-export function fetchLiveMatch({ leagueId, teamAId, teamBId }) {
-  const params = new URLSearchParams({ team_a_id: teamAId, team_b_id: teamBId });
+export function fetchLiveMatch({ leagueId, teamAId, teamBId, matchId }) {
+  const params = new URLSearchParams({ team_a_id: teamAId, team_b_id: teamBId, match_id: matchId });
   return request(`/api/leagues/${encodeURIComponent(leagueId)}/live-match?${params}`);
 }
 
-export function refreshLiveMatch({ leagueId, teamAId, teamBId }) {
-  const params = new URLSearchParams({ team_a_id: teamAId, team_b_id: teamBId });
+export function refreshLiveMatch({ leagueId, teamAId, teamBId, matchId }) {
+  const params = new URLSearchParams({ team_a_id: teamAId, team_b_id: teamBId, match_id: matchId });
   return request(`/api/leagues/${encodeURIComponent(leagueId)}/live-match/refresh?${params}`, {
     method: "POST",
   });

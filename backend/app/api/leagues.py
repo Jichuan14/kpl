@@ -99,10 +99,13 @@ def live_match(
     league_id: str,
     team_a_id: str = Query(min_length=1, max_length=32),
     team_b_id: str = Query(min_length=1, max_length=32),
+    match_id: str = Query(min_length=1, max_length=32),
 ) -> ApiResponse:
     """Return disposable live BP context without writing to the database."""
     try:
-        state = live_match_service.get_match_state(league_id, team_a_id, team_b_id)
+        state = live_match_service.get_match_state(
+            league_id, team_a_id, team_b_id, match_id
+        )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return ApiResponse(data=state)
@@ -113,10 +116,13 @@ def refresh_live_match(
     league_id: str,
     team_a_id: str = Query(min_length=1, max_length=32),
     team_b_id: str = Query(min_length=1, max_length=32),
+    match_id: str = Query(min_length=1, max_length=32),
 ) -> ApiResponse:
     """Request a read-only live refresh, rate-limited by the in-memory cache."""
     try:
-        state = live_match_service.refresh_match_state(league_id, team_a_id, team_b_id)
+        state = live_match_service.refresh_match_state(
+            league_id, team_a_id, team_b_id, match_id
+        )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return ApiResponse(data=state)

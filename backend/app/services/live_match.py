@@ -51,7 +51,7 @@ class LiveMatchService:
         self.manual_refresh_seconds = (
             manual_refresh_seconds or settings.live_match_manual_refresh_seconds
         )
-        self._cache: dict[tuple[str, str, str], tuple[float, dict[str, Any]]] = {}
+        self._cache: dict[tuple[str, str], tuple[float, dict[str, Any]]] = {}
         self._fixture_cache: dict[str, tuple[float, dict[str, Any] | None]] = {}
         self._lock = Lock()
 
@@ -100,20 +100,25 @@ class LiveMatchService:
             return fixture
 
     def get_match_state(
-        self, league_id: str, team_a_id: str, team_b_id: str
+        self, league_id: str, team_a_id: str, team_b_id: str, match_id: str
     ) -> dict[str, Any]:
         return self._get_match_state(
-            league_id, team_a_id, team_b_id, refresh_after_seconds=self.cache_seconds
+            league_id,
+            team_a_id,
+            team_b_id,
+            match_id,
+            refresh_after_seconds=self.cache_seconds,
         )
 
     def refresh_match_state(
-        self, league_id: str, team_a_id: str, team_b_id: str
+        self, league_id: str, team_a_id: str, team_b_id: str, match_id: str
     ) -> dict[str, Any]:
         """Refresh on request, but never more than once a minute per matchup."""
         return self._get_match_state(
             league_id,
             team_a_id,
             team_b_id,
+            match_id,
             refresh_after_seconds=self.manual_refresh_seconds,
         )
 
@@ -122,13 +127,16 @@ class LiveMatchService:
         league_id: str,
         team_a_id: str,
         team_b_id: str,
+        match_id: str,
         *,
         refresh_after_seconds: int,
     ) -> dict[str, Any]:
         team_ids = {str(team_a_id), str(team_b_id)}
         if len(team_ids) != 2:
             raise ValueError("Choose two different teams to follow a live match")
-        key = (str(league_id), *sorted(team_ids))
+        if not str(match_id):
+            raise ValueError("A scheduled match is required for live follow")
+        key = (str(league_id), str(match_id))
         now = monotonic()
         with self._lock:
             cached = self._cache.get(key)
@@ -137,7 +145,7 @@ class LiveMatchService:
 
             # Holding this small lock prevents many browser tabs from making the
             # same upstream KPL request at once. No data is written to SQLite.
-            state = self._fetch_state(str(league_id), team_ids)
+            state = self._fetch_state(str(league_id), team_ids, str(match_id))
             self._cache[key] = (now, state)
             return self._response(state, cache_age=0, refreshed=True)
 
@@ -154,12 +162,15 @@ class LiveMatchService:
         }
         return response
 
-    def _fetch_state(self, league_id: str, team_ids: set[str]) -> dict[str, Any]:
+    def _fetch_state(
+        self, league_id: str, team_ids: set[str], match_id: str
+    ) -> dict[str, Any]:
         matches_payload = self.client.get_matches(league_id)
         candidates = [
             row
             for row in _results(matches_payload)
-            if {
+            if str(row.get("match_id") or "") == match_id
+            and {
                 str((row.get("camp1") or {}).get("team_id") or ""),
                 str((row.get("camp2") or {}).get("team_id") or ""),
             }

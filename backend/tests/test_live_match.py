@@ -74,7 +74,7 @@ class LiveMatchServiceTest(unittest.TestCase):
         client = FakeKplClient()
         service = LiveMatchService(client=client, cache_seconds=180)
 
-        state = service.get_match_state("season", "hero", "lgd")
+        state = service.get_match_state("season", "hero", "lgd", "live-1")
 
         self.assertTrue(state["is_live"])
         self.assertFalse(state["is_finished"])
@@ -89,8 +89,8 @@ class LiveMatchServiceTest(unittest.TestCase):
         client = FakeKplClient()
         service = LiveMatchService(client=client, cache_seconds=180)
 
-        service.get_match_state("season", "lgd", "hero")
-        service.get_match_state("season", "hero", "lgd")
+        service.get_match_state("season", "lgd", "hero", "live-1")
+        service.get_match_state("season", "hero", "lgd", "live-1")
 
         self.assertEqual(client.matches_calls, 1)
         self.assertEqual(client.battles_calls, 1)
@@ -102,13 +102,33 @@ class LiveMatchServiceTest(unittest.TestCase):
             client=client, cache_seconds=180, manual_refresh_seconds=60
         )
 
-        first = service.get_match_state("season", "lgd", "hero")
-        manual = service.refresh_match_state("season", "lgd", "hero")
+        first = service.get_match_state("season", "lgd", "hero", "live-1")
+        manual = service.refresh_match_state("season", "lgd", "hero", "live-1")
 
         self.assertTrue(first["official_refresh"]["performed"])
         self.assertFalse(manual["official_refresh"]["performed"])
         self.assertGreater(manual["official_refresh"]["manual_refresh_available_in_seconds"], 0)
         self.assertEqual(client.matches_calls, 1)
+
+    def test_does_not_treat_an_old_same_team_series_as_the_scheduled_fixture(self) -> None:
+        client = FakeKplClient()
+        client.get_matches = lambda _league_id: {
+            "results": [
+                {
+                    "match_id": "old-1",
+                    "status": 2,
+                    "bo": 5,
+                    "camp1": {"team_id": "lgd", "team_name": "LGD", "score": 3},
+                    "camp2": {"team_id": "hero", "team_name": "Hero", "score": 1},
+                }
+            ]
+        }
+        service = LiveMatchService(client=client, cache_seconds=180)
+
+        state = service.get_match_state("season", "lgd", "hero", "scheduled-2")
+
+        self.assertFalse(state["is_finished"])
+        self.assertIsNone(state["match"])
 
 
 class LiveMatchApiTest(unittest.TestCase):
@@ -117,12 +137,12 @@ class LiveMatchApiTest(unittest.TestCase):
         state = {"is_live": True, "hero_selection_locked": True, "match": {"match_id": "live-1"}}
         with patch("app.api.leagues.live_match_service.get_match_state", return_value=state) as get_state:
             response = client.get(
-                "/api/leagues/season/live-match?team_a_id=lgd&team_b_id=hero"
+                "/api/leagues/season/live-match?team_a_id=lgd&team_b_id=hero&match_id=live-1"
             )
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["data"], state)
-        get_state.assert_called_once_with("season", "lgd", "hero")
+        get_state.assert_called_once_with("season", "lgd", "hero", "live-1")
 
     def test_refresh_endpoint_delegates_to_the_minute_limited_refresh(self) -> None:
         client = TestClient(app)
@@ -131,12 +151,12 @@ class LiveMatchApiTest(unittest.TestCase):
             "app.api.leagues.live_match_service.refresh_match_state", return_value=state
         ) as refresh:
             response = client.post(
-                "/api/leagues/season/live-match/refresh?team_a_id=lgd&team_b_id=hero"
+                "/api/leagues/season/live-match/refresh?team_a_id=lgd&team_b_id=hero&match_id=live-1"
             )
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["data"], state)
-        refresh.assert_called_once_with("season", "lgd", "hero")
+        refresh.assert_called_once_with("season", "lgd", "hero", "live-1")
 
 if __name__ == "__main__":
     unittest.main()
