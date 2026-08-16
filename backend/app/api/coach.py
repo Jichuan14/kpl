@@ -24,6 +24,7 @@ from app.agent.service import (
     KimiConfigurationError,
 )
 from app.agent.scout_report import ScoutReportInput, ScoutReportService
+from app.agent.scout_report_cache import scout_report_cache, scout_report_cache_key
 from app.database import get_db
 from app.config import get_settings
 from app.schemas import ApiResponse, CoachLimitsUpdate
@@ -286,7 +287,18 @@ def prepare_scout_report(
                 "red_team_name": str(teams["red"]["team_name"]),
             }
         )
-        result = ScoutReportService().generate(trusted_body, request_id=request_id)
+        cache_key = scout_report_cache_key(
+            league_id=trusted_body.league_id,
+            blue_team_id=trusted_body.blue_team_id,
+            red_team_id=trusted_body.red_team_id,
+            language=trusted_body.language,
+        )
+        result = scout_report_cache.get_or_generate(
+            cache_key,
+            lambda: ScoutReportService().generate(trusted_body, request_id=request_id),
+        )
+        # A cached report is still a distinct HTTP request for observability.
+        result["request_id"] = request_id
     except ValueError as exc:
         _http_error(
             status_code=422,
