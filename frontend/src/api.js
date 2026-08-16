@@ -75,6 +75,18 @@ export function fetchUpcomingMatch(leagueId) {
   return request(`/api/leagues/${encodeURIComponent(leagueId)}/upcoming-match`);
 }
 
+export function fetchLiveMatch({ leagueId, teamAId, teamBId }) {
+  const params = new URLSearchParams({ team_a_id: teamAId, team_b_id: teamBId });
+  return request(`/api/leagues/${encodeURIComponent(leagueId)}/live-match?${params}`);
+}
+
+export function refreshLiveMatch({ leagueId, teamAId, teamBId }) {
+  const params = new URLSearchParams({ team_a_id: teamAId, team_b_id: teamBId });
+  return request(`/api/leagues/${encodeURIComponent(leagueId)}/live-match/refresh?${params}`, {
+    method: "POST",
+  });
+}
+
 export function fetchVisualizationSeasons() {
   return staticData("/assets/data/seasons.json");
 }

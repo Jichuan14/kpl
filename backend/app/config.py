@@ -19,6 +19,10 @@ class Settings(BaseSettings):
     comp_base_url: str = "https://prod.comp.smoba.qq.com"
     tga_base_url: str = "https://tga-openapi.tga.qq.com"
     sync_request_delay: float = 0.2
+    # Read-only official live-match cache. It is process memory only and is
+    # never persisted to the analysis SQLite database.
+    live_match_cache_seconds: int = 180
+    live_match_manual_refresh_seconds: int = 60
     cors_origins: str = "http://localhost:5173,http://localhost:3000"
     moonshot_api_key: SecretStr | None = None
     kimi_base_url: str = "https://api.moonshot.ai/v1"
@@ -101,6 +105,8 @@ class Settings(BaseSettings):
         "simulation_server_requests_per_day",
         "simulation_ip_max_active_requests",
         "simulation_server_max_active_requests",
+        "live_match_cache_seconds",
+        "live_match_manual_refresh_seconds",
     )
     @classmethod
     def positive_kimi_limits(cls, value: int) -> int:

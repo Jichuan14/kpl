@@ -8,6 +8,7 @@ const props = defineProps({
   leagueId: { type: String, required: true },
   seasonName: { type: String, default: "" },
   draftState: { type: Object, default: null },
+  forceChinese: { type: Boolean, default: false },
 });
 
 const sessionHistoryKey = "kpl-draft-coach-session-history";
@@ -57,6 +58,7 @@ const coachMode = ref("draft");
 const messages = ref(loadSessionHistory(coachMode.value));
 const thread = ref(null);
 let messageId = Math.max(0, ...messages.value.map((message) => Number(message.id) || 0));
+const isChinese = computed(() => props.forceChinese || language.value === "zh-CN");
 
 const contextKey = computed(() =>
   JSON.stringify({ league_id: props.leagueId, draft_state: props.draftState })
@@ -170,10 +172,10 @@ const suggestionIndexes = ref(randomSuggestionIndexes());
 const suggestions = computed(() =>
   coachMode.value === "research"
     ? researchSuggestions.map((item) =>
-        language.value === "zh-CN" ? item.zh : item.en
+        isChinese.value ? item.zh : item.en
       )
     : suggestionIndexes.value.map((index) =>
-        language.value === "zh-CN"
+        isChinese.value
           ? suggestionPairs[index].zh
           : suggestionPairs[index].en
       )
@@ -181,57 +183,61 @@ const suggestions = computed(() =>
 
 const welcomeTitle = computed(() =>
   coachMode.value === "research"
-    ? language.value === "zh-CN"
+    ? isChinese.value
       ? "版本资料查询"
       : "Patch research"
-    : "Ask about this draft"
+    : isChinese.value
+      ? "询问当前 BP"
+      : "Ask about this draft"
 );
 const welcomeCopy = computed(() =>
   coachMode.value === "research"
-    ? language.value === "zh-CN"
+    ? isChinese.value
       ? "可查询英雄或游戏改动。每条回答下方的来源卡片会链接至腾讯官方公告。"
       : "Ask about official hero or game changes. Source cards below each answer link back to Tencent announcements."
-    : "Ask a KPL question. Kimi uses approved local tools and attaches the current season and board automatically."
+    : isChinese.value
+      ? "询问 KPL 相关问题。Kimi 会使用已批准的本地工具，并自动附加当前赛季和 BP 面板。"
+      : "Ask a KPL question. Kimi uses approved local tools and attaches the current season and board automatically."
 );
 const composerPlaceholder = computed(() =>
   coachMode.value === "research"
-    ? language.value === "zh-CN"
+    ? isChinese.value
       ? "询问英雄或官方版本调整…"
       : "Ask about an official hero or patch change…"
-    : "Ask a KPL draft question…"
+    : isChinese.value ? "询问 KPL BP 问题…" : "Ask a KPL draft question…"
 );
 const draftModeLabel = computed(() =>
-  language.value === "zh-CN" ? "BP 分析" : "Draft analysis"
+  isChinese.value ? "BP 分析" : "Draft analysis"
 );
 const researchModeLabel = computed(() =>
-  language.value === "zh-CN" ? "版本资料" : "Patch research"
+  isChinese.value ? "版本资料" : "Patch research"
 );
 const officialSourcesLabel = computed(() =>
-  language.value === "zh-CN" ? "官方版本来源" : "Official patch sources"
+  isChinese.value ? "官方版本来源" : "Official patch sources"
 );
 const sourceBoundaryLabel = computed(() =>
-  language.value === "zh-CN"
+  isChinese.value
     ? "游戏改动证据 · 非 KPL 赛事表现数据"
     : "Game-change evidence · not KPL performance data"
 );
 const sourceLinkLabel = computed(() =>
-  language.value === "zh-CN" ? "打开腾讯官方公告" : "Open Tencent announcement"
+  isChinese.value ? "打开腾讯官方公告" : "Open Tencent announcement"
 );
 const citationLabel = computed(() =>
-  language.value === "zh-CN" ? "条引用" : "citation"
+  isChinese.value ? "条引用" : "citation"
 );
 const coachDisclaimer = computed(() =>
-  language.value === "zh-CN"
+  isChinese.value
     ? "KPL BP 证据来自历史数据；官方版本来源描述游戏改动，不保证比赛结果。"
     : "KPL draft evidence is historical; official patch sources describe game changes, not guaranteed outcomes."
 );
 const scoutReportLabel = computed(() =>
-  language.value === "zh-CN" ? "生成对阵侦察报告" : "Prepare scout report"
+  isChinese.value ? "生成对阵侦察报告" : "Prepare scout report"
 );
 const scoutReportQuestion = computed(() => {
-  const blue = props.draftState?.blue_team_name || "Blue";
-  const red = props.draftState?.red_team_name || "Red";
-  return language.value === "zh-CN"
+  const blue = props.draftState?.blue_team_name || (isChinese.value ? "蓝方" : "Blue");
+  const red = props.draftState?.red_team_name || (isChinese.value ? "红方" : "Red");
+  return isChinese.value
     ? `生成 ${blue} 对阵 ${red} 的赛前侦察报告`
     : `Prepare a scout report: ${blue} vs ${red}`;
 });
@@ -348,7 +354,7 @@ function patchSubjectNames(card) {
   const heroes = Array.isArray(card.hero_names) ? card.hero_names : [];
   if (equipment.length) return equipment.join(" · ");
   if (heroes.length) return heroes.join(" · ");
-  return language.value === "zh-CN" ? "系统调整" : "System change";
+  return isChinese.value ? "系统调整" : "System change";
 }
 
 async function submitQuestion(suggestedQuestion = null) {
@@ -383,10 +389,12 @@ async function submitQuestion(suggestedQuestion = null) {
     });
   } catch (err) {
     activeEntry.error = err.retryAfter
-      ? language.value === "zh-CN"
+      ? isChinese.value
         ? `BP 教练正忙，请在 ${err.retryAfter} 秒后重试。`
         : `The Draft Coach is busy. Try again in ${err.retryAfter} second${err.retryAfter === 1 ? "" : "s"}.`
-      : err.message || "The Draft Coach could not answer this question.";
+      : isChinese.value
+        ? "BP 教练暂时无法回答该问题。"
+        : err.message || "The Draft Coach could not answer this question.";
   } finally {
     activeEntry.loading = false;
     loading.value = false;
@@ -422,10 +430,12 @@ async function submitScoutReport() {
     });
   } catch (err) {
     activeEntry.error = err.retryAfter
-      ? language.value === "zh-CN"
+      ? isChinese.value
         ? `BP 教练正忙，请在 ${err.retryAfter} 秒后重试。`
         : `The Draft Coach is busy. Try again in ${err.retryAfter} second${err.retryAfter === 1 ? "" : "s"}.`
-      : err.message || "The Draft Coach could not prepare this scout report.";
+      : isChinese.value
+        ? "BP 教练暂时无法生成该侦察报告。"
+        : err.message || "The Draft Coach could not prepare this scout report.";
   } finally {
     activeEntry.loading = false;
     loading.value = false;
@@ -442,9 +452,9 @@ watch(messages, (value) => persistSessionHistory(value, coachMode.value), { deep
   <section class="coach-panel" aria-labelledby="draft-coach-title">
     <header class="coach-header">
       <div>
-        <p class="coach-eyebrow"><i></i> AI · Evidence-backed</p>
-        <h2 id="draft-coach-title">Draft Coach</h2>
-        <div class="coach-modes" role="group" aria-label="Coach mode">
+        <p class="coach-eyebrow"><i></i> AI · 证据支持</p>
+        <h2 id="draft-coach-title">BP 教练</h2>
+        <div class="coach-modes" role="group" aria-label="教练模式">
           <button
             type="button"
             :class="{ active: coachMode === 'draft' }"
@@ -466,7 +476,7 @@ watch(messages, (value) => persistSessionHistory(value, coachMode.value), { deep
         </div>
       </div>
       <div class="coach-context" :class="{ active: hasBoardContext }">
-        <span>{{ coachMode === "research" ? "Official sources" : hasBoardContext ? "Board attached" : "Season context" }}</span>
+        <span>{{ coachMode === "research" ? "官方来源" : hasBoardContext ? "已附加 BP 面板" : "赛季上下文" }}</span>
         <small v-if="draftState" data-i18n-ignore>
           BP {{ draftState.bp_order }} · {{ draftState.model_type }}
         </small>
@@ -487,7 +497,7 @@ watch(messages, (value) => persistSessionHistory(value, coachMode.value), { deep
         :disabled="loading"
         @click="clearHistory"
       >
-        Clear
+        清空
       </button>
     </header>
 
@@ -496,7 +506,7 @@ watch(messages, (value) => persistSessionHistory(value, coachMode.value), { deep
         <span class="coach-mark">AI</span>
         <h3>{{ welcomeTitle }}</h3>
         <p>{{ welcomeCopy }}</p>
-        <div class="coach-suggestions" aria-label="Suggested questions">
+        <div class="coach-suggestions" aria-label="推荐问题">
           <button
             v-for="suggestion in suggestions"
             :key="suggestion"
@@ -516,7 +526,7 @@ watch(messages, (value) => persistSessionHistory(value, coachMode.value), { deep
         class="conversation-turn"
       >
         <div class="coach-message user-message">
-          <span>You</span>
+          <span>你</span>
           <p data-i18n-ignore>{{ message.question }}</p>
         </div>
 
@@ -524,8 +534,8 @@ watch(messages, (value) => persistSessionHistory(value, coachMode.value), { deep
           v-if="message.loading"
           class="coach-message assistant-message loading-message"
         >
-          <span>Draft Coach</span>
-          <p>Kimi is selecting evidence tools and preparing an answer…</p>
+          <span>BP 教练</span>
+          <p>Kimi 正在选择证据工具并准备回答…</p>
           <i><b></b><b></b><b></b></i>
         </div>
 
@@ -540,10 +550,10 @@ watch(messages, (value) => persistSessionHistory(value, coachMode.value), { deep
         >
           <header>
             <div>
-              <span>Draft Coach</span>
+              <span>BP 教练</span>
               <small data-i18n-ignore>{{ message.response.model }}</small>
             </div>
-            <span v-if="isContextStale(message)" class="stale-label">Board changed</span>
+            <span v-if="isContextStale(message)" class="stale-label">BP 面板已变化</span>
           </header>
           <p class="coach-answer" data-i18n-ignore>
             {{ humanReadableAnswer(message.response.answer) }}
@@ -570,7 +580,7 @@ watch(messages, (value) => persistSessionHistory(value, coachMode.value), { deep
                 <small>{{ sourceBoundaryLabel }}</small>
               </div>
               <small v-if="patchEvidence(message).length">
-                {{ patchEvidence(message).length }} {{ citationLabel }}<template v-if="language !== 'zh-CN' && patchEvidence(message).length !== 1">s</template>
+                {{ patchEvidence(message).length }} {{ citationLabel }}<template v-if="!isChinese && patchEvidence(message).length !== 1">s</template>
               </small>
             </header>
             <p v-if="patchEvidenceWarnings(message).length" class="patch-evidence-note">
@@ -597,7 +607,7 @@ watch(messages, (value) => persistSessionHistory(value, coachMode.value), { deep
 
           <footer>
             <span data-i18n-ignore>
-              {{ Number(message.response.usage?.total_tokens || 0).toLocaleString() }} tokens
+              {{ Number(message.response.usage?.total_tokens || 0).toLocaleString("zh-CN") }} 个令牌
             </span>
             <span data-i18n-ignore>
               {{ message.response.request_id.slice(0, 8) }}
@@ -608,7 +618,7 @@ watch(messages, (value) => persistSessionHistory(value, coachMode.value), { deep
     </div>
 
     <form class="coach-form" @submit.prevent="submitQuestion()">
-      <label class="sr-only" for="coach-question">Your question</label>
+      <label class="sr-only" for="coach-question">你的问题</label>
       <textarea
         id="coach-question"
         v-model="question"
@@ -618,12 +628,12 @@ watch(messages, (value) => persistSessionHistory(value, coachMode.value), { deep
         :disabled="loading"
         @keydown="handleComposerKeydown"
       ></textarea>
-      <button type="submit" :disabled="loading || !question.trim() || !leagueId" aria-label="Ask Draft Coach">
+      <button type="submit" :disabled="loading || !question.trim() || !leagueId" aria-label="询问 BP 教练">
         <span>{{ loading ? "…" : "↑" }}</span>
       </button>
       <small data-i18n-ignore>
-        {{ seasonName || leagueId }} · {{ t("context attached") }}
-        <template v-if="answeredCount"> · {{ answeredCount }} {{ t("answered") }}</template>
+        {{ seasonName || leagueId }} · {{ isChinese ? "已附加上下文" : t("context attached") }}
+        <template v-if="answeredCount"> · {{ answeredCount }} {{ isChinese ? "已回答" : t("answered") }}</template>
       </small>
     </form>
 

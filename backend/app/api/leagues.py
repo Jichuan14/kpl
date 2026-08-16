@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -7,8 +7,10 @@ from app.models import League
 from app.schemas import ApiResponse, LeagueOut
 from app.services.sync import SyncService
 from app.services.season_teams import list_season_teams, next_scheduled_match
+from app.services.live_match import LiveMatchService
 
 router = APIRouter(prefix="/api/leagues", tags=["leagues"])
+live_match_service = LiveMatchService()
 
 
 @router.get("")
@@ -62,9 +64,46 @@ def upcoming_match(
     if not db.scalar(select(League.id).where(League.league_id == league_id)):
         raise HTTPException(status_code=404, detail="League not found")
     teams = list_season_teams(db, league_id)
+    selectable_team_ids = {str(team["team_id"]) for team in teams}
+    live_fixture = live_match_service.get_current_fixture(
+        league_id, selectable_team_ids=selectable_team_ids
+    )
+    if live_fixture is not None:
+        return ApiResponse(data=live_fixture)
     fixture = next_scheduled_match(
         db,
         league_id,
-        selectable_team_ids={str(team["team_id"]) for team in teams},
+        selectable_team_ids=selectable_team_ids,
     )
+    if fixture is not None:
+        fixture["fixture_status"] = "upcoming"
+        fixture["is_live"] = False
     return ApiResponse(data=fixture)
+
+
+@router.get("/{league_id}/live-match")
+def live_match(
+    league_id: str,
+    team_a_id: str = Query(min_length=1, max_length=32),
+    team_b_id: str = Query(min_length=1, max_length=32),
+) -> ApiResponse:
+    """Return disposable live BP context without writing to the database."""
+    try:
+        state = live_match_service.get_match_state(league_id, team_a_id, team_b_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return ApiResponse(data=state)
+
+
+@router.post("/{league_id}/live-match/refresh")
+def refresh_live_match(
+    league_id: str,
+    team_a_id: str = Query(min_length=1, max_length=32),
+    team_b_id: str = Query(min_length=1, max_length=32),
+) -> ApiResponse:
+    """Request a read-only live refresh, rate-limited by the in-memory cache."""
+    try:
+        state = live_match_service.refresh_match_state(league_id, team_a_id, team_b_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return ApiResponse(data=state)

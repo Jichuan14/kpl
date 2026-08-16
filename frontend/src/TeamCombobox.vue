@@ -68,7 +68,7 @@ function selectTeam(team) {
         type="search"
         autocomplete="off"
         :disabled="disabled"
-        :placeholder="`Search ${label.toLocaleLowerCase()}…`"
+        :placeholder="`搜索${label}…`"
         role="combobox"
         :aria-expanded="open"
         aria-autocomplete="list"
@@ -86,7 +86,7 @@ function selectTeam(team) {
           @mousedown.prevent="selectTeam(opponentTeam)"
         >
           <img v-if="opponentTeam.team_icon" :src="opponentTeam.team_icon" alt="" />
-          <span><small>Opponent</small>{{ opponentTeam.team_name }}</span>
+          <span><small>对手</small>{{ opponentTeam.team_name }}</span>
         </button>
         <button
           v-for="team in visibleTeams"
@@ -98,9 +98,9 @@ function selectTeam(team) {
         >
           <img v-if="team.team_icon" :src="team.team_icon" alt="" />
           <span>{{ team.team_name }}</span>
-          <small>{{ team.battle_count }} games</small>
+          <small>{{ team.battle_count }} 场</small>
         </button>
-        <small v-if="!visibleTeams.length" class="no-team">No season team matches.</small>
+        <small v-if="!visibleTeams.length" class="no-team">没有匹配的本赛季战队。</small>
       </div>
     </div>
   </label>
