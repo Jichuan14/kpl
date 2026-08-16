@@ -6,7 +6,7 @@ from app.database import get_db
 from app.models import League
 from app.schemas import ApiResponse, LeagueOut
 from app.services.sync import SyncService
-from app.services.season_teams import list_season_teams, next_scheduled_match
+from app.services.season_teams import current_or_next_scheduled_match, list_season_teams
 from app.services.live_match import LiveMatchService
 
 router = APIRouter(prefix="/api/leagues", tags=["leagues"])
@@ -60,23 +60,23 @@ def upcoming_match(
     league_id: str,
     db: Session = Depends(get_db),
 ) -> ApiResponse:
-    """Return the nearest scheduled, selectable fixture in China Standard Time."""
+    """Return local catalogue timing for the current or next fixture.
+
+    This intentionally does not call the official KPL API. The browser uses
+    this database timestamp to defer its first live check until five minutes
+    after the scheduled start.
+    """
     if not db.scalar(select(League.id).where(League.league_id == league_id)):
         raise HTTPException(status_code=404, detail="League not found")
     teams = list_season_teams(db, league_id)
     selectable_team_ids = {str(team["team_id"]) for team in teams}
-    live_fixture = live_match_service.get_current_fixture(
-        league_id, selectable_team_ids=selectable_team_ids
-    )
-    if live_fixture is not None:
-        return ApiResponse(data=live_fixture)
-    fixture = next_scheduled_match(
+    fixture = current_or_next_scheduled_match(
         db,
         league_id,
         selectable_team_ids=selectable_team_ids,
     )
     if fixture is not None:
-        fixture["fixture_status"] = "upcoming"
+        fixture["fixture_status"] = "scheduled"
         fixture["is_live"] = False
     return ApiResponse(data=fixture)
 

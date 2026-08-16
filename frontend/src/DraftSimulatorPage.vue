@@ -50,7 +50,10 @@ const liveFollowing = ref(false);
 const liveFollowDismissed = ref(false);
 const liveFollowFinished = ref(false);
 const liveAppliedGameSignature = ref("");
+const liveScheduleClock = ref(Date.now());
 let liveMatchPollTimer = null;
+let liveMatchCheckTimer = null;
+let liveScheduleTimer = null;
 let liveMatchRequestNumber = 0;
 const selectedTeamIds = ref({ [TEAM_A]: "", [TEAM_B]: "" });
 const teamsBySide = ref({ blue: TEAM_A, red: TEAM_B });
@@ -168,7 +171,19 @@ const teamsReady = computed(
     selectedTeamIds.value[TEAM_A] !== selectedTeamIds.value[TEAM_B]
 );
 
-const liveMatchDetected = computed(() => Boolean(liveMatch.value?.is_live));
+const scheduledMatchStarted = computed(() => {
+  const delay = scheduledLiveCheckDelay(upcomingMatch.value);
+  return Boolean(
+    teamsReady.value &&
+      selectedTeamsMatchFixture() &&
+      delay !== null &&
+      delay <= 5 * 60_000
+  );
+});
+const liveApiCheckAvailable = computed(() => {
+  const delay = scheduledLiveCheckDelay(upcomingMatch.value);
+  return delay !== null && delay <= 0;
+});
 const liveHeroSelectionLocked = computed(
   () =>
     liveFollowing.value &&
@@ -178,7 +193,11 @@ const liveOfficialHeroContextLocked = computed(
   () => liveFollowing.value && Boolean(liveMatch.value?.is_live)
 );
 const liveMatchStatusLabel = computed(() => {
-  if (!liveMatch.value?.match) return "";
+  if (!liveMatch.value?.match) {
+    return liveApiCheckAvailable.value
+      ? "正在等待官方赛况"
+      : "将在开赛五分钟后开始同步官方赛况";
+  }
   const teams = liveMatch.value.match.teams || [];
   const score = teams.map((team) => `${team.team_name} ${team.score}`).join(" – ");
   if (liveFollowFinished.value || liveMatch.value.is_finished) return `${score} · 系列赛已结束`;
@@ -383,8 +402,8 @@ function readLiveFollowPreference() {
   }
 }
 
-function saveLiveFollowPreference(state) {
-  const matchId = String(state?.match?.match_id || "");
+function saveLiveFollowPreference(source) {
+  const matchId = String(source?.match?.match_id || source?.match_id || "");
   if (!matchId || !leagueId.value) return;
   window.localStorage.setItem(
     liveFollowStorageKey,
@@ -406,11 +425,89 @@ function shouldRestoreLiveFollow(state) {
   );
 }
 
+function shouldRestoreScheduledFollow() {
+  const saved = readLiveFollowPreference();
+  return Boolean(
+    saved &&
+      saved.leagueId === String(leagueId.value) &&
+      saved.matchId === String(upcomingMatch.value?.match_id || "") &&
+      scheduledMatchStarted.value
+  );
+}
+
 function stopLiveMatchPolling() {
   if (liveMatchPollTimer !== null) {
     window.clearInterval(liveMatchPollTimer);
     liveMatchPollTimer = null;
   }
+}
+
+function stopLiveMatchCheckSchedule() {
+  if (liveMatchCheckTimer !== null) {
+    window.clearTimeout(liveMatchCheckTimer);
+    liveMatchCheckTimer = null;
+  }
+}
+
+function stopLiveScheduleClock() {
+  if (liveScheduleTimer !== null) {
+    window.clearTimeout(liveScheduleTimer);
+    liveScheduleTimer = null;
+  }
+}
+
+function scheduledLiveCheckDelay(fixture) {
+  const match = String(fixture?.start_time || "").match(
+    /^(\d{4})-(\d{2})-(\d{2})\s+?(\d{2}):(\d{2}):(\d{2})$/
+  );
+  if (!match) return null;
+  const [, year, month, day, hour, minute, second] = match;
+  // The catalogue stores China time. Date.UTC with an eight-hour offset avoids
+  // treating that string as the visitor's local computer time.
+  const scheduledAt = Date.UTC(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hour) - 8,
+    Number(minute),
+    Number(second)
+  );
+  return scheduledAt + 5 * 60_000 - liveScheduleClock.value;
+}
+
+function selectedTeamsMatchFixture() {
+  const fixtureIds = new Set((upcomingMatch.value?.teams || []).map((team) => String(team.team_id)));
+  const selectedIds = new Set([
+    String(selectedTeamIds.value[TEAM_A] || ""),
+    String(selectedTeamIds.value[TEAM_B] || ""),
+  ]);
+  return fixtureIds.size === 2 && fixtureIds.size === selectedIds.size && [...fixtureIds].every((id) => selectedIds.has(id));
+}
+
+function scheduleLiveScheduleClock() {
+  stopLiveScheduleClock();
+  if (!teamsReady.value || !selectedTeamsMatchFixture()) return;
+  const checkDelay = scheduledLiveCheckDelay(upcomingMatch.value);
+  if (checkDelay === null) return;
+  const waits = [checkDelay - 5 * 60_000, checkDelay].filter((wait) => wait > 0);
+  if (!waits.length) return;
+  liveScheduleTimer = window.setTimeout(() => {
+    liveScheduleTimer = null;
+    liveScheduleClock.value = Date.now();
+    scheduleLiveScheduleClock();
+  }, Math.min(Math.min(...waits), 2_147_000_000));
+}
+
+function scheduleLiveMatchCheck() {
+  stopLiveMatchCheckSchedule();
+  if (!teamsReady.value || !selectedTeamsMatchFixture() || !liveFollowing.value) return;
+  const delay = scheduledLiveCheckDelay(upcomingMatch.value);
+  if (delay === null) return;
+  const wait = Math.max(0, delay);
+  liveMatchCheckTimer = window.setTimeout(() => {
+    liveMatchCheckTimer = null;
+    refreshLiveMatch();
+  }, Math.min(wait, 2_147_000_000));
 }
 
 function startLiveMatchPolling() {
@@ -488,11 +585,13 @@ async function refreshLiveMatch(manual = false) {
       await applyLiveMatchState(state);
       liveAppliedGameSignature.value = gameSignature;
     }
-    if (state.is_finished || !state.is_live) {
-      liveFollowFinished.value = Boolean(state.is_finished);
-      if (state.is_finished) clearLiveFollowPreference();
-      stopLiveMatchPolling();
+    if (state.is_finished) {
+      // A completed official series has no next BP to follow. Preserve the
+      // final hero context already applied above, but stop all live activity.
+      stopFollowingLiveMatch();
+      return;
     }
+    startLiveMatchPolling();
   } catch {
     // A temporary official API failure should not remove the last usable live
     // context from a visitor's simulator.
@@ -502,14 +601,16 @@ async function refreshLiveMatch(manual = false) {
 }
 
 async function followLiveMatch({ persist = true } = {}) {
-  if (!liveMatch.value?.is_live) return;
+  if (!scheduledMatchStarted.value) return;
   liveFollowing.value = true;
   liveFollowDismissed.value = true;
   liveFollowFinished.value = false;
-  if (persist) saveLiveFollowPreference(liveMatch.value);
-  await applyLiveMatchState(liveMatch.value);
-  liveAppliedGameSignature.value = completedGameSignature(liveMatch.value);
-  startLiveMatchPolling();
+  if (persist) saveLiveFollowPreference(liveMatch.value || upcomingMatch.value);
+  if (liveMatch.value?.is_live) {
+    await applyLiveMatchState(liveMatch.value);
+    liveAppliedGameSignature.value = completedGameSignature(liveMatch.value);
+  }
+  scheduleLiveMatchCheck();
 }
 
 function stopFollowingLiveMatch({ forget = true } = {}) {
@@ -518,6 +619,7 @@ function stopFollowingLiveMatch({ forget = true } = {}) {
   liveAppliedGameSignature.value = "";
   if (forget) clearLiveFollowPreference();
   stopLiveMatchPolling();
+  stopLiveMatchCheckSchedule();
 }
 
 async function loadSeasons() {
@@ -535,6 +637,8 @@ async function loadModel() {
   seasonTeams.value = [];
   upcomingMatch.value = null;
   stopFollowingLiveMatch({ forget: false });
+  stopLiveMatchCheckSchedule();
+  stopLiveScheduleClock();
   liveMatch.value = null;
   liveFollowDismissed.value = false;
   liveAppliedGameSignature.value = "";
@@ -555,6 +659,7 @@ async function loadModel() {
     ]);
     model.value = draftModel;
     upcomingMatch.value = fixture;
+    if ([5, 7].includes(Number(fixture?.bo))) bestOf.value = Number(fixture.bo);
     seasonTeams.value = teamsWithUpcomingFixtureFirst(teams, fixture);
     const scheduledTeams = (fixture?.teams || [])
       .map((fixtureTeam) =>
@@ -776,13 +881,23 @@ watch(
     liveMatch.value = null;
     liveFollowDismissed.value = false;
     liveAppliedGameSignature.value = "";
+    liveScheduleClock.value = Date.now();
     await forecast();
-    await refreshLiveMatch();
+    if (shouldRestoreScheduledFollow()) {
+      liveFollowing.value = true;
+      liveFollowDismissed.value = true;
+    }
+    scheduleLiveScheduleClock();
+    scheduleLiveMatchCheck();
   },
   { deep: true }
 );
 
-onBeforeUnmount(stopLiveMatchPolling);
+onBeforeUnmount(() => {
+  stopLiveMatchPolling();
+  stopLiveMatchCheckSchedule();
+  stopLiveScheduleClock();
+});
 </script>
 
 <template>
@@ -883,11 +998,11 @@ onBeforeUnmount(stopLiveMatchPolling);
         <p v-if="upcomingMatchLabel" class="upcoming-match-note" data-i18n-ignore>
           {{ upcomingMatchLabel }}
         </p>
-        <aside v-if="liveMatchDetected && !liveFollowing && !liveFollowDismissed" class="live-match-panel">
+        <aside v-if="scheduledMatchStarted && !liveFollowing && !liveFollowDismissed" class="live-match-panel">
           <div>
-            <p class="simulator-eyebrow">检测到进行中的比赛</p>
-            <strong data-i18n-ignore>{{ liveMatchStatusLabel }}</strong>
-            <small>跟随官方比赛，可将已结束小局的英雄加入“已使用”。</small>
+            <p class="simulator-eyebrow">赛程已到开始时间</p>
+            <strong>是否跟随本场比赛？</strong>
+            <small>跟随后会在开赛五分钟后开始同步官方赛况，并将已结束小局的英雄加入“已使用”。</small>
           </div>
           <div>
             <button type="button" :disabled="liveMatchLoading" @click="followLiveMatch">跟随当前比赛</button>
@@ -898,14 +1013,14 @@ onBeforeUnmount(stopLiveMatchPolling);
           <div>
             <p class="simulator-eyebrow">正在跟随官方比赛</p>
             <strong data-i18n-ignore>{{ liveMatchStatusLabel }}</strong>
-            <small v-if="liveFollowFinished">比赛已结束。最终的临时英雄上下文会保留，直到你停止跟随。</small>
+            <small v-if="!liveApiCheckAvailable">已启用跟随；开赛五分钟后将开始同步官方赛况。</small>
             <small v-else-if="liveMatch?.current_game_status === 'in_progress'">官方对局进行时仍可继续本地 BP。对局结束后，官方选择会自动替换“已使用”上下文。</small>
-            <small v-else>已加载结束小局的英雄。官方数据最多每三分钟刷新一次。</small>
+            <small v-else>官方数据最多每三分钟刷新一次。</small>
             <small v-if="liveRefreshNotice" class="live-refresh-note" data-i18n-ignore>{{ liveRefreshNotice }}</small>
           </div>
           <div>
-            <button type="button" class="quiet" :disabled="liveMatchLoading" @click="refreshLiveMatch(true)">
-              {{ liveMatchLoading ? '正在检查…' : '刷新官方数据' }}
+            <button type="button" class="quiet" :disabled="liveMatchLoading || !liveApiCheckAvailable" @click="refreshLiveMatch(true)">
+              {{ !liveApiCheckAvailable ? '开赛五分钟后可刷新' : liveMatchLoading ? '正在检查…' : '刷新官方数据' }}
             </button>
             <button type="button" class="quiet" @click="stopFollowingLiveMatch">停止跟随</button>
           </div>
