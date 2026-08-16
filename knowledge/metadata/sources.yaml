@@ -1,0 +1,88 @@
+schema_version: 1
+collection_date: "2026-08-14"
+sources:
+  - source_id: project-calculation-methodology
+    title: Draft Atlas calculation methodology
+    source_class: project_primary
+    publisher: Draft Atlas
+    local_source: CALCULATION_METHODOLOGY.md
+    local_copy: sources/project/CALCULATION_METHODOLOGY.md
+    status: collected
+
+  - source_id: project-artifact-reference
+    title: Draft Atlas artifact reference
+    source_class: project_primary
+    publisher: Draft Atlas
+    local_source: ARTIFACTS.md
+    local_copy: sources/project/ARTIFACTS.md
+    status: collected
+
+  - source_id: project-hero-ability-mechanics
+    title: Hero ability mechanics artifact
+    source_class: project_primary
+    publisher: Draft Atlas; source metadata is embedded in the artifact
+    local_source: analysis/hero_ability_mechanics.json
+    local_copy: sources/project/hero_ability_mechanics.json
+    status: collected
+
+  - source_id: project-hero-tactical-roles
+    title: Hero tactical roles artifact
+    source_class: project_primary
+    publisher: Draft Atlas; source metadata is embedded in the artifact
+    local_source: analysis/hero_tactical_roles.json
+    local_copy: sources/project/hero_tactical_roles.json
+    status: collected
+
+  - source_id: official-hero-catalogue
+    title: Honor of Kings hero catalogue
+    source_class: primary
+    publisher: Tencent Games / Honor of Kings
+    url: https://pvp.qq.com/web201605/js/herolist.json
+    local_copy: sources/official/herolist.json
+    sha256: a969270436b367288285f8a580d0fc238e84218ddf9ba8c484364dcab6dc8ed5
+    collected_at: "2026-08-14"
+    status: collected
+
+  - source_id: official-honor-of-kings-homepage
+    title: Honor of Kings official homepage
+    source_class: primary_discovery
+    publisher: Tencent Games / Honor of Kings
+    url: https://pvp.qq.com/
+    status: url_only_discovery_source
+
+  - source_id: kpl-season-rules
+    title: KPL season rules and Global BP rules
+    source_class: primary_required
+    publisher: KPL / Honor of Kings Esports
+    required_metadata: [season, publication_date, effective_date, source_url]
+    status: awaiting_official_versioned_source
+
+  - source_id: kpl-2026-rules-secondary-discovery
+    title: KPL 2026 rules page discovered during source research
+    source_class: secondary_unverified
+    publisher: wangyoushe.com (not verified as the official KPL publisher)
+    url: https://www.wangyoushe.com/info/Ejzlq
+    collection_note: >-
+      The page was not downloaded because its TLS certificate failed validation
+      on 2026-08-14. Do not bypass certificate validation. Its contents must
+      not be treated as official rules without a primary source.
+    status: not_collected
+
+  - source_id: hok-patch-notes
+    title: Honor of Kings patch notes
+    source_class: primary
+    publisher: Tencent Games / Honor of Kings
+    access_method: Tencent announcement API
+    list_url: https://apps.game.qq.com/cmc/cross
+    detail_url_template: https://apps.game.qq.com/wmp/v3.1/public/searchNews.php?p0=18&source=web_pc&id={announcement_id}
+    status: active
+
+  - source_id: tencent-patch-timeline
+    title: Tencent hero and version patch timeline
+    source_class: primary
+    publisher: 王者荣耀 / Tencent Games
+    index: metadata/tencent-patch-index.json
+    source_document_pattern: sources/official/patches/{published_date}-{announcement_id}-*.md
+    raw_payload_pattern: raw/tencent-announcements/{announcement_id}.json
+    coverage: "2025-01-02 through 2026-08-13; see index for exact records"
+    status: collected

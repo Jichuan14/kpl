@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 from sqlalchemy import distinct, func, select
 from sqlalchemy.orm import Session
 
-from app.models import BattlePlayer, Team
+from app.models import BattlePlayer, Match, Team
 
 
 def list_season_teams(db: Session, league_id: str) -> list[dict[str, object]]:
@@ -36,6 +39,41 @@ def list_season_teams(db: Session, league_id: str) -> list[dict[str, object]]:
         }
         for row in rows
     ]
+
+
+def next_scheduled_match(
+    db: Session,
+    league_id: str,
+    *,
+    selectable_team_ids: set[str] | None = None,
+    as_of_china: datetime | None = None,
+) -> dict[str, object] | None:
+    """Return the next selectable fixture using China-local catalogue time."""
+    now = as_of_china or datetime.now(ZoneInfo("Asia/Shanghai"))
+    cutoff = now.strftime("%Y-%m-%d %H:%M:%S")
+    rows = db.scalars(
+        select(Match)
+        .where(
+            Match.league_id == league_id,
+            Match.start_time.is_not(None),
+            Match.start_time >= cutoff,
+        )
+        .order_by(Match.start_time.asc(), Match.match_id.asc())
+    ).all()
+    for match in rows:
+        team_ids = {str(match.camp1_team_id), str(match.camp2_team_id)}
+        if selectable_team_ids is not None and not team_ids.issubset(selectable_team_ids):
+            continue
+        return {
+            "match_id": match.match_id,
+            "start_time": match.start_time,
+            "timezone": "Asia/Shanghai",
+            "teams": [
+                {"team_id": match.camp1_team_id, "team_name": match.camp1_team_name},
+                {"team_id": match.camp2_team_id, "team_name": match.camp2_team_name},
+            ],
+        }
+    return None
 
 
 def validate_season_team_pair(

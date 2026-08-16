@@ -25,6 +25,10 @@ from app.agent.tools.meta import (
     get_hero_bp_stats,
     get_meta_heroes,
 )
+from app.agent.tools.patches import (
+    SearchPatchNotesArguments,
+    search_patch_notes,
+)
 from app.agent.tools.relationships import (
     GetHeroRelationshipsArguments,
     get_hero_relationships,
@@ -208,6 +212,17 @@ TOOLS: dict[str, RegisteredTool] = {
         ),
         arguments_model=GetBattleDraftArguments,
         handler=get_battle_draft,
+    ),
+    "search_patch_notes": RegisteredTool(
+        name="search_patch_notes",
+        description=(
+            "Retrieve up to five official Tencent Honor of Kings patch-note "
+            "sections for a hero, equipment, or game-system change question. Results are "
+            "source-attributed game facts, not KPL pick/ban statistics, draft "
+            "strategy, or proof that a patch caused a KPL outcome."
+        ),
+        arguments_model=SearchPatchNotesArguments,
+        handler=search_patch_notes,
     ),
 }
 

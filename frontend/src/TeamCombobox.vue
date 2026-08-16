@@ -6,6 +6,7 @@ const props = defineProps({
   modelValue: { type: String, default: "" },
   teams: { type: Array, default: () => [] },
   excludedId: { type: String, default: "" },
+  opponentTeam: { type: Object, default: null },
   disabled: { type: Boolean, default: false },
 });
 
@@ -77,6 +78,17 @@ function selectTeam(team) {
       />
       <div v-if="open" class="team-options" role="listbox">
         <button
+          v-if="opponentTeam && !query.trim()"
+          type="button"
+          class="team-opponent"
+          role="option"
+          :aria-selected="String(opponentTeam.team_id) === String(modelValue)"
+          @mousedown.prevent="selectTeam(opponentTeam)"
+        >
+          <img v-if="opponentTeam.team_icon" :src="opponentTeam.team_icon" alt="" />
+          <span><small>Opponent</small>{{ opponentTeam.team_name }}</span>
+        </button>
+        <button
           v-for="team in visibleTeams"
           :key="team.team_id"
           type="button"
@@ -100,6 +112,11 @@ function selectTeam(team) {
 .team-combobox-control > img { width:1.5rem; height:1.5rem; margin-left:.35rem; object-fit:contain; }
 input { width:100%; min-width:0; min-height:32px; padding:.35rem .5rem; border:0; outline:0; background:transparent; color:var(--ink); font:inherit; font-size:.7rem; letter-spacing:normal; text-transform:none; }
 .team-options { position:absolute; z-index:30; top:calc(100% + .25rem); left:0; right:0; display:grid; max-height:16rem; overflow:auto; border:1px solid var(--line); box-shadow:0 12px 26px rgba(16,42,46,.16); background:#fff; }
+.team-options .team-opponent { display:grid; grid-template-columns:1.6rem 1fr; gap:.45rem; align-items:center; min-height:2.5rem; padding:.35rem .45rem; border-bottom:1px solid var(--line); background:#edf8f3; color:var(--ink); }
+.team-options .team-opponent:hover { background:#dff1e9; }
+.team-opponent img { width:1.5rem; height:1.5rem; object-fit:contain; }
+.team-opponent span { display:grid; gap:.05rem; font-size:.7rem; letter-spacing:normal; text-transform:none; }
+.team-opponent small { color:var(--accent-deep); font-size:.52rem; letter-spacing:.08em; text-transform:uppercase; }
 .team-options button { display:grid; grid-template-columns:1.6rem 1fr auto; gap:.45rem; align-items:center; min-height:2.5rem; padding:.35rem .45rem; border:0; border-bottom:1px solid var(--line); background:#fff; color:var(--ink); text-align:left; cursor:pointer; }
 .team-options button:hover, .team-options button[aria-selected="true"] { background:#fff7e7; }
 .team-options img { width:1.5rem; height:1.5rem; object-fit:contain; }

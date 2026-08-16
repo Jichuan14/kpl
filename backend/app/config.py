@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     kimi_max_tool_rounds: int = 3
     kimi_max_tool_calls: int = 8
     kimi_max_output_tokens: int = 600
+    scout_report_max_output_tokens: int = 1200
     coach_ip_requests_per_minute: int = 5
     coach_ip_requests_per_day: int = 50
     coach_server_requests_per_minute: int = 30
@@ -87,6 +88,7 @@ class Settings(BaseSettings):
         "kimi_max_tool_rounds",
         "kimi_max_tool_calls",
         "kimi_max_output_tokens",
+        "scout_report_max_output_tokens",
         "coach_ip_requests_per_minute",
         "coach_ip_requests_per_day",
         "coach_server_requests_per_minute",

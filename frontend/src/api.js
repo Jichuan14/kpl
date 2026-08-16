@@ -71,6 +71,10 @@ export function fetchSeasonTeams(leagueId) {
   return request(`/api/leagues/${encodeURIComponent(leagueId)}/teams`);
 }
 
+export function fetchUpcomingMatch(leagueId) {
+  return request(`/api/leagues/${encodeURIComponent(leagueId)}/upcoming-match`);
+}
+
 export function fetchVisualizationSeasons() {
   return staticData("/assets/data/seasons.json");
 }
@@ -146,6 +150,13 @@ export function fetchSelectionCommentary(state) {
 
 export function askDraftCoach(payload) {
   return request("/api/coach", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function prepareScoutReport(payload) {
+  return request("/api/coach/scout-report", {
     method: "POST",
     body: JSON.stringify(payload),
   });

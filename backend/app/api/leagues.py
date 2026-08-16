@@ -6,7 +6,7 @@ from app.database import get_db
 from app.models import League
 from app.schemas import ApiResponse, LeagueOut
 from app.services.sync import SyncService
-from app.services.season_teams import list_season_teams
+from app.services.season_teams import list_season_teams, next_scheduled_match
 
 router = APIRouter(prefix="/api/leagues", tags=["leagues"])
 
@@ -51,3 +51,20 @@ def season_teams(
     if not rows:
         raise HTTPException(status_code=404, detail="No teams found for this season")
     return ApiResponse(data=rows)
+
+
+@router.get("/{league_id}/upcoming-match")
+def upcoming_match(
+    league_id: str,
+    db: Session = Depends(get_db),
+) -> ApiResponse:
+    """Return the nearest scheduled, selectable fixture in China Standard Time."""
+    if not db.scalar(select(League.id).where(League.league_id == league_id)):
+        raise HTTPException(status_code=404, detail="League not found")
+    teams = list_season_teams(db, league_id)
+    fixture = next_scheduled_match(
+        db,
+        league_id,
+        selectable_team_ids={str(team["team_id"]) for team in teams},
+    )
+    return ApiResponse(data=fixture)

@@ -18,10 +18,12 @@ from app.agent.scope import (
     ScopeDecision,
     denial_answer,
     direct_deny_reason,
+    direct_patch_notes_intent,
     normalize_gate_message,
 )
 from app.agent.tool_registry import available_tool_definitions, invoke_tool
 from app.config import Settings, get_settings
+from app.knowledge.patch_retrieval import PatchIndexUnavailableError
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +33,11 @@ DRAFT_TOOL_OPTIONS: dict[str, frozenset[str]] = {
         {"horizon", "choices_per_action", "seed"}
     ),
 }
+
+# Patch documents describe the game globally; they are not scoped to the
+# selected KPL league, so do not append the application's league_id to this
+# otherwise strict tool contract.
+NO_LEAGUE_CONTEXT_TOOLS = frozenset({"search_patch_notes"})
 
 PLANNING_LEAK_MARKERS = (
     "让我",
@@ -335,6 +342,15 @@ class KimiCoachService:
                 ),
                 None,
             )
+        if direct_patch_notes_intent(message):
+            return (
+                ScopeDecision(
+                    decision="allow",
+                    intent="patch_notes",
+                    reason_code="direct_patch_notes_request",
+                ),
+                None,
+            )
         response = self.client.chat.completions.create(
             model=self.settings.kimi_model,
             messages=[
@@ -460,7 +476,13 @@ class KimiCoachService:
             result = invoke_tool(name, arguments, request_id=request_id)
             record = {"name": name, "success": True, "result": result}
             content = {"success": True, "data": result}
-        except (json.JSONDecodeError, ValueError, LookupError, FileNotFoundError) as exc:
+        except (
+            json.JSONDecodeError,
+            ValueError,
+            LookupError,
+            FileNotFoundError,
+            PatchIndexUnavailableError,
+        ) as exc:
             error = KimiCoachService._safe_tool_error(exc, tool_name=name)
             record = {"name": name, "success": False, "error": error}
             content = {"success": False, "error": error}
@@ -481,6 +503,8 @@ class KimiCoachService:
         request: CoachInput,
     ) -> dict[str, Any]:
         """Make validated website context authoritative over model output."""
+        if name in NO_LEAGUE_CONTEXT_TOOLS:
+            return dict(model_arguments)
         option_names = DRAFT_TOOL_OPTIONS.get(name)
         if option_names is None:
             return {**model_arguments, "league_id": request.league_id}
@@ -499,6 +523,8 @@ class KimiCoachService:
     def _safe_tool_error(exc: Exception, *, tool_name: str = "") -> str:
         if isinstance(exc, FileNotFoundError):
             return "Required analysis data is unavailable for this season."
+        if isinstance(exc, PatchIndexUnavailableError):
+            return "Official patch-note data is temporarily unavailable."
         if isinstance(exc, json.JSONDecodeError):
             return "The tool request contained invalid JSON arguments."
         if isinstance(exc, LookupError):

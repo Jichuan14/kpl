@@ -2,7 +2,11 @@ import unittest
 from random import Random
 from unittest.mock import patch
 
-from app.agent.scope import direct_deny_reason, normalize_gate_message
+from app.agent.scope import (
+    direct_deny_reason,
+    direct_patch_notes_intent,
+    normalize_gate_message,
+)
 from app.agent.service import CoachInput, KimiCoachService
 from tests.test_coach_service import FakeClient, FakeMessage, response, settings, tool_call
 
@@ -76,6 +80,34 @@ class ScopePolicyTest(unittest.TestCase):
 
     def test_oversized_messages_fail_closed(self) -> None:
         self.assertEqual(direct_deny_reason("K" * 2_001), "message_too_long")
+
+    def test_clear_equipment_patch_question_has_a_direct_safe_route(self) -> None:
+        self.assertTrue(direct_patch_notes_intent("最近都有哪些装备调整"))
+        self.assertFalse(direct_patch_notes_intent("装备怎么购买"))
+
+    def test_general_honor_of_kings_reference_is_allowed_by_the_scope_gate(self) -> None:
+        client = FakeClient(
+            [response(FakeMessage(content="I do not have a verified source for that item."))],
+            scope_responses=[
+                response(
+                    FakeMessage(
+                        content=(
+                            '{"decision":"allow","intent":"game_reference",'
+                            '"reason_code":"honor_of_kings_game_reference"}'
+                        )
+                    )
+                )
+            ],
+        )
+        service = KimiCoachService(client=client, settings=settings())
+
+        result = service.ask(
+            CoachInput(message="有没有一件叫无象神器的装备？", league_id="20260002")
+        )
+
+        self.assertEqual(result["answer"], "I do not have a verified source for that item.")
+        self.assertEqual(len(client.chat.completions.scope_calls), 1)
+        self.assertEqual(len(client.chat.completions.calls), 1)
 
 
 class ScopeGateServiceTest(unittest.TestCase):
@@ -174,7 +206,8 @@ class ScopeGateServiceTest(unittest.TestCase):
         names = [definition["function"]["name"] for definition in definitions]
         self.assertIn("get_team_roster", names)
         self.assertIn("predict_next_draft_action", names)
-        self.assertEqual(len(names), 13)
+        self.assertIn("search_patch_notes", names)
+        self.assertEqual(len(names), 14)
 
     def test_wrong_tool_cannot_execute_even_if_provider_requests_it(self) -> None:
         client = FakeClient(

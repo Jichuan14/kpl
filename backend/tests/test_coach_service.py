@@ -141,7 +141,11 @@ class KimiCoachServiceTest(unittest.TestCase):
             " ".join(provider_call["messages"][0]["content"].lower().split()),
         )
         self.assertIn(
-            "answer only questions directly related to kpl",
+            "answer only questions directly related to honor of kings",
+            " ".join(provider_call["messages"][0]["content"].lower().split()),
+        )
+        self.assertIn(
+            "never state a factual game or kpl claim solely from model memory",
             " ".join(provider_call["messages"][0]["content"].lower().split()),
         )
         self.assertIn(
