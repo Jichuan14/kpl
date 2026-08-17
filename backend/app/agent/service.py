@@ -13,7 +13,6 @@ from pydantic import BaseModel, Field
 from app.agent.prompts import COACH_SYSTEM_PROMPT
 from app.agent.scope import (
     INTENT_TOOL_ALLOWLIST,
-    READ_ONLY_TOOL_ALLOWLIST,
     SCOPE_GATE_SYSTEM_PROMPT,
     ScopeDecision,
     denial_answer,
@@ -179,9 +178,14 @@ class KimiCoachService:
                 "tool_calls": [],
                 "usage": usage,
             }
-        # Every registered coach tool is read-only. Once a request passes the
-        # KPL gate, expose the full read-only set so Kimi can combine evidence.
-        allowed_tools = READ_ONLY_TOOL_ALLOWLIST
+        # Semantic scope is enforced twice: it controls both the model-visible
+        # tool set and whether the active board can enter the model context.
+        # This keeps a league-wide question from being pulled toward whichever
+        # teams happen to be selected in the simulator.
+        allowed_tools = decision.allowed_tools()
+        active_draft_state = (
+            request.draft_state if decision.query_scope == "current_draft" else None
+        )
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": COACH_SYSTEM_PROMPT},
         ]
@@ -214,9 +218,10 @@ class KimiCoachService:
                     {
                         "question": normalized_message,
                         "league_id": request.league_id,
+                        "analysis_scope": decision.query_scope,
                         "draft_state": (
-                            request.draft_state.model_dump(mode="json")
-                            if request.draft_state is not None
+                            active_draft_state.model_dump(mode="json")
+                            if active_draft_state is not None
                             else None
                         ),
                         "response_style": {
@@ -287,6 +292,7 @@ class KimiCoachService:
                     request=request,
                     request_id=request_id,
                     allowed_tools=allowed_tools,
+                    allow_draft_context=active_draft_state is not None,
                 )
                 executed_tools.append(tool_record)
                 messages.append(tool_message)
@@ -338,6 +344,7 @@ class KimiCoachService:
                 ScopeDecision(
                     decision="deny",
                     intent="unsupported",
+                    query_scope="league_wide",
                     reason_code=blocked_reason,
                 ),
                 None,
@@ -347,6 +354,7 @@ class KimiCoachService:
                 ScopeDecision(
                     decision="allow",
                     intent="patch_notes",
+                    query_scope="league_wide",
                     reason_code="direct_patch_notes_request",
                 ),
                 None,
@@ -373,12 +381,14 @@ class KimiCoachService:
             decision = ScopeDecision(
                 decision="deny",
                 intent="unsupported",
+                query_scope="league_wide",
                 reason_code="invalid_gate_response",
             )
         if decision.decision == "allow" and decision.intent not in INTENT_TOOL_ALLOWLIST:
             decision = ScopeDecision(
                 decision="deny",
                 intent="unsupported",
+                query_scope="league_wide",
                 reason_code="unsupported_gate_intent",
             )
         return decision, getattr(response, "usage", None)
@@ -460,6 +470,7 @@ class KimiCoachService:
         request: CoachInput,
         request_id: str,
         allowed_tools: frozenset[str],
+        allow_draft_context: bool,
     ) -> tuple[dict[str, Any], dict[str, Any]]:
         name = str(tool_call.function.name)
         try:
@@ -472,6 +483,7 @@ class KimiCoachService:
                 name,
                 arguments,
                 request,
+                allow_draft_context=allow_draft_context,
             )
             result = invoke_tool(name, arguments, request_id=request_id)
             record = {"name": name, "success": True, "result": result}
@@ -501,6 +513,8 @@ class KimiCoachService:
         name: str,
         model_arguments: dict[str, Any],
         request: CoachInput,
+        *,
+        allow_draft_context: bool,
     ) -> dict[str, Any]:
         """Make validated website context authoritative over model output."""
         if name in NO_LEAGUE_CONTEXT_TOOLS:
@@ -509,14 +523,16 @@ class KimiCoachService:
         if option_names is None:
             return {**model_arguments, "league_id": request.league_id}
 
+        if not allow_draft_context or request.draft_state is None:
+            raise ValueError("An active draft board is required for this tool")
+
         arguments = {
             key: model_arguments[key]
             for key in option_names
             if key in model_arguments
         }
         arguments["league_id"] = request.league_id
-        if request.draft_state is not None:
-            arguments.update(request.draft_state.model_dump(mode="json"))
+        arguments.update(request.draft_state.model_dump(mode="json"))
         return arguments
 
     @staticmethod

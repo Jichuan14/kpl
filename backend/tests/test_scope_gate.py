@@ -165,7 +165,7 @@ class ScopeGateServiceTest(unittest.TestCase):
         self.assertIn("只能帮助", result["answer"])
         self.assertEqual(client.chat.completions.calls, [])
 
-    def test_main_coach_receives_the_full_read_only_tool_set(self) -> None:
+    def test_team_scope_receives_team_and_league_tools_but_not_draft_tools(self) -> None:
         client = FakeClient(
             [
                 response(
@@ -185,6 +185,7 @@ class ScopeGateServiceTest(unittest.TestCase):
                     FakeMessage(
                         content=(
                             '{"decision":"allow","intent":"team_roster",'
+                            '"query_scope":"team_specific",'
                             '"reason_code":"supported_kpl_question"}'
                         )
                     )
@@ -205,9 +206,11 @@ class ScopeGateServiceTest(unittest.TestCase):
         definitions = client.chat.completions.calls[0]["tools"]
         names = [definition["function"]["name"] for definition in definitions]
         self.assertIn("get_team_roster", names)
-        self.assertIn("predict_next_draft_action", names)
+        self.assertIn("get_hero_relationships", names)
         self.assertIn("search_patch_notes", names)
-        self.assertEqual(len(names), 14)
+        self.assertNotIn("predict_next_draft_action", names)
+        self.assertNotIn("simulate_future_draft", names)
+        self.assertEqual(len(names), 12)
 
     def test_wrong_tool_cannot_execute_even_if_provider_requests_it(self) -> None:
         client = FakeClient(

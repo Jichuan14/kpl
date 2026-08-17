@@ -72,6 +72,7 @@ class FakeCompletions:
                 FakeMessage(
                     content=(
                         '{"decision":"allow","intent":"draft_prediction",'
+                        '"query_scope":"current_draft",'
                         '"reason_code":"supported_kpl_question"}'
                     )
                 ),
@@ -162,6 +163,7 @@ class KimiCoachServiceTest(unittest.TestCase):
                 "markdown_tables": False,
             },
         )
+        self.assertEqual(user_payload["analysis_scope"], "current_draft")
 
     def test_rewrites_provider_planning_text_before_returning_it(self) -> None:
         client = FakeClient(
@@ -230,6 +232,46 @@ class KimiCoachServiceTest(unittest.TestCase):
         second_messages = client.chat.completions.calls[1]["messages"]
         self.assertEqual(second_messages[-1]["role"], "tool")
         self.assertIn("Hero A", second_messages[-1]["content"])
+
+    def test_league_wide_scope_hides_board_and_draft_tools(self) -> None:
+        client = FakeClient(
+            [response(FakeMessage(content="Lu Bu historically counters Hero A."))],
+            scope_responses=[
+                response(
+                    FakeMessage(
+                        content=(
+                            '{"decision":"allow","intent":"hero_relationships",'
+                            '"query_scope":"league_wide",'
+                            '"reason_code":"general_counter_pick"}'
+                        )
+                    )
+                )
+            ],
+        )
+        service = KimiCoachService(client=client, settings=settings())
+
+        service.ask(
+            CoachInput(
+                message="吕布通常反制哪些英雄？",
+                league_id="20260002",
+                draft_state={
+                    "bp_order": 1,
+                    "blue_team_id": "blue-1",
+                    "blue_team_name": "Blue Club",
+                    "red_team_id": "red-1",
+                    "red_team_name": "Red Club",
+                },
+            )
+        )
+
+        provider_call = client.chat.completions.calls[0]
+        payload = json.loads(provider_call["messages"][-1]["content"])
+        self.assertEqual(payload["analysis_scope"], "league_wide")
+        self.assertIsNone(payload["draft_state"])
+        names = [tool["function"]["name"] for tool in provider_call["tools"]]
+        self.assertIn("get_hero_relationships", names)
+        self.assertNotIn("predict_next_draft_action", names)
+        self.assertNotIn("get_team_draft_tendencies", names)
 
     def test_relays_only_server_filtered_history_as_untrusted_context(self) -> None:
         client = FakeClient([response(FakeMessage(content="It refers to Wolves."))])
