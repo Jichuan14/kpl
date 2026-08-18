@@ -404,13 +404,16 @@ def data_status(
             and public_path.is_file()
             and public_path.stat().st_mtime >= newest_source
         )
-    analysis_ready = bool(
+    display_ready = bool(
         decisions["ready"]
         and statistics_ready
         and meta["ready"]
         and team_synergy["ready"]
         and team_profiles_ready
         and power_rankings["ready"]
+    )
+    analysis_ready = bool(
+        display_ready
         and draft_model["ready"]
         and learnable_draft_model["ready"]
         and sequence_draft_model["ready"]
@@ -528,6 +531,7 @@ def data_status(
                 "sequence_draft_model": sequence_draft_model,
             },
             "frontend_assets": frontend_assets,
+            "display_ready": display_ready,
             "analysis_ready": analysis_ready,
             "processing_note": (
                 "JSONL processing preserves questionable source rows and marks "

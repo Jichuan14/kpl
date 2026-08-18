@@ -30,6 +30,7 @@ const loading = ref(false);
 const simulating = ref(false);
 const error = ref("");
 const search = ref("");
+const laneFilter = ref("all");
 // BP forecasts always use the chronological GRU model. Keeping this fixed
 // avoids presenting model choice in either the desktop or mobile interface.
 const modelType = "sequence";
@@ -100,6 +101,15 @@ const usedHeroIds = computed(
 
 const heroes = computed(() => model.value?.heroes || []);
 
+const laneOptions = [
+  { value: "all", label: "全部英雄" },
+  { value: "6", label: "对抗路" },
+  { value: "2", label: "中路" },
+  { value: "5", label: "打野" },
+  { value: "7", label: "发育路" },
+  { value: "4", label: "游走" },
+];
+
 const pickerTitle = computed(() => {
   if (pickerTarget.value === "global-blue") return addEarlierHeroLabel(teamsBySide.value.blue);
   if (pickerTarget.value === "global-red") return addEarlierHeroLabel(teamsBySide.value.red);
@@ -136,6 +146,7 @@ const probabilityByHeroId = computed(
 
 const availableHeroes = computed(() => {
   const needle = search.value.trim().toLocaleLowerCase();
+  const selectedLane = Number(laneFilter.value);
   const targetSide = pickerTarget.value.replace("global-", "");
   const targetTeam = teamsBySide.value[targetSide];
   const candidates =
@@ -151,7 +162,15 @@ const availableHeroes = computed(() => {
         pickerTarget.value === "draft"
           ? usedHeroIds.value.has(heroId)
           : globalUsed.value[targetTeam].includes(heroId) || usedHeroIds.value.has(heroId);
-      return !unavailableForTarget && (!needle || hero.hero_name.toLocaleLowerCase().includes(needle));
+      const matchesLane =
+        pickerTarget.value !== "draft" ||
+        laneFilter.value === "all" ||
+        (hero.positions || []).map(Number).includes(selectedLane);
+      return (
+        !unavailableForTarget &&
+        matchesLane &&
+        (!needle || hero.hero_name.toLocaleLowerCase().includes(needle))
+      );
     })
     .sort(
       (a, b) =>
@@ -1276,7 +1295,20 @@ onBeforeUnmount(() => {
                 <p class="simulator-eyebrow">{{ pickerTarget === 'draft' ? '添加下一步操作' : '全局 BP 设置' }}</p>
                 <h2 data-i18n-ignore>{{ pickerTitle }}</h2>
               </div>
-              <input v-model="search" type="search" placeholder="搜索英雄…" :disabled="!teamsReady || (pickerTarget === 'draft' && !currentStep) || liveHeroSelectionLocked" />
+              <div class="picker-controls">
+                <label v-if="pickerTarget === 'draft'" class="hero-lane-filter">
+                  <span>英雄位置</span>
+                  <select
+                    v-model="laneFilter"
+                    :disabled="!teamsReady || (pickerTarget === 'draft' && !currentStep) || liveHeroSelectionLocked"
+                  >
+                    <option v-for="lane in laneOptions" :key="lane.value" :value="lane.value">
+                      {{ lane.label }}概率
+                    </option>
+                  </select>
+                </label>
+                <input v-model="search" type="search" placeholder="搜索英雄…" :disabled="!teamsReady || (pickerTarget === 'draft' && !currentStep) || liveHeroSelectionLocked" />
+              </div>
             </div>
             <div v-if="globalMode !== 'single'" class="picker-targets">
               <button type="button" :class="{ active: pickerTarget === 'draft' }" :disabled="liveHeroSelectionLocked" @click="pickerTarget = 'draft'">当前 BP</button>
@@ -1385,10 +1417,11 @@ onBeforeUnmount(() => {
 .probability-list { margin-top: 1rem; }.probability-list > div { display: grid; grid-template-columns:2rem minmax(4rem,1.8fr) 3rem; gap: .55rem; align-items: center; margin-top: .55rem; font-size: .7rem; }.probability-list img { width:2rem; height:2rem; object-fit:cover; }.probability-list em { color: var(--ink-soft); font-style: normal; text-align: right; }.probability-track { height: .42rem; overflow: hidden; background: rgba(16,42,46,.1); }.probability-track i { display:block; height:100%; background: var(--accent); }
 .end-ban-list { margin-top: 1.2rem; padding-top: .85rem; border-top: 1px solid var(--line); }.end-ban-list p { margin:0 0 .5rem; color: var(--ink-soft); font-size:.65rem; }.end-ban-list span { display:inline-flex; align-items:center; gap:.25rem; margin:.25rem .6rem 0 0; font-size:.7rem; }.end-ban-list img { width:1.6rem; height:1.6rem; object-fit:cover; }
 .commentary-panel { margin-top:.75rem; padding:1rem 1.15rem; border:1px solid var(--accent-deep); background:linear-gradient(120deg, rgba(232,191,108,.18), rgba(255,255,255,.84)); }.commentary-panel h2 { max-width:70rem; margin:.25rem 0 0; font:700 1rem/1.55 var(--display); letter-spacing:-.015em; }.commentary-loading { margin:0; color:var(--ink-soft); font-size:.75rem; }
-.hero-picker { margin-top: .75rem; padding: 1rem; }.picker-heading { display:flex; align-items:end; justify-content:space-between; gap:1rem; }.picker-heading h2 { font-size:1.4rem; }.picker-heading input { width:min(100%, 260px); }.picker-targets { margin-top:.85rem; }.hero-options { display:grid; grid-template-columns:repeat(auto-fill, minmax(3.6rem, 1fr)); gap:.45rem; margin-top:1rem; max-height:360px; overflow:auto; }.hero-options button { position:relative; display:grid; place-items:center; aspect-ratio:1; padding:0; overflow:hidden; }.hero-options button img { width:100%; height:100%; object-fit:cover; }.hero-options button small { position:absolute; right:0; bottom:0; padding:.14rem .2rem; background:rgba(16,42,46,.84); color:#fff; font-size:.56rem; }.hero-options button:hover:not(:disabled), .draft-slots button:not(:disabled):hover { border-color: var(--accent); color: var(--accent-deep); }
+.hero-picker { margin-top: .75rem; padding: 1rem; }.picker-heading { display:flex; align-items:end; justify-content:space-between; gap:1rem; }.picker-heading h2 { font-size:1.4rem; }.picker-controls { display:flex; align-items:end; gap:.55rem; }.picker-controls input { width:min(100%, 260px); }.hero-lane-filter { display:grid; gap:.22rem; color:var(--ink-soft); font-size:.67rem; font-weight:700; letter-spacing:.04em; }.hero-lane-filter select { min-width:9.2rem; }.picker-targets { margin-top:.85rem; }.hero-options { display:grid; grid-template-columns:repeat(auto-fill, minmax(3.6rem, 1fr)); gap:.45rem; margin-top:1rem; max-height:360px; overflow:auto; }.hero-options button { position:relative; display:grid; place-items:center; aspect-ratio:1; padding:0; overflow:hidden; }.hero-options button img { width:100%; height:100%; object-fit:cover; }.hero-options button small { position:absolute; right:0; bottom:0; padding:.14rem .2rem; background:rgba(16,42,46,.84); color:#fff; font-size:.56rem; }.hero-options button:hover:not(:disabled), .draft-slots button:not(:disabled):hover { border-color: var(--accent); color: var(--accent-deep); }
 @media (max-width: 1000px) { .simulator-workspace { grid-template-columns:1fr; }.coach-rail { position:static; }.coach-rail { grid-row:1; }.simulator-main-column { grid-row:2; } }
 @media (max-width: 860px) { .simulator-hero, .simulator-status, .simulator-layout { flex-direction:column; align-items:stretch; }.simulator-header-controls { justify-content:stretch; }.simulator-season, .forecast-panel { width:100%; }.simulator-season { min-width:0; }.simulator-settings { align-self:flex-end; }.forecast-panel { min-width:0; }.simulator-actions { justify-content:space-between; }.side-assignment { position:static; width:100%; transform:none; }.side-assignment label { flex:1; }.draft-board { grid-template-columns:1fr; }.global-bp-panel { grid-template-columns:1fr; }.global-used { grid-template-columns:1fr; }.next-battle { justify-self:start; } }
 @media (max-width:620px) {
+  .settings-menu { left:0; right:auto; width:min(19rem, calc(100vw - 1rem)); }
   .forecast-panel { display:none; }
   .global-used > .used-team { display:none; }
   .mobile-used-hero-buttons { display:grid; grid-template-columns:1fr 1fr; grid-column:1 / -1; gap:.45rem; }
@@ -1429,6 +1462,6 @@ onBeforeUnmount(() => {
   .draft-slots button, .draft-slots span { max-width:none; font-size:.55rem; }
   .draft-slots button { min-height:0; overflow:hidden; }
 }
-@media (max-width: 620px) { .simulator-page { width:calc(100% - 1rem); padding-top:1.25rem; }.simulator-status { gap:1rem; }.simulator-actions { flex-wrap:wrap; }.picker-heading { align-items:stretch; flex-direction:column; }.picker-heading input { width:100%; }.hero-options { grid-template-columns:repeat(auto-fill, minmax(3.25rem, 1fr)); }.coach-rail{display:none}.coach-rail.coach-open{position:fixed;z-index:91;right:.75rem;bottom:calc(5.25rem + env(safe-area-inset-bottom));left:.75rem;display:block;overflow:hidden;border:1px solid var(--line);border-radius:.8rem;background:#fff;box-shadow:0 1rem 3rem rgba(16,42,46,.28)}.coach-rail.coach-open :deep(.coach-panel){height:auto;min-height:0;max-height:none;grid-template-rows:auto minmax(150px,auto) auto auto;border:0;box-shadow:none}.coach-rail.coach-open :deep(.coach-header){padding:.72rem 3.25rem .72rem .8rem}.coach-rail.coach-open :deep(.coach-thread){min-height:150px;max-height:42dvh;padding:.75rem}.coach-rail.coach-open :deep(.coach-form){padding:.65rem .7rem .45rem}.coach-rail.coach-open :deep(.coach-disclaimer){padding:0 .7rem .45rem}.coach-scrim{position:fixed;z-index:90;inset:0;display:block;width:100%;height:100%;border:0;background:rgba(16,42,46,.28)}.mobile-coach-toggle{position:fixed;z-index:80;right:1rem;bottom:calc(6rem + env(safe-area-inset-bottom));display:grid;width:3.5rem;height:3.5rem;place-items:center;border:1px solid rgba(255,255,255,.7);border-radius:50%;background:var(--ink);color:#fff;box-shadow:0 .6rem 1.4rem rgba(16,42,46,.28);font-family:var(--mono)}.mobile-coach-toggle span{position:absolute;top:.38rem;right:.5rem;color:#8fe0c8;font-size:.8rem}.mobile-coach-toggle strong{font-size:.7rem;letter-spacing:.08em}.coach-open~.mobile-coach-toggle{display:none}.mobile-coach-close{position:absolute;z-index:2;top:.65rem;right:.65rem;display:grid;width:1.85rem;height:1.85rem;min-height:1.85rem;place-items:center;margin:0;padding:0;border:1px solid rgba(255,255,255,.28);border-radius:.5rem;background:rgba(255,255,255,.12);color:#fff;box-shadow:none;font:400 1.15rem/1 var(--display)} }
+@media (max-width: 620px) { .simulator-page { width:calc(100% - 1rem); padding-top:1.25rem; }.simulator-status { gap:1rem; }.simulator-actions { flex-wrap:wrap; }.picker-heading { align-items:stretch; flex-direction:column; }.picker-controls { align-items:stretch; flex-direction:column; }.picker-controls input, .hero-lane-filter select { width:100%; }.hero-options { grid-template-columns:repeat(auto-fill, minmax(3.25rem, 1fr)); }.coach-rail{display:none}.coach-rail.coach-open{position:fixed;z-index:91;right:.75rem;bottom:calc(5.25rem + env(safe-area-inset-bottom));left:.75rem;display:block;overflow:hidden;border:1px solid var(--line);border-radius:.8rem;background:#fff;box-shadow:0 1rem 3rem rgba(16,42,46,.28)}.coach-rail.coach-open :deep(.coach-panel){height:auto;min-height:0;max-height:none;grid-template-rows:auto minmax(150px,auto) auto auto;border:0;box-shadow:none}.coach-rail.coach-open :deep(.coach-header){padding:.72rem 3.25rem .72rem .8rem}.coach-rail.coach-open :deep(.coach-thread){min-height:150px;max-height:42dvh;padding:.75rem}.coach-rail.coach-open :deep(.coach-form){padding:.65rem .7rem .45rem}.coach-rail.coach-open :deep(.coach-disclaimer){padding:0 .7rem .45rem}.coach-scrim{position:fixed;z-index:90;inset:0;display:block;width:100%;height:100%;border:0;background:rgba(16,42,46,.28)}.mobile-coach-toggle{position:fixed;z-index:80;right:1rem;bottom:calc(6rem + env(safe-area-inset-bottom));display:grid;width:3.5rem;height:3.5rem;place-items:center;border:1px solid rgba(255,255,255,.7);border-radius:50%;background:var(--ink);color:#fff;box-shadow:0 .6rem 1.4rem rgba(16,42,46,.28);font-family:var(--mono)}.mobile-coach-toggle span{position:absolute;top:.38rem;right:.5rem;color:#8fe0c8;font-size:.8rem}.mobile-coach-toggle strong{font-size:.7rem;letter-spacing:.08em}.coach-open~.mobile-coach-toggle{display:none}.mobile-coach-close{position:absolute;z-index:2;top:.65rem;right:.65rem;display:grid;width:1.85rem;height:1.85rem;min-height:1.85rem;place-items:center;margin:0;padding:0;border:1px solid rgba(255,255,255,.28);border-radius:.5rem;background:rgba(255,255,255,.12);color:#fff;box-shadow:none;font:400 1.15rem/1 var(--display)} }
 @media (max-width: 620px) { .coach-rail.coach-open{top:auto;height:75dvh;max-height:75dvh;border-radius:1rem}.coach-rail.coach-open :deep(.coach-panel){height:100% !important;min-height:0 !important;max-height:none !important;grid-template-rows:auto minmax(0,1fr) auto auto !important}.coach-rail.coach-open :deep(.coach-thread){min-height:0 !important;max-height:none !important} }
 </style>

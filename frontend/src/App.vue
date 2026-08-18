@@ -865,6 +865,18 @@ watch(selectedYear, () => {
 
           <div class="pipeline-actions">
             <button
+              class="button"
+              type="button"
+              :disabled="Boolean(processingStep) || syncing || !pipelineReady('download')"
+              @click="runPipeline('display')"
+            >
+              {{
+                processingStep === "display"
+                  ? `Building display data… ${processingElapsed}s`
+                  : "Build display data (no model training)"
+              }}
+            </button>
+            <button
               class="button primary"
               type="button"
               :disabled="Boolean(processingStep) || syncing || !pipelineReady('download')"
@@ -916,7 +928,7 @@ watch(selectedYear, () => {
             <button
               class="button primary"
               type="button"
-              :disabled="Boolean(processingStep) || syncing || !dataStatus.analysis_ready"
+              :disabled="Boolean(processingStep) || syncing || !dataStatus.display_ready"
               @click="publishAssets"
             >
               {{ processingStep === "publish" ? `Publishing… ${processingElapsed}s` : "Populate frontend assets" }}
@@ -933,9 +945,10 @@ watch(selectedYear, () => {
               </div>
             </li>
           </ul>
-          <p v-if="!dataStatus.analysis_ready" class="terminal-note">
-            Complete the analysis pipeline first; this prevents publishing a
-            partial frontend dataset.
+          <p v-if="!dataStatus.display_ready" class="terminal-note">
+            Build the display data first; this prevents publishing a partial
+            frontend dataset. Draft-model training is optional for season
+            history.
           </p>
         </article>
       </section>

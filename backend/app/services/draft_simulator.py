@@ -236,7 +236,7 @@ def load_learnable_model(league_id: str) -> dict[str, Any]:
 
 
 def load_sequence_model(league_id: str) -> dict[str, Any]:
-    """Load and prepare the schema-v3 bag-plus-GRU artifact for NumPy inference."""
+    """Load and prepare a sequence draft artifact for NumPy inference."""
     path = sequence_model_path(league_id)
     if not path.is_file():
         raise FileNotFoundError(f"No sequence draft model has been generated for {league_id}")
@@ -247,7 +247,7 @@ def load_sequence_model(league_id: str) -> dict[str, Any]:
     with path.open(encoding="utf-8") as source:
         model = json.load(source)
     if (
-        model.get("schema_version") != 3
+        model.get("schema_version") not in {3, 4}
         or model.get("model_type") != "frozen_bag_gru_residual_choice"
     ):
         raise ValueError("Unsupported sequence draft model version")
@@ -772,6 +772,22 @@ def _predict_sequence(
     team_to_index = sequence_model["_team_to_index"]
     acting_team_id = str(state.get(f"{side}_team_id") or "")
     opponent_team_id = str(state.get(f"{opponent_side}_team_id") or "")
+    own_previous = {
+        int(hero_id)
+        for hero_id in state.get(f"{side}_used_previous_battles", [])
+        if int(hero_id) in hero_to_index
+    }
+    opponent_previous = {
+        int(hero_id)
+        for hero_id in state.get(f"{opponent_side}_used_previous_battles", [])
+        if int(hero_id) in hero_to_index
+    }
+    own_previous_mask = np.asarray(
+        [hero_id in own_previous for hero_id in hero_ids], dtype=np.bool_
+    )
+    opponent_previous_mask = np.asarray(
+        [hero_id in opponent_previous for hero_id in hero_ids], dtype=np.bool_
+    )
     acting_team = team_to_index.get(acting_team_id, 0)
     opponent_team = team_to_index.get(opponent_team_id, 0)
     logits = sequence_logits(
@@ -788,6 +804,8 @@ def _predict_sequence(
         acting_team=acting_team,
         opponent_team=opponent_team,
         legal_mask=legal_mask,
+        own_previous_hero_mask=own_previous_mask,
+        opponent_previous_hero_mask=opponent_previous_mask,
     )
     candidate_logits = logits[legal_indices]
     weights = np.exp(candidate_logits - candidate_logits.max())
