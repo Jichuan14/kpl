@@ -13,7 +13,7 @@ from typing import Any
 
 
 MODEL_TYPE = "frozen_bag_gru_residual_choice"
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 FEATURE_ARTIFACT_NAME = "hero_draft_feature_vectors.json"
 
 
@@ -66,11 +66,16 @@ def _atomic_json(path: Path, value: dict[str, Any]) -> None:
 def _team_training_decisions(
     repo_root: Path, league_id: str, experiment: dict[str, Any]
 ) -> dict[str, int]:
-    excluded_match_ids = {
-        *experiment.get("validation_match_ids", []),
-        *experiment.get("holdout_match_ids", []),
-        *experiment.get("excluded_future_match_ids", []),
-    }
+    release_refit = experiment.get("release_refit", {})
+    excluded_match_ids = (
+        set()
+        if release_refit.get("trained_on_all_available_matches")
+        else {
+            *experiment.get("validation_match_ids", []),
+            *experiment.get("holdout_match_ids", []),
+            *experiment.get("excluded_future_match_ids", []),
+        }
+    )
     counts: Counter[str] = Counter()
     for season in experiment.get("training_seasons", []):
         path = repo_root / "analysis" / "exports" / str(season) / "bp_decisions.jsonl"
@@ -160,6 +165,10 @@ def main() -> None:
             args.experiment_results.resolve().read_text(encoding="utf-8")
         )
         model_result = experiment.get("models", {}).get("hybrid_bag_gru", {})
+    release_refit = experiment.get("release_refit", {})
+    trained_on_all_available_matches = bool(
+        release_refit.get("trained_on_all_available_matches")
+    )
 
     checkpoint_hash = hashlib.sha256(checkpoint_path.read_bytes()).hexdigest()
     parameters = {
@@ -192,14 +201,21 @@ def main() -> None:
         "training": {
             "training_seasons": experiment.get("training_seasons", []),
             "season_weights": experiment.get("season_weights", {}),
-            "training_decisions": int(experiment.get("train_decisions", 0)),
+            "training_decisions": int(
+                release_refit.get("train_decisions", experiment.get("train_decisions", 0))
+            ),
             "validation_match_ids": experiment.get("validation_match_ids", []),
             "holdout_match_ids": experiment.get("holdout_match_ids", []),
             "best_epoch": model_result.get("best_epoch"),
             "validation_metrics": model_result.get("validation_metrics"),
             "holdout_metrics": checkpoint.get("holdout_metrics"),
             "source_checkpoint_sha256": checkpoint_hash,
-            "artifact_status": "experimental_chronological_checkpoint",
+            "artifact_status": (
+                "release_refit_on_all_available_matches"
+                if trained_on_all_available_matches
+                else "experimental_chronological_checkpoint"
+            ),
+            "release_refit": release_refit or None,
         },
         "parameters_sha256": parameters_sha256,
         "parameters": parameters,

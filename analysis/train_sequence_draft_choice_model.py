@@ -1,6 +1,6 @@
 """Train and export the chronological bag-plus-GRU model for the web app.
 
-Run this command in a separate PyTorch environment.  The produced schema-v3
+Run this command in a separate PyTorch environment.  The produced sequence
 JSON artifact is consumed by the NumPy-only backend runtime.
 """
 
@@ -28,6 +28,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--epochs", type=int, default=30)
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--threads", type=int, default=4)
+    parser.add_argument("--second-ban-weight", type=float, default=1.0)
+    parser.add_argument(
+        "--use-series-context",
+        action="store_true",
+        help="Encode prior-game hero usage for both teams.",
+    )
+    parser.add_argument(
+        "--train-on-all-data",
+        action="store_true",
+        help="Refit the exported release model on all available matches.",
+    )
     parser.add_argument("--output", type=Path)
     return parser.parse_args()
 
@@ -70,31 +81,36 @@ def main() -> None:
     ).resolve()
     trainer = repo_root / "analysis" / "sequence_training" / "train.py"
     exporter = repo_root / "analysis" / "export_sequence_draft_choice_model.py"
-    run(
-        [
-            sys.executable,
-            str(trainer),
-            "--target-season",
-            args.league_id,
-            "--previous-seasons",
-            str(args.previous_seasons),
-            "--validation-matches",
-            str(args.validation_matches),
-            "--holdout-matches",
-            str(args.holdout_matches),
-            "--epochs",
-            str(args.epochs),
-            "--seed",
-            str(args.seed),
-            "--threads",
-            str(args.threads),
-            "--models",
-            "bag_ablation,hybrid_bag_gru",
-            "--output-dir",
-            str(output_dir),
-        ],
-        repo_root,
-    )
+    training_command = [
+        sys.executable,
+        str(trainer),
+        "--target-season",
+        args.league_id,
+        "--previous-seasons",
+        str(args.previous_seasons),
+        "--validation-matches",
+        str(args.validation_matches),
+        "--holdout-matches",
+        str(args.holdout_matches),
+        "--epochs",
+        str(args.epochs),
+        "--seed",
+        str(args.seed),
+        "--threads",
+        str(args.threads),
+        "--models",
+        "bag_ablation,hybrid_bag_gru",
+        "--output-dir",
+        str(output_dir),
+    ]
+    if args.use_series_context:
+        training_command.append("--use-series-context")
+    if args.train_on_all_data:
+        training_command.append("--train-on-all-data")
+    if args.second_ban_weight <= 0:
+        raise ValueError("Second-ban weight must be positive")
+    training_command.extend(("--second-ban-weight", str(args.second_ban_weight)))
+    run(training_command, repo_root)
     run(
         [
             sys.executable,

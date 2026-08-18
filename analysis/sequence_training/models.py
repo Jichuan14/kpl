@@ -42,6 +42,7 @@ class ModelConfig:
     app_hidden_dim: int = 16
     hybrid_initial_residual_scale: float = 0.05
     hybrid_residual_scale_penalty: float = 1e-3
+    use_series_context: bool = False
 
 
 @dataclass
@@ -59,6 +60,8 @@ class TensorDataset:
     next_team_slots: Tensor
     acting_teams: Tensor
     opponent_teams: Tensor
+    own_previous_hero_mask: Tensor
+    opponent_previous_hero_mask: Tensor
     legal_mask: Tensor
     targets: Tensor
     sample_weights: Tensor
@@ -83,6 +86,8 @@ class TensorDataset:
             "next_team_slots",
             "acting_teams",
             "opponent_teams",
+            "own_previous_hero_mask",
+            "opponent_previous_hero_mask",
             "legal_mask",
             "targets",
             "sample_weights",
@@ -133,6 +138,9 @@ class DraftChoiceModel(nn.Module):
         self.team_slot_embedding = nn.Embedding(6, d, padding_idx=0)
         self.acting_team_embedding = nn.Embedding(config.team_count + 1, d, padding_idx=0)
         self.opponent_team_embedding = nn.Embedding(config.team_count + 1, d, padding_idx=0)
+        if config.use_series_context:
+            self.own_previous_hero_embedding = nn.Embedding(config.hero_count, d)
+            self.opponent_previous_hero_embedding = nn.Embedding(config.hero_count, d)
         self.hero_bias = nn.Parameter(torch.zeros(config.hero_count))
         self.reset_parameters()
 
@@ -162,13 +170,25 @@ class DraftChoiceModel(nn.Module):
         return torch.cat((candidates, padding), dim=0)[history_heroes]
 
     def context_query(self, batch: dict[str, Tensor]) -> Tensor:
-        return (
+        context = (
             self.action_embedding(batch["next_actions"])
             + self.side_embedding(batch["next_sides"])
             + self.position_embedding(batch["next_positions"])
             + self.team_slot_embedding(batch["next_team_slots"])
             + self.acting_team_embedding(batch["acting_teams"])
             + self.opponent_team_embedding(batch["opponent_teams"])
+        )
+        if not self.config.use_series_context:
+            return context
+        own_mask = batch["own_previous_hero_mask"].to(context.dtype)
+        opponent_mask = batch["opponent_previous_hero_mask"].to(context.dtype)
+        own_scale = own_mask.sum(dim=1, keepdim=True).clamp_min(1).sqrt()
+        opponent_scale = opponent_mask.sum(dim=1, keepdim=True).clamp_min(1).sqrt()
+        return (
+            context
+            + own_mask @ self.own_previous_hero_embedding.weight / own_scale
+            + opponent_mask @ self.opponent_previous_hero_embedding.weight
+            / opponent_scale
         )
 
     def apply_legal_mask(self, logits: Tensor, legal_mask: Tensor) -> Tensor:
@@ -626,6 +646,8 @@ def _empty_lists() -> dict[str, list[Any]]:
         "next_team_slots": [],
         "acting_teams": [],
         "opponent_teams": [],
+        "own_previous_hero_mask": [],
+        "opponent_previous_hero_mask": [],
         "legal_mask": [],
         "targets": [],
         "sample_weights": [],
@@ -649,6 +671,12 @@ def _as_tensor_dataset(values: dict[str, list[Any]]) -> TensorDataset:
         "next_team_slots": torch.tensor(values["next_team_slots"], dtype=torch.long),
         "acting_teams": torch.tensor(values["acting_teams"], dtype=torch.long),
         "opponent_teams": torch.tensor(values["opponent_teams"], dtype=torch.long),
+        "own_previous_hero_mask": torch.tensor(
+            values["own_previous_hero_mask"], dtype=torch.bool
+        ),
+        "opponent_previous_hero_mask": torch.tensor(
+            values["opponent_previous_hero_mask"], dtype=torch.bool
+        ),
         "legal_mask": torch.tensor(values["legal_mask"], dtype=torch.bool),
         "targets": torch.tensor(values["targets"], dtype=torch.long),
         "sample_weights": torch.tensor(values["sample_weights"], dtype=torch.float32),
@@ -670,8 +698,10 @@ def prepare_data(
     holdout_offset_matches: int,
     recency_decay: float,
     winning_pick_weight: float,
+    second_ban_weight: float = 1.0,
+    include_all_target_matches: bool = False,
 ) -> PreparedData:
-    """Reconstruct chronological prefixes from existing decision exports."""
+    """Reconstruct chronological prefixes, optionally retaining every target match."""
     analysis_dir = repo_root / "analysis"
     exports_dir = analysis_dir / "exports"
     available = {
@@ -687,6 +717,8 @@ def prepare_data(
     ]
     if len(training_seasons) != previous_seasons + 1:
         raise ValueError("Not enough previous seasons for the requested window")
+    if second_ban_weight <= 0:
+        raise ValueError("Second-ban weight must be positive")
     season_weights = {
         season: recency_decay ** (len(training_seasons) - 1 - index)
         for index, season in enumerate(training_seasons)
@@ -736,16 +768,21 @@ def prepare_data(
             if row["_season"] == target_season
         },
     )
-    (
-        validation_match_ids,
-        holdout_match_ids,
-        excluded_future_match_ids,
-    ) = chronological_windows(
-        ordered_match_ids,
-        validation_matches=validation_matches,
-        holdout_matches=holdout_matches,
-        holdout_offset_matches=holdout_offset_matches,
-    )
+    if include_all_target_matches:
+        validation_match_ids: list[str] = []
+        holdout_match_ids: list[str] = []
+        excluded_future_match_ids: list[str] = []
+    else:
+        (
+            validation_match_ids,
+            holdout_match_ids,
+            excluded_future_match_ids,
+        ) = chronological_windows(
+            ordered_match_ids,
+            validation_matches=validation_matches,
+            holdout_matches=holdout_matches,
+            holdout_offset_matches=holdout_offset_matches,
+        )
     validation_set = set(validation_match_ids)
     holdout_set = set(holdout_match_ids)
     excluded_future_set = set(excluded_future_match_ids)
@@ -835,6 +872,20 @@ def prepare_data(
                 values["opponent_teams"].append(
                     team_to_index.get(str(row["opponent_team_id"]), 0)
                 )
+                own_previous = {
+                    int(hero_id)
+                    for hero_id in row.get("team_used_in_previous_battles", [])
+                }
+                opponent_previous = {
+                    int(hero_id)
+                    for hero_id in row.get("opponent_used_in_previous_battles", [])
+                }
+                values["own_previous_hero_mask"].append(
+                    [hero_id in own_previous for hero_id in hero_ids]
+                )
+                values["opponent_previous_hero_mask"].append(
+                    [hero_id in opponent_previous for hero_id in hero_ids]
+                )
                 legal_ids = {int(hero_id) for hero_id in row["legal_hero_ids"]}
                 values["legal_mask"].append(
                     [hero_id in legal_ids for hero_id in hero_ids]
@@ -846,10 +897,15 @@ def prepare_data(
                     and row.get("acting_team_won_battle") is True
                     else 1.0
                 )
+                phase_weight = (
+                    second_ban_weight if 11 <= position <= 16 else 1.0
+                )
                 values["sample_weights"].append(
                     1.0
                     if is_holdout or is_validation
-                    else season_weights[row["_season"]] * outcome_weight
+                    else season_weights[row["_season"]]
+                    * outcome_weight
+                    * phase_weight
                 )
                 values["match_ids"].append(str(row["match_id"]))
                 values["battle_ids"].append(battle_id)
@@ -872,13 +928,17 @@ def prepare_data(
     train = _as_tensor_dataset(train_values)
     validation = _as_tensor_dataset(validation_values)
     holdout = _as_tensor_dataset(holdout_values)
-    if not len(train) or not len(validation) or not len(holdout):
+    if not len(train) or (
+        not include_all_target_matches and (not len(validation) or not len(holdout))
+    ):
         raise ValueError("The chronological split produced an empty dataset")
     if not bool(train.legal_mask.gather(1, train.targets[:, None]).all()):
         raise AssertionError("A training target is outside its legal mask")
-    if not bool(holdout.legal_mask.gather(1, holdout.targets[:, None]).all()):
+    if len(holdout) and not bool(
+        holdout.legal_mask.gather(1, holdout.targets[:, None]).all()
+    ):
         raise AssertionError("A holdout target is outside its legal mask")
-    if not bool(
+    if len(validation) and not bool(
         validation.legal_mask.gather(1, validation.targets[:, None]).all()
     ):
         raise AssertionError("A validation target is outside its legal mask")
@@ -1024,8 +1084,8 @@ def evaluate(
 def train_model(
     model: DraftChoiceModel,
     train: TensorDataset,
-    validation: TensorDataset,
-    holdout: TensorDataset,
+    validation: TensorDataset | None,
+    holdout: TensorDataset | None,
     *,
     epochs: int,
     batch_size: int,
@@ -1036,8 +1096,8 @@ def train_model(
 ) -> tuple[
     DraftChoiceModel,
     list[dict[str, Any]],
-    dict[str, Any],
-    dict[str, Any],
+    dict[str, Any] | None,
+    dict[str, Any] | None,
 ]:
     model.to(device)
     trainable_parameters = [
@@ -1091,24 +1151,30 @@ def train_model(
             weighted_loss_sum += float(loss.item()) * batch_weight
             weight_sum += batch_weight
 
-        validation_metrics = evaluate(
-            model, validation, batch_size=batch_size, device=device
-        )
         row = {
             "epoch": epoch,
             "weighted_training_loss": weighted_loss_sum / weight_sum,
-            "validation_negative_log_likelihood": validation_metrics[
-                "negative_log_likelihood"
-            ],
-            "validation_top_1_accuracy": validation_metrics["top_1_accuracy"],
-            "validation_top_5_accuracy": validation_metrics["top_5_accuracy"],
         }
+        if validation is not None:
+            validation_metrics = evaluate(
+                model, validation, batch_size=batch_size, device=device
+            )
+            row.update(
+                {
+                    "validation_negative_log_likelihood": validation_metrics[
+                        "negative_log_likelihood"
+                    ],
+                    "validation_top_1_accuracy": validation_metrics["top_1_accuracy"],
+                    "validation_top_5_accuracy": validation_metrics["top_5_accuracy"],
+                }
+            )
         diagnostics = getattr(model, "diagnostics", None)
         if diagnostics is not None:
             row["model_diagnostics"] = diagnostics()
         history.append(row)
-        if validation_metrics["negative_log_likelihood"] < best_nll:
-            best_nll = validation_metrics["negative_log_likelihood"]
+        if validation is None or validation_metrics["negative_log_likelihood"] < best_nll:
+            if validation is not None:
+                best_nll = validation_metrics["negative_log_likelihood"]
             best_state = {
                 name: value.detach().cpu().clone()
                 for name, value in model.state_dict().items()
@@ -1116,11 +1182,15 @@ def train_model(
     if best_state is None:
         raise AssertionError("Training did not produce a checkpoint")
     model.load_state_dict(best_state)
-    final_validation_metrics = evaluate(
-        model, validation, batch_size=batch_size, device=device
+    final_validation_metrics = (
+        evaluate(model, validation, batch_size=batch_size, device=device)
+        if validation is not None
+        else None
     )
-    final_holdout_metrics = evaluate(
-        model, holdout, batch_size=batch_size, device=device
+    final_holdout_metrics = (
+        evaluate(model, holdout, batch_size=batch_size, device=device)
+        if holdout is not None
+        else None
     )
     return (
         model,

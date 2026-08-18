@@ -90,6 +90,7 @@ class AnalysisRunRequest(BaseModel):
         "draft_model",
         "learnable_draft_model",
         "sequence_draft_model",
+        "display",
         "all",
     ] = "all"
 

@@ -30,6 +30,10 @@ _SHARED_KEYS = {
     "query_projection.weight",
     "query_projection.bias",
 }
+_SERIES_CONTEXT_KEYS = {
+    "own_previous_hero_embedding.weight",
+    "opponent_previous_hero_embedding.weight",
+}
 _BAG_KEYS = _SHARED_KEYS | {"source_projection.weight"}
 _GRU_KEYS = _SHARED_KEYS | {
     "gru.weight_ih_l0",
@@ -55,8 +59,11 @@ def _prepare_branch(
     team_count: int,
     feature_width: int,
     hidden_dim: int,
+    use_series_context: bool,
 ) -> dict[str, FloatArray]:
     required = _BAG_KEYS if branch_name == "bag" else _GRU_KEYS
+    if use_series_context:
+        required = required | _SERIES_CONTEXT_KEYS
     if set(raw) != required:
         raise ValueError(f"Sequence model {branch_name} parameters are incomplete")
     d = hidden_dim
@@ -87,6 +94,13 @@ def _prepare_branch(
                 "gru.bias_hh_l0": (3 * d,),
             }
         )
+    if use_series_context:
+        shapes.update(
+            {
+                "own_previous_hero_embedding.weight": (h, d),
+                "opponent_previous_hero_embedding.weight": (h, d),
+            }
+        )
     return {
         name: _array(raw[name], shape, f"{branch_name}.{name}")
         for name, shape in shapes.items()
@@ -102,6 +116,7 @@ def prepare_sequence_parameters(
     team_count = len(artifact.get("team_ids", []))
     feature_width = len(artifact.get("feature_names", []))
     hidden_dim = int(config.get("hidden_dim") or 0)
+    use_series_context = bool(config.get("use_series_context", False))
     if (
         hero_count < 1
         or team_count < 1
@@ -129,6 +144,7 @@ def prepare_sequence_parameters(
         team_count=team_count,
         feature_width=feature_width,
         hidden_dim=hidden_dim,
+        use_series_context=use_series_context,
     )
     gru = _prepare_branch(
         raw_parameters["gru"],
@@ -137,6 +153,7 @@ def prepare_sequence_parameters(
         team_count=team_count,
         feature_width=feature_width,
         hidden_dim=hidden_dim,
+        use_series_context=use_series_context,
     )
     features = np.asarray(feature_matrix, dtype=np.float32)
     bag_candidates = (
@@ -162,6 +179,7 @@ def prepare_sequence_parameters(
         "residual_scale": residual_scale,
         "hidden_dim": hidden_dim,
         "hero_count": hero_count,
+        "use_series_context": use_series_context,
     }
 
 
@@ -174,14 +192,35 @@ def _context_query(
     next_team_slot: int,
     acting_team: int,
     opponent_team: int,
+    own_previous_hero_mask: NDArray[np.bool_] | None = None,
+    opponent_previous_hero_mask: NDArray[np.bool_] | None = None,
 ) -> FloatArray:
-    return (
+    context = (
         branch["action_embedding.weight"][next_action]
         + branch["side_embedding.weight"][next_side]
         + branch["position_embedding.weight"][next_position]
         + branch["team_slot_embedding.weight"][next_team_slot]
         + branch["acting_team_embedding.weight"][acting_team]
         + branch["opponent_team_embedding.weight"][opponent_team]
+    )
+    if not ("own_previous_hero_embedding.weight" in branch):
+        return context
+    if own_previous_hero_mask is None or opponent_previous_hero_mask is None:
+        raise ValueError("Series-aware sequence model requires previous-hero masks")
+    own_mask = np.asarray(own_previous_hero_mask, dtype=np.bool_)
+    opponent_mask = np.asarray(opponent_previous_hero_mask, dtype=np.bool_)
+    hero_count = branch["hero_bias"].shape[0]
+    if own_mask.shape != (hero_count,) or opponent_mask.shape != (hero_count,):
+        raise ValueError("Series previous-hero masks have an invalid shape")
+    own_scale = np.float32(math.sqrt(max(int(own_mask.sum()), 1)))
+    opponent_scale = np.float32(math.sqrt(max(int(opponent_mask.sum()), 1)))
+    return (
+        context
+        + own_mask.astype(np.float32) @ branch["own_previous_hero_embedding.weight"]
+        / own_scale
+        + opponent_mask.astype(np.float32)
+        @ branch["opponent_previous_hero_embedding.weight"]
+        / opponent_scale
     )
 
 
@@ -280,6 +319,8 @@ def sequence_logits(
     acting_team: int,
     opponent_team: int,
     legal_mask: NDArray[np.bool_],
+    own_previous_hero_mask: NDArray[np.bool_] | None = None,
+    opponent_previous_hero_mask: NDArray[np.bool_] | None = None,
 ) -> FloatArray:
     """Return masked logits using the production PyTorch training equations."""
     if legal_mask.shape != (prepared["hero_count"],) or not legal_mask.any():
@@ -292,6 +333,8 @@ def sequence_logits(
         next_team_slot=next_team_slot,
         acting_team=acting_team,
         opponent_team=opponent_team,
+        own_previous_hero_mask=own_previous_hero_mask,
+        opponent_previous_hero_mask=opponent_previous_hero_mask,
     )
     gru_context = _context_query(
         prepared["gru"],
@@ -301,6 +344,8 @@ def sequence_logits(
         next_team_slot=next_team_slot,
         acting_team=acting_team,
         opponent_team=opponent_team,
+        own_previous_hero_mask=own_previous_hero_mask,
+        opponent_previous_hero_mask=opponent_previous_hero_mask,
     )
     bag_logits = _bag_logits(
         prepared,

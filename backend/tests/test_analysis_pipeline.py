@@ -25,6 +25,31 @@ class AnalysisPipelineTests(unittest.TestCase):
         self.assertEqual(completed[-2:], ["learnable_draft_model", "sequence_draft_model"])
         self.assertEqual(result["steps"][-1]["step"], "sequence_draft_model")
 
+    def test_display_pipeline_skips_all_draft_models(self) -> None:
+        pipeline = analysis_pipeline.AnalysisPipeline("20250004")
+        completed: list[str] = []
+
+        with patch.object(
+            pipeline,
+            "_run_step",
+            side_effect=lambda step: completed.append(step) or {"step": step},
+        ):
+            result = pipeline.run("display")
+
+        self.assertEqual(
+            completed,
+            [
+                "export",
+                "decisions",
+                "statistics",
+                "meta",
+                "team_synergy",
+                "team_profiles",
+                "power_rankings",
+            ],
+        )
+        self.assertEqual(result["requested_step"], "display")
+
     def test_sequence_step_builds_features_then_trains_with_extended_timeout(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
@@ -50,7 +75,17 @@ class AnalysisPipelineTests(unittest.TestCase):
         training_command = run.call_args_list[1].args[0]
         self.assertTrue(feature_command[1].endswith("build_hero_draft_feature_vectors.py"))
         self.assertTrue(training_command[1].endswith("train_sequence_draft_choice_model.py"))
-        self.assertEqual(training_command[-2:], ["--league-id", "20260003"])
+        self.assertEqual(
+            training_command[-4:],
+            [
+                "--league-id",
+                "20260003",
+                "--use-series-context",
+                "--train-on-all-data",
+            ],
+        )
+        self.assertEqual(training_command.count("--use-series-context"), 1)
+        self.assertEqual(training_command.count("--train-on-all-data"), 1)
         self.assertNotIn("poc", str(training_command))
         self.assertTrue(all(call.kwargs["timeout"] == 900 for call in run.call_args_list))
 
@@ -60,6 +95,10 @@ class AnalysisPipelineTests(unittest.TestCase):
             step="sequence_draft_model",
         )
         self.assertEqual(request.step, "sequence_draft_model")
+
+    def test_display_step_is_accepted_by_request_schema(self) -> None:
+        request = AnalysisRunRequest(league_id="20250004", step="display")
+        self.assertEqual(request.step, "display")
 
     def test_sequence_timeout_is_reported_as_pipeline_error(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:

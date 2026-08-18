@@ -17,6 +17,7 @@ PipelineStep = Literal[
     "draft_model",
     "learnable_draft_model",
     "sequence_draft_model",
+    "display",
     "all",
 ]
 
@@ -42,20 +43,21 @@ class AnalysisPipeline:
         self.decisions_path = self.export_dir / "bp_decisions.jsonl"
 
     def run(self, step: PipelineStep) -> dict[str, Any]:
+        display_steps = [
+            "export",
+            "decisions",
+            "statistics",
+            "meta",
+            "team_synergy",
+            "team_profiles",
+            "power_rankings",
+        ]
         steps = (
-            [
-                "export",
-                "decisions",
-                "statistics",
-                "meta",
-                "team_synergy",
-                "team_profiles",
-                "power_rankings",
-                "draft_model",
-                "learnable_draft_model",
-                "sequence_draft_model",
-            ]
+            display_steps
+            + ["draft_model", "learnable_draft_model", "sequence_draft_model"]
             if step == "all"
+            else display_steps
+            if step == "display"
             else [step]
         )
         results = [self._run_step(current) for current in steps]
@@ -209,5 +211,7 @@ class AnalysisPipeline:
                 str(ANALYSIS_DIR / "train_sequence_draft_choice_model.py"),
                 "--league-id",
                 self.league_id,
+                "--use-series-context",
+                "--train-on-all-data",
             ]
         raise ValueError(f"Unknown pipeline step: {step}")

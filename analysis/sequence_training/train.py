@@ -44,6 +44,25 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--weight-decay", type=float, default=1e-4)
     parser.add_argument("--recency-decay", type=float, default=0.65)
     parser.add_argument("--winning-pick-weight", type=float, default=1.5)
+    parser.add_argument(
+        "--second-ban-weight",
+        type=float,
+        default=1.0,
+        help="Additional training weight for BP orders 11 through 16.",
+    )
+    parser.add_argument(
+        "--use-series-context",
+        action="store_true",
+        help="Encode each team's hero usage from earlier games in the series.",
+    )
+    parser.add_argument(
+        "--train-on-all-data",
+        action="store_true",
+        help=(
+            "After evaluation, refit the release checkpoints on every available "
+            "match using each model's validation-selected epoch."
+        ),
+    )
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--threads", type=int, default=4)
     parser.add_argument(
@@ -98,6 +117,7 @@ def main() -> None:
         holdout_offset_matches=args.holdout_offset_matches,
         recency_decay=args.recency_decay,
         winning_pick_weight=args.winning_pick_weight,
+        second_ban_weight=args.second_ban_weight,
     )
     print(
         f"Train decisions: {len(data.train):,}; "
@@ -111,6 +131,7 @@ def main() -> None:
         team_count=len(data.team_ids),
         feature_width=int(data.hero_features.shape[1]),
         hidden_dim=args.hidden_dim,
+        use_series_context=args.use_series_context,
     )
     run_results: dict[str, object] = {
         "training_schema_version": 1,
@@ -204,6 +225,82 @@ def main() -> None:
             f"top-5 {holdout_metrics['top_5_accuracy']:.3%}; "
             f"{latency['mean_milliseconds']:.3f} ms/prediction"
         )
+
+    if args.train_on_all_data:
+        print("\nRefitting release checkpoints on all available matches...")
+        release_data = prepare_data(
+            repo_root,
+            target_season=args.target_season,
+            previous_seasons=args.previous_seasons,
+            validation_matches=args.validation_matches,
+            holdout_matches=args.holdout_matches,
+            holdout_offset_matches=args.holdout_offset_matches,
+            recency_decay=args.recency_decay,
+            winning_pick_weight=args.winning_pick_weight,
+            second_ban_weight=args.second_ban_weight,
+            include_all_target_matches=True,
+        )
+        release_config = ModelConfig(
+            hero_count=len(release_data.hero_ids),
+            team_count=len(release_data.team_ids),
+            feature_width=int(release_data.hero_features.shape[1]),
+            hidden_dim=args.hidden_dim,
+            use_series_context=args.use_series_context,
+        )
+        release_selected_bag: BagAblationModel | None = None
+        release_selected_app: AppCurrentChoiceModel | None = None
+        release_epochs: dict[str, int] = {}
+        for offset, model_name in enumerate(model_names):
+            model_result = run_results["models"][model_name]
+            if not isinstance(model_result, dict):
+                raise AssertionError("Missing evaluation result for release refit")
+            release_epochs[model_name] = int(model_result["best_epoch"])
+            seed_everything(args.seed + offset)
+            release_model = MODEL_TYPES[model_name](
+                release_config, release_data.hero_features
+            )
+            if isinstance(release_model, HybridBagGRUModel):
+                if release_selected_bag is None:
+                    raise AssertionError("The release hybrid model has no bag checkpoint")
+                release_model.initialize_from_bag(release_selected_bag)
+            if isinstance(release_model, HybridAppLagGRUModel):
+                if release_selected_app is None:
+                    raise AssertionError("The release hybrid model has no app checkpoint")
+                release_model.initialize_from_app(release_selected_app)
+            release_model, _, _, _ = train_model(
+                release_model,
+                release_data.train,
+                None,
+                None,
+                epochs=release_epochs[model_name],
+                batch_size=getattr(release_model, "recommended_batch_size", args.batch_size),
+                learning_rate=getattr(
+                    release_model, "recommended_learning_rate", args.learning_rate
+                ),
+                weight_decay=args.weight_decay,
+                device=device,
+                seed=args.seed + offset,
+            )
+            holdout_metrics = model_result.get("holdout_metrics")
+            if not isinstance(holdout_metrics, dict):
+                raise AssertionError("Release checkpoint is missing holdout metrics")
+            save_checkpoint(
+                output_dir / f"{model_name}.pt",
+                release_model,
+                release_data,
+                holdout_metrics,
+            )
+            if isinstance(release_model, BagAblationModel):
+                release_selected_bag = release_model
+            if isinstance(release_model, AppCurrentChoiceModel):
+                release_selected_app = release_model
+        run_results["release_refit"] = {
+            "trained_on_all_available_matches": True,
+            "train_decisions": len(release_data.train),
+            "validation_match_ids": data.validation_match_ids,
+            "holdout_match_ids": data.holdout_match_ids,
+            "selected_epochs": release_epochs,
+        }
 
     results_path = output_dir / "results.json"
     results_path.write_text(
