@@ -99,12 +99,6 @@ function percent(value) {
   return `${(Number(value || 0) * 100).toFixed(1)}%`;
 }
 
-function shortDate(value) {
-  if (!value) return "—";
-  const date = new Date(value.replace(" ", "T"));
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString(language.value);
-}
-
 function scoreWidth(score, maximum) {
   return `${Math.max(2, (Number(score || 0) / maximum) * 100)}%`;
 }
@@ -182,23 +176,6 @@ watch(leagueId, loadRankings);
     <p v-else-if="loading" class="rankings-message">Calculating the form table…</p>
 
     <template v-if="payload && !loading">
-      <section class="method-strip">
-        <div>
-          <span>Evidence window</span>
-          <strong data-i18n-ignore>
-            {{ payload.history_league_ids.length }}{{ language === "zh-CN" ? " 项赛事" : " competitions" }}
-          </strong>
-        </div>
-        <div>
-          <span>As of</span>
-          <strong>{{ shortDate(payload.as_of) }}</strong>
-        </div>
-        <a href="/methodology#rankings">
-          <span>Ranking calculation</span>
-          <strong>Read methodology →</strong>
-        </a>
-      </section>
-
       <div class="board-switch" role="tablist" aria-label="Ranking board">
         <button
           type="button"
@@ -542,8 +519,6 @@ watch(leagueId, loadRankings);
 .season-control span,.hero-filters span,.hero-search > span { color:var(--ink-soft); font-size:.62rem; letter-spacing:.1em; text-transform:uppercase; }
 select,input { min-height:43px; padding:.62rem .75rem; border:1px solid var(--line); background:rgba(255,255,255,.94); color:var(--ink); font:inherit; }
 .rankings-message { margin:.8rem 0 0; padding:1rem; border:1px solid var(--line); background:#fff; }.rankings-message.error{color:var(--warn)}
-.method-strip { display:grid; grid-template-columns:repeat(3,1fr); margin-top:.75rem; border:1px solid var(--line); background:rgba(255,255,255,.78); }
-.method-strip > div,.method-strip > a { margin:0; padding:1rem 1.15rem; border-right:1px solid var(--line); }.method-strip > :last-child{border-right:0}.method-strip>a{color:var(--ink);text-decoration:none}.method-strip>a:hover{background:rgba(15,138,107,.07)}.method-strip span,.method-strip strong{display:block}.method-strip span{color:var(--ink-soft);font-size:.6rem;text-transform:uppercase}.method-strip strong{margin-top:.25rem;font:700 1rem var(--display)}
 .board-switch { display:grid; grid-template-columns:repeat(3,1fr); gap:.7rem; margin-top:.75rem; }
 .board-switch button { display:grid; grid-template-columns:40px 1fr; gap:.12rem .7rem; padding:1.1rem; border:1px solid var(--line); background:rgba(255,255,255,.72); color:var(--ink); text-align:left; }.board-switch button>span{grid-row:1/3;color:var(--accent);font:700 .7rem var(--mono)}.board-switch strong{font:700 1.15rem var(--display)}.board-switch small{color:var(--ink-soft)}.board-switch button.active{border-color:var(--ink);background:var(--ink);color:#fff}.board-switch button.active small{color:#b9cbc8}
 .team-board { margin-top:2.4rem; }.section-heading,.player-board-head { display:flex; align-items:flex-end; justify-content:space-between; gap:2rem; }.section-heading h2{margin:0;font:800 clamp(2.2rem,5vw,4.5rem)/.9 var(--display);letter-spacing:-.06em}.section-heading>p{max-width:340px;margin:0;color:var(--ink-soft);font-size:.68rem;text-align:right}
@@ -554,5 +529,5 @@ select,input { min-height:43px; padding:.62rem .75rem; border:1px solid var(--li
 .hero-filters{display:grid;grid-template-columns:minmax(180px,.5fr) minmax(240px,1fr);gap:.65rem;margin-top:.7rem;padding:1rem;border:1px solid var(--line);background:rgba(255,255,255,.76)}.hero-filters label{display:grid;gap:.3rem}.player-board-head h3{margin:0;font:700 1.55rem var(--display)}.player-board-head>span{color:var(--ink-soft);font-size:.65rem}.player-row{display:grid;grid-template-columns:30px minmax(180px,1fr) repeat(5,minmax(75px,.35fr));gap:.65rem;align-items:center;padding:.9rem 0;border-top:1px solid var(--line)}.player-row:first-of-type{margin-top:1rem}.player-rank{color:var(--accent);font-weight:700}.player-identity{min-width:0}.player-identity strong,.player-identity small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.player-identity strong{font:700 1rem var(--display)}.player-identity small{margin:.1rem 0 .42rem;color:var(--ink-soft);font-size:.62rem}.player-identity>span{width:min(150px,100%)}.player-stat strong,.player-stat span{display:block}.player-stat strong{font:700 .95rem var(--display)}.player-stat span{color:var(--ink-soft);font-size:.55rem;text-transform:uppercase}.player-stat.primary strong{color:var(--accent-deep);font-size:1.2rem}.formula-note{margin-top:.7rem;padding:1rem 1.2rem;border-left:3px solid var(--accent);background:rgba(255,255,255,.72)}.formula-note strong{font-family:var(--display)}.formula-note p{margin:.35rem 0 0;color:var(--ink-soft);font-size:.68rem;line-height:1.65}.empty-board{padding:2rem 0;color:var(--ink-soft);text-align:center}
 .position-board{margin-top:2.4rem}.position-tabs{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:.45rem;margin-top:1.5rem}.position-tabs button{display:grid;gap:.2rem;padding:1rem;border:1px solid var(--line);background:rgba(255,255,255,.76);color:var(--ink);text-align:left}.position-tabs button.active{border-color:var(--ink);background:var(--ink);color:#fff}.position-tabs strong{font:700 1rem var(--display)}.position-tabs small{color:var(--ink-soft);font-size:.6rem}.position-tabs button.active small{color:#b9cbc8}.position-filters{margin-top:.45rem}.position-player-card{margin-top:.45rem}
 @media(max-width:980px){.rankings-hero{display:grid;gap:2rem}.season-control{min-width:0}.hero-board{grid-template-columns:1fr}.hero-directory{position:static;max-height:none}.directory-head{display:flex;align-items:center;justify-content:space-between}.directory-toggle{display:block;padding:.6rem .75rem;border:1px solid var(--line);background:#fff;color:var(--ink)}.hero-search{display:none}.hero-list{display:none;grid-template-columns:repeat(3,1fr);margin-top:.8rem}.hero-list.open{display:grid}.player-row{grid-template-columns:28px minmax(160px,1fr) repeat(3,minmax(72px,.35fr))}.player-stat:nth-last-child(-n+2){display:none}}
-@media(max-width:680px){.rankings-page{width:min(100% - 1rem,640px);padding-top:.6rem}.rankings-hero{padding:1.5rem}.method-strip{display:none}.board-switch{grid-template-columns:repeat(3,minmax(0,1fr));gap:.35rem}.board-switch button{display:flex;min-height:44px;align-items:center;justify-content:center;padding:.5rem .4rem;text-align:center}.board-switch button>span,.board-switch button>small{display:none}.board-switch strong{font-size:.68rem;white-space:nowrap}.podium{grid-template-columns:repeat(3,minmax(0,1fr));gap:.35rem}.podium article{min-height:0;padding:.7rem}.podium article::after{width:90px;height:90px;right:-42px;bottom:-45px}.podium .team-monogram{width:34px;height:34px;margin-top:.7rem;font-size:.62rem}.podium h3{margin:.65rem 0 .3rem;font-size:.9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.podium article>strong{font-size:1.4rem}.podium article>small{display:block;margin:.2rem 0 0;font-size:.58rem}.hero-list.open{grid-template-columns:1fr}.hero-banner{align-items:flex-start}.hero-portrait{width:66px;height:66px}.hero-filters{display:none}.position-tabs{grid-template-columns:repeat(3,minmax(0,1fr));margin-top:1rem}.position-tabs button{padding:.7rem}.player-row{grid-template-columns:25px minmax(130px,1fr) 70px 75px}.player-stat:nth-of-type(n+5){display:none}.player-stat.confidence{display:none}.section-heading,.player-board-head{align-items:flex-start;flex-direction:column;gap:.5rem}.section-heading>p{text-align:left}}
+@media(max-width:680px){.rankings-page{width:min(100% - 1rem,640px);padding-top:.6rem}.rankings-hero{padding:1.5rem}.board-switch{grid-template-columns:repeat(3,minmax(0,1fr));gap:.35rem}.board-switch button{display:flex;min-height:44px;align-items:center;justify-content:center;padding:.5rem .4rem;text-align:center}.board-switch button>span,.board-switch button>small{display:none}.board-switch strong{font-size:.68rem;white-space:nowrap}.podium{grid-template-columns:repeat(3,minmax(0,1fr));gap:.35rem}.podium article{min-height:0;padding:.7rem}.podium article::after{width:90px;height:90px;right:-42px;bottom:-45px}.podium .team-monogram{width:34px;height:34px;margin-top:.7rem;font-size:.62rem}.podium h3{margin:.65rem 0 .3rem;font-size:.9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.podium article>strong{font-size:1.4rem}.podium article>small{display:block;margin:.2rem 0 0;font-size:.58rem}.hero-list.open{grid-template-columns:1fr}.hero-banner{align-items:flex-start}.hero-portrait{width:66px;height:66px}.hero-filters{display:none}.position-tabs{grid-template-columns:repeat(3,minmax(0,1fr));margin-top:1rem}.position-tabs button{padding:.7rem}.player-row{grid-template-columns:25px minmax(130px,1fr) 70px 75px}.player-stat:nth-of-type(n+5){display:none}.player-stat.confidence{display:none}.section-heading,.player-board-head{align-items:flex-start;flex-direction:column;gap:.5rem}.section-heading>p{text-align:left}}
 </style>
