@@ -112,7 +112,7 @@ onBeforeUnmount(() => {
       <p class="eyebrow">方法说明</p>
       <h1>BP 下一手预测：统计关系与 GRU 模型</h1>
       <p>
-        本页说明网站目前使用的 BP 预测方法。线上预测使用的是 Bag + GRU 模型：Bag 分支判断当前局面，GRU 分支补充严格的 BP 顺序信息。
+        本页说明网站目前使用的 BP 预测方法。线上预测使用的是 Bag + GRU 模型：Bag 分支判断当前局面，GRU 分支补充严格的 BP 顺序信息；在 BO 系列赛中，模型还会参考此前小局双方已经使用过的英雄。
       </p>
       <p v-if="model?.sequenceModel?.available" class="model-note">
         当前线上模型：{{ model.sequenceModel.name }}；隐藏维度 {{ model.sequenceModel.hiddenDim }}；残差系数 α = {{ Number(model.sequenceModel.residualAlpha).toFixed(4) }}。
@@ -279,7 +279,7 @@ onBeforeUnmount(() => {
           <p>最后，Bag 分支结合“下一步是什么动作”生成预测 query：</p>
 
           <pre>q_bag = tanh(W_b p_bag + b_b + c)</pre>
-          <pre>c = E_next_action + E_next_side + E_next_position + E_team_slot + E_acting_team + E_opponent_team</pre>
+          <pre>c = E_next_action + E_next_side + E_next_position + E_team_slot + E_acting_team + E_opponent_team + S_own + S_opponent</pre>
 
           <ul>
             <li><code>q_bag</code>：Bag 分支用来给候选英雄打分的 48 维查询向量。</li>
@@ -292,6 +292,7 @@ onBeforeUnmount(() => {
             <li><code>E_team_slot</code>：该队伍第几次执行这一类动作，例如“红方第 2 次 Pick”。</li>
             <li><code>E_acting_team</code>：当前执行操作的战队 embedding。</li>
             <li><code>E_opponent_team</code>：对手战队 embedding。</li>
+            <li><code>S_own</code>、<code>S_opponent</code>：同一系列赛此前小局中，当前队伍和对手已使用英雄的聚合表示。首局或单局预测中，这两项为零。</li>
           </ul>
 
           <p>
@@ -326,6 +327,18 @@ onBeforeUnmount(() => {
 
           <p>
             因此，“对方先 Pick A，两手后我方 Pick B”和“对方先 Pick C，再 Pick A，最后我方 Pick B”会产生不同的 <code>h_L</code>。GRU 能学习到 B 是紧接着对 A 的回应，还是在另一套阵容条件下出现的选择。
+          </p>
+
+          <h3>3.1 系列赛上下文</h3>
+          <p>
+            一场 BO 并不是完全独立的多局比赛。前一局已经出现过的英雄，常常会影响下一局的优先级、处理方式和可选阵容。为此，当前模型会分别收集双方在本系列此前完成的小局中使用过的英雄，并把两组集合编码为额外上下文。
+          </p>
+
+          <pre>S_own = (Σ E_prev_own(hero)) / √max(n_own, 1)</pre>
+          <pre>S_opponent = (Σ E_prev_opponent(hero)) / √max(n_opponent, 1)</pre>
+
+          <p>
+            两组表示会加入 Bag 和 GRU 的下一手 query。它们不替代当前局的 Ban/Pick 历史，而是回答一个更具体的问题：在双方已经展示过这些英雄后，这一局接下来更可能如何延续或变化。当前局没有前序小局时，模型会自然退化为原来的单局预测方式。
           </p>
         </section>
 
@@ -380,7 +393,7 @@ onBeforeUnmount(() => {
           </ul>
 
           <p>
-            当前导出的模型中，<code>α ≈ 0.2265</code>。这表示 Bag 仍然是主要判断来源，而 GRU 会以较小但明确的幅度调整排序。这样做是因为历史 BP 数据规模有限：顺序信息有价值，但不应让高方差的顺序分支取代稳定的局面基线。
+            <code>α</code> 由训练过程自动学习，而不是预先固定。它让模型根据数据决定顺序信息应当以多大幅度修正稳定的 Bag 基线：顺序信息有价值，但不应在样本有限时完全取代对当前局面的整体判断。
           </p>
         </section>
 
@@ -399,11 +412,15 @@ onBeforeUnmount(() => {
           </ul>
 
           <p>
-            当前模型使用 37,121 个训练决策、800 个验证决策和 899 个留出测试决策。留出测试的 Top-1 为 22.91%，Top-5 为 56.73%。Top-5 的意思是：在类似的历史局面中，真实下一手英雄有约 56.73% 的概率出现在模型给出的前五个候选内。
+            当前模型先在按时间划分的数据上选择训练轮数：最近 10 场作为验证集，再之后的 10 场作为留出测试集。加入系列赛上下文后，899 个留出测试决策上的 Top-1 为 24.69%，Top-5 为 58.18%，负对数损失为 2.8295。相比未加入系列赛上下文的同一模型，Top-1 从 22.91% 提升到 24.69%，Top-5 从 56.73% 提升到 58.18%。
           </p>
 
           <p>
-            与网站原先的非顺序方法在滚动历史评估上的比较为：Top-1 从 21.81% 提升到 22.84%，Top-5 从 52.81% 提升到 56.19%，负对数损失从 3.0735 降至 2.9017。
+            留出测试并不参与梯度训练，也不用于挑选最终轮数；它只用于记录这次改动在未见比赛上的表现。完成评估后，线上发布的模型会使用同一套已确定的参数，在当前五个赛季窗口内全部 38,820 个可用决策上重新训练。这样既保留一份可比较的离线结果，也让线上模型学习到最新比赛的完整信息。
+          </p>
+
+          <p>
+            结果并不表示每个 BP 阶段都同样容易。开局 Ban 和首抢的留出 Top-1 为 47.11%，而第二轮 Ban 为 11.48%。后者仍是目前最不稳定的阶段：候选空间较大，且它更容易受到阵容、版本和临场策略变化影响。因此页面展示的是条件概率和排序，不把单次预测解释为确定的赛场结论。
           </p>
 
           <span id="rankings" aria-hidden="true"></span>
