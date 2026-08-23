@@ -247,3 +247,25 @@ class VisitorDailyPage(Base):
     day: Mapped[date] = mapped_column(Date, index=True)
     page_path: Mapped[str] = mapped_column(String(120))
     page_views: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class LiveMatchWinnerPrediction(Base):
+    """One anonymous visitor prediction for a followed live game."""
+
+    __tablename__ = "live_match_winner_predictions"
+    __table_args__ = (
+        UniqueConstraint(
+            "match_id", "game_number", "visitor_hash",
+            name="uk_live_match_winner_prediction_visitor",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    league_id: Mapped[str] = mapped_column(String(32), index=True)
+    match_id: Mapped[str] = mapped_column(String(32), index=True)
+    game_number: Mapped[int] = mapped_column(Integer, index=True)
+    visitor_hash: Mapped[str] = mapped_column(String(64), index=True)
+    winner_team_id: Mapped[str] = mapped_column(String(32), index=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )

@@ -3,7 +3,9 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import {
   fetchDraftModel,
   fetchLiveMatch,
+  fetchLiveWinnerPredictions,
   refreshLiveMatch as requestLiveMatchRefresh,
+  saveLiveWinnerPrediction,
   fetchSelectionCommentary,
   fetchSeasonTeams,
   fetchUpcomingMatch,
@@ -65,6 +67,11 @@ const pickerTarget = ref("draft");
 const coachOpen = ref(false);
 const usedHeroesModalSide = ref(null);
 const liveFollowStorageKey = "kpl-live-match-following";
+const livePredictionStorageKey = "kpl-live-winner-predictions";
+const liveWinnerPredictions = ref(null);
+const liveWinnerPredictionLoading = ref(false);
+const liveWinnerPredictionSaving = ref(false);
+const liveWinnerPredictionSelections = ref({});
 
 function bpT(key) {
   return messages["zh-CN"][key] || key;
@@ -233,6 +240,19 @@ const liveRefreshNotice = computed(() => {
   return seconds > 0
     ? `当前展示的是官方缓存数据，${seconds} 秒后可手动刷新。`
     : "当前展示的是最新的官方缓存数据。";
+});
+const livePredictionGame = computed(() => {
+  const game = Number(liveMatch.value?.current_game || seriesGame.value);
+  return Number.isInteger(game) && game > 0 ? game : null;
+});
+const livePredictionMatchId = computed(() =>
+  String(liveMatch.value?.match?.match_id || upcomingMatch.value?.match_id || "")
+);
+const livePredictionVotes = computed(() => liveWinnerPredictions.value?.votes_by_team || {});
+const livePredictionTotal = computed(() => Number(liveWinnerPredictions.value?.total_votes || 0));
+const selectedWinnerPrediction = computed(() => {
+  const key = `${livePredictionMatchId.value}:${livePredictionGame.value}`;
+  return liveWinnerPredictionSelections.value[key] || readLiveWinnerPredictions()[key] || null;
 });
 
 const upcomingMatchLabel = computed(() => {
@@ -432,6 +452,89 @@ function saveLiveFollowPreference(source) {
 
 function clearLiveFollowPreference() {
   window.localStorage.removeItem(liveFollowStorageKey);
+}
+
+function readLiveWinnerPredictions() {
+  try {
+    const value = JSON.parse(window.localStorage.getItem(livePredictionStorageKey) || "{}");
+    return value && typeof value === "object" ? value : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveLocalWinnerPrediction(teamId) {
+  const matchId = livePredictionMatchId.value;
+  const game = livePredictionGame.value;
+  if (!matchId || !game) return;
+  const predictions = readLiveWinnerPredictions();
+  predictions[`${matchId}:${game}`] = String(teamId);
+  window.localStorage.setItem(livePredictionStorageKey, JSON.stringify(predictions));
+  liveWinnerPredictionSelections.value = predictions;
+}
+
+function anonymousVisitorId() {
+  const key = "draft-atlas-visitor-id";
+  try {
+    const stored = window.localStorage.getItem(key);
+    if (stored) return stored;
+    const id = window.crypto.randomUUID();
+    window.localStorage.setItem(key, id);
+    return id;
+  } catch {
+    return window.crypto.randomUUID();
+  }
+}
+
+async function loadLiveWinnerPredictions() {
+  const matchId = livePredictionMatchId.value;
+  const game = livePredictionGame.value;
+  if (!liveFollowing.value || !leagueId.value || !matchId || !game) {
+    liveWinnerPredictions.value = null;
+    return;
+  }
+  liveWinnerPredictionLoading.value = true;
+  try {
+    liveWinnerPredictions.value = await fetchLiveWinnerPredictions({
+      leagueId: leagueId.value,
+      matchId,
+      gameNumber: game,
+    });
+  } catch {
+    // Prediction totals are supplementary; keep the live simulator usable.
+  } finally {
+    liveWinnerPredictionLoading.value = false;
+  }
+}
+
+async function chooseLiveWinnerPrediction(teamId) {
+  const matchId = livePredictionMatchId.value;
+  const game = livePredictionGame.value;
+  if (
+    !liveFollowing.value ||
+    !matchId ||
+    !game ||
+    selectedWinnerPrediction.value ||
+    liveWinnerPredictionSaving.value
+  ) return;
+  liveWinnerPredictionSaving.value = true;
+  try {
+    const response = await saveLiveWinnerPrediction({
+      leagueId: leagueId.value,
+      visitorId: anonymousVisitorId(),
+      matchId,
+      gameNumber: game,
+      teamAId: String(selectedTeamIds.value[TEAM_A]),
+      teamBId: String(selectedTeamIds.value[TEAM_B]),
+      winnerTeamId: String(teamId),
+    });
+    liveWinnerPredictions.value = response;
+    saveLocalWinnerPrediction(response.your_winner_team_id || teamId);
+  } catch (err) {
+    error.value = err.message || "Could not save your winner prediction.";
+  } finally {
+    liveWinnerPredictionSaving.value = false;
+  }
 }
 
 function shouldRestoreLiveFollow(state) {
@@ -653,6 +756,7 @@ async function refreshLiveMatch(manual = false) {
       startLiveMatchPolling();
       return;
     }
+    await loadLiveWinnerPredictions();
     const gameSignature = completedGameSignature(state);
     if (gameSignature !== liveAppliedGameSignature.value) {
       // Only a newly completed official battle replaces the temporary local BP
@@ -680,6 +784,7 @@ async function followLiveMatch({ persist = true } = {}) {
     await applyLiveMatchState(liveMatch.value);
     liveAppliedGameSignature.value = completedGameSignature(liveMatch.value);
   }
+  await loadLiveWinnerPredictions();
   scheduleLiveMatchCheck();
 }
 
@@ -687,6 +792,7 @@ function stopFollowingLiveMatch({ forget = true } = {}) {
   liveFollowing.value = false;
   liveFollowFinished.value = false;
   liveAppliedGameSignature.value = "";
+  liveWinnerPredictions.value = null;
   if (forget) clearLiveFollowPreference();
 }
 
@@ -1095,6 +1201,28 @@ onBeforeUnmount(() => {
             <button type="button" class="quiet" @click="stopFollowingLiveMatch">停止跟随</button>
           </div>
         </aside>
+        <aside v-if="liveFollowing && livePredictionGame" class="live-winner-prediction" aria-live="polite">
+          <div>
+            <p class="simulator-eyebrow">观众胜负预测</p>
+            <strong>你认为第 {{ livePredictionGame }} 局谁会赢？</strong>
+            <small v-if="liveWinnerPredictionLoading">正在加载大家的预测…</small>
+            <small v-else-if="selectedWinnerPrediction">你已提交预测；已有 {{ livePredictionTotal }} 人参与。</small>
+            <small v-else>已有 {{ livePredictionTotal }} 人参与；提交后无法修改。</small>
+          </div>
+          <div class="live-winner-choices">
+            <button
+              v-for="team in [selectedTeam(TEAM_A), selectedTeam(TEAM_B)]"
+              :key="team.team_id"
+              type="button"
+              :class="{ active: selectedWinnerPrediction === String(team.team_id) }"
+              :disabled="liveWinnerPredictionSaving || Boolean(selectedWinnerPrediction)"
+              @click="chooseLiveWinnerPrediction(team.team_id)"
+            >
+              {{ team.team_name }} 胜
+              <small>{{ livePredictionVotes[String(team.team_id)] || 0 }} 票</small>
+            </button>
+          </div>
+        </aside>
         <p v-if="!teamsReady" class="team-required">
           搜索并选择本赛季两支战队，以开始模拟并为教练提供蓝红方上下文。
         </p>
@@ -1408,6 +1536,7 @@ onBeforeUnmount(() => {
 .team-required { grid-column:1 / -1; margin:0; padding:.65rem .75rem; border:1px solid #d9b663; background:#fff8e7; color:var(--ink-soft); font-size:.68rem; }
 .upcoming-match-note { grid-column:1 / -1; margin:0; padding:.65rem .75rem; border-left:3px solid var(--accent); background:#edf8f3; color:var(--accent-deep); font-size:.68rem; line-height:1.45; }
 .live-match-panel { grid-column:1 / -1; display:flex; align-items:center; justify-content:space-between; gap:1rem; margin:0; padding:.75rem; border:1px solid #d9b663; background:#fff8e7; }.live-match-panel.active { border-color:var(--accent-deep); background:#edf8f3; }.live-match-panel strong { display:block; margin:.1rem 0; font:700 .8rem var(--mono); }.live-match-panel small { display:block; max-width:48rem; color:var(--ink-soft); font-size:.62rem; line-height:1.45; }.live-match-panel .live-refresh-note { margin-top:.25rem; color:var(--accent-deep); }.live-match-panel > div:last-child { display:flex; flex-wrap:wrap; gap:.35rem; }.live-match-panel button { min-height:32px; padding:.4rem .55rem; border:1px solid var(--accent-deep); background:var(--accent-deep); color:#fff; font:700 .61rem var(--mono); cursor:pointer; white-space:nowrap; }.live-match-panel button.quiet { border-color:var(--line); background:#fff; color:var(--ink-soft); }.live-match-panel button:disabled { cursor:not-allowed; opacity:.55; }
+.live-winner-prediction { grid-column:1 / -1; display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:.75rem; border:1px solid #9ab9cd; background:#f3f9fd; }.live-winner-prediction strong { display:block; margin:.1rem 0; font:700 .8rem var(--mono); }.live-winner-prediction small { display:block; color:var(--ink-soft); font-size:.62rem; line-height:1.45; }.live-winner-choices { display:flex; flex-wrap:wrap; gap:.4rem; }.live-winner-choices button { display:grid; gap:.1rem; min-width:7.5rem; min-height:38px; padding:.4rem .6rem; border:1px solid #9ab9cd; background:#fff; color:var(--ink); font:700 .64rem var(--mono); cursor:pointer; }.live-winner-choices button.active { border-color:var(--accent-deep); background:var(--ink); color:#fff; }.live-winner-choices button.active small { color:#fff; }.live-winner-choices button:disabled { cursor:not-allowed; opacity:.6; }
 .simulator-workspace { display:grid; grid-template-columns:minmax(0, 1fr) minmax(340px, 390px); gap:.85rem; align-items:start; margin-top:.75rem; }.simulator-main-column { min-width:0; }.coach-rail { position:sticky; top:1rem; min-width:0; }.simulator-layout { align-items: stretch; margin-top:0; gap:.75rem; }.draft-board { display: grid; flex: 1; min-width:0; grid-template-columns: repeat(2, minmax(0,1fr)); gap: .75rem; }
 .mobile-group-title { display:none; }
 .mobile-coach-toggle,.mobile-coach-close,.coach-scrim{display:none}

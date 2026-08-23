@@ -28,6 +28,28 @@ class VisitorTrackRequest(BaseModel):
     page_path: str = Field(min_length=1, max_length=120, pattern=r"^/[^?#]*$")
 
 
+class LiveWinnerPredictionRequest(BaseModel):
+    """A browser's final prediction for one currently followed game."""
+
+    model_config = {"extra": "forbid"}
+
+    visitor_id: UUID
+    match_id: str = Field(min_length=1, max_length=32)
+    # Zero denotes a pre-match series-winner prediction; 1–7 are individual games.
+    game_number: int = Field(ge=0, le=7)
+    team_a_id: str = Field(min_length=1, max_length=32)
+    team_b_id: str = Field(min_length=1, max_length=32)
+    winner_team_id: str = Field(min_length=1, max_length=32)
+
+    @model_validator(mode="after")
+    def validate_winner_is_in_match(self) -> "LiveWinnerPredictionRequest":
+        if self.team_a_id == self.team_b_id:
+            raise ValueError("A prediction requires two different teams")
+        if self.winner_team_id not in {self.team_a_id, self.team_b_id}:
+            raise ValueError("The predicted winner must be one of the match teams")
+        return self
+
+
 class LeagueOut(BaseModel):
     league_id: str
     league_name: str

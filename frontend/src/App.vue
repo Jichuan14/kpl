@@ -6,9 +6,11 @@ const TeamSynergyPage = defineAsyncComponent(() => import("./TeamSynergyPage.vue
 const VisualizationPage = defineAsyncComponent(() => import("./VisualizationPage.vue"));
 const HeroFeatureSpacePage = defineAsyncComponent(() => import("./HeroFeatureSpacePage.vue"));
 const RankingsPage = defineAsyncComponent(() => import("./RankingsPage.vue"));
+const DailyPredictionsModal = defineAsyncComponent(() => import("./DailyPredictionsModal.vue"));
 import {
   fetchDataStatus,
   fetchCoachUsage,
+  fetchDailyMatches,
   fetchVisitorStats,
   fetchVisualizationSeasons,
   updateCoachLimits,
@@ -45,6 +47,10 @@ const apiConnected = ref(false);
 const rightsContactEmail = "jichuan1625@gmail.com";
 const firstVisitKey = "draft-atlas-notice-seen";
 const visitorIdKey = "draft-atlas-visitor-id";
+const dailyPredictionSeenKey = "kpl-daily-prediction-popup-seen";
+const dailyMatches = ref([]);
+const dailyMatchesDate = ref("");
+const showDailyPredictions = ref(false);
 const showProjectNotice = ref(
   window.localStorage.getItem(firstVisitKey) !== "true"
 );
@@ -214,6 +220,28 @@ function trackCurrentPublicPage() {
   }).catch(() => {
     // Tracking should never interrupt the public experience.
   });
+}
+
+async function loadDailyPredictions() {
+  try {
+    const payload = await fetchDailyMatches();
+    const date = String(payload?.date || "");
+    const matches = payload?.matches || [];
+    dailyMatchesDate.value = date;
+    dailyMatches.value = matches;
+    if (date && matches.length && window.localStorage.getItem(dailyPredictionSeenKey) !== date) {
+      showDailyPredictions.value = true;
+    }
+  } catch {
+    // The optional welcome popup stays hidden when scheduled fixtures are unavailable.
+  }
+}
+
+function dismissDailyPredictions() {
+  if (dailyMatchesDate.value) {
+    window.localStorage.setItem(dailyPredictionSeenKey, dailyMatchesDate.value);
+  }
+  showDailyPredictions.value = false;
 }
 
 async function saveCoachLimits() {
@@ -467,6 +495,7 @@ function handlePopState() {
     stopCoachUsageMonitor();
     stopVisitorAnalyticsMonitor();
     trackCurrentPublicPage();
+    loadDailyPredictions();
   }
 }
 
@@ -503,6 +532,7 @@ onMounted(() => {
     startVisitorAnalyticsMonitor();
   } else {
     trackCurrentPublicPage();
+    loadDailyPredictions();
   }
   startupFallbackTimer = window.setTimeout(finishStartupLoading, 12000);
 });
@@ -550,6 +580,14 @@ watch(selectedYear, () => {
       </div>
     </section>
   </Transition>
+
+  <DailyPredictionsModal
+    v-if="showDailyPredictions"
+    :date="dailyMatchesDate"
+    :matches="dailyMatches"
+    :visitor-id="anonymousVisitorId()"
+    @close="dismissDailyPredictions"
+  />
 
   <nav class="site-navigation">
     <a class="site-brand" href="/" @click.prevent="navigate('/')">
