@@ -76,6 +76,10 @@ export function fetchUpcomingMatch(leagueId, { nextOnly = false } = {}) {
   return request(`/api/leagues/${encodeURIComponent(leagueId)}/upcoming-match${query}`);
 }
 
+export function fetchDailyMatches() {
+  return request("/api/leagues/daily-matches");
+}
+
 export function fetchLiveMatch({ leagueId, teamAId, teamBId, matchId }) {
   const params = new URLSearchParams({ team_a_id: teamAId, team_b_id: teamBId, match_id: matchId });
   return request(`/api/leagues/${encodeURIComponent(leagueId)}/live-match?${params}`);
@@ -85,6 +89,25 @@ export function refreshLiveMatch({ leagueId, teamAId, teamBId, matchId }) {
   const params = new URLSearchParams({ team_a_id: teamAId, team_b_id: teamBId, match_id: matchId });
   return request(`/api/leagues/${encodeURIComponent(leagueId)}/live-match/refresh?${params}`, {
     method: "POST",
+  });
+}
+
+export function fetchLiveWinnerPredictions({ leagueId, matchId, gameNumber }) {
+  const params = new URLSearchParams({ match_id: matchId, game_number: String(gameNumber) });
+  return request(`/api/leagues/${encodeURIComponent(leagueId)}/live-match/predictions?${params}`);
+}
+
+export function saveLiveWinnerPrediction({ leagueId, visitorId, matchId, gameNumber, teamAId, teamBId, winnerTeamId }) {
+  return request(`/api/leagues/${encodeURIComponent(leagueId)}/live-match/predictions`, {
+    method: "POST",
+    body: JSON.stringify({
+      visitor_id: visitorId,
+      match_id: matchId,
+      game_number: gameNumber,
+      team_a_id: teamAId,
+      team_b_id: teamBId,
+      winner_team_id: winnerTeamId,
+    }),
   });
 }
 
