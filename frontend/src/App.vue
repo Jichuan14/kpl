@@ -7,6 +7,7 @@ const VisualizationPage = defineAsyncComponent(() => import("./VisualizationPage
 const HeroFeatureSpacePage = defineAsyncComponent(() => import("./HeroFeatureSpacePage.vue"));
 const RankingsPage = defineAsyncComponent(() => import("./RankingsPage.vue"));
 const DailyPredictionsModal = defineAsyncComponent(() => import("./DailyPredictionsModal.vue"));
+const DailyMatchesWidget = defineAsyncComponent(() => import("./DailyMatchesWidget.vue"));
 import {
   fetchDataStatus,
   fetchCoachUsage,
@@ -51,6 +52,7 @@ const dailyPredictionSeenKey = "kpl-daily-prediction-popup-seen";
 const dailyMatches = ref([]);
 const dailyMatchesDate = ref("");
 const showDailyPredictions = ref(false);
+const predictionRefresh = ref(0);
 const showProjectNotice = ref(
   window.localStorage.getItem(firstVisitKey) !== "true"
 );
@@ -242,6 +244,13 @@ function dismissDailyPredictions() {
     window.localStorage.setItem(dailyPredictionSeenKey, dailyMatchesDate.value);
   }
   showDailyPredictions.value = false;
+  predictionRefresh.value += 1;
+}
+
+function openMatchPrediction({ date, matches }) {
+  dailyMatchesDate.value = date;
+  dailyMatches.value = matches;
+  showDailyPredictions.value = true;
 }
 
 async function saveCoachLimits() {
@@ -588,12 +597,16 @@ watch(selectedYear, () => {
     :visitor-id="anonymousVisitorId()"
     @close="dismissDailyPredictions"
   />
-
   <nav class="site-navigation">
     <a class="site-brand" href="/" @click.prevent="navigate('/')">
       <img src="/assets/brand/draft-atlas-icon.png" alt="" aria-hidden="true" />
       <span class="site-brand-name">Draft <b>Atlas</b></span>
     </a>
+    <DailyMatchesWidget
+      v-if="!isManagement"
+      :prediction-refresh="predictionRefresh"
+      @predict="openMatchPrediction"
+    />
     <div class="navigation-links">
       <div class="primary-tabs" aria-label="Analysis views">
         <a

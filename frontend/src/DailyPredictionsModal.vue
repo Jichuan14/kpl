@@ -16,15 +16,24 @@ const totals = ref({});
 const saving = ref({});
 const sharing = ref("");
 const shareNotice = ref("");
-const storageKey = `kpl-daily-series-predictions:${props.date}`;
+const storageKey = "kpl-series-winner-predictions";
 const predictedMatches = computed(() =>
   props.matches.filter((match) => selections.value[match.match_id])
 );
 
 function savedSelections() {
   try {
-    const value = JSON.parse(window.localStorage.getItem(storageKey) || "{}");
-    return value && typeof value === "object" ? value : {};
+    const saved = JSON.parse(window.localStorage.getItem(storageKey) || "{}");
+    const legacy = {};
+    for (let index = 0; index < window.localStorage.length; index += 1) {
+      const key = window.localStorage.key(index);
+      if (!key?.startsWith("kpl-daily-series-predictions:")) continue;
+      Object.assign(legacy, JSON.parse(window.localStorage.getItem(key) || "{}"));
+    }
+    return {
+      ...(legacy && typeof legacy === "object" ? legacy : {}),
+      ...(saved && typeof saved === "object" ? saved : {}),
+    };
   } catch {
     return {};
   }

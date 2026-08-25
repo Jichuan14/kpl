@@ -1,5 +1,5 @@
 from hashlib import sha256
-from datetime import datetime
+from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -22,9 +22,16 @@ live_match_service = LiveMatchService()
 
 
 @router.get("/daily-matches")
-def daily_matches(db: Session = Depends(get_db)) -> ApiResponse:
-    """Return every locally scheduled KPL fixture for the current China day."""
-    china_day = datetime.now(ZoneInfo("Asia/Shanghai")).strftime("%Y-%m-%d")
+def daily_matches(
+    match_date: date | None = Query(default=None),
+    db: Session = Depends(get_db),
+) -> ApiResponse:
+    """Return every locally scheduled KPL fixture for a China-calendar day."""
+    china_day = (
+        match_date.isoformat()
+        if match_date is not None
+        else datetime.now(ZoneInfo("Asia/Shanghai")).strftime("%Y-%m-%d")
+    )
     rows = db.execute(
         select(Match, League.league_name)
         .outerjoin(League, League.league_id == Match.league_id)

@@ -76,8 +76,9 @@ export function fetchUpcomingMatch(leagueId, { nextOnly = false } = {}) {
   return request(`/api/leagues/${encodeURIComponent(leagueId)}/upcoming-match${query}`);
 }
 
-export function fetchDailyMatches() {
-  return request("/api/leagues/daily-matches");
+export function fetchDailyMatches({ date } = {}) {
+  const query = date ? `?match_date=${encodeURIComponent(date)}` : "";
+  return request(`/api/leagues/daily-matches${query}`);
 }
 
 export function fetchLiveMatch({ leagueId, teamAId, teamBId, matchId }) {
