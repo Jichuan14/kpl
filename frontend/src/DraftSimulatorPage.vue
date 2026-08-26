@@ -71,6 +71,7 @@ const nextBlueTeam = ref(null);
 const pickerTarget = ref("draft");
 const coachOpen = ref(false);
 const usedHeroesModalSide = ref(null);
+const draftBoardElement = ref(null);
 const liveFollowStorageKey = "kpl-live-match-following";
 const livePredictionStorageKey = "kpl-live-winner-predictions";
 const liveWinnerPredictions = ref(null);
@@ -1126,6 +1127,85 @@ function removeHero(field, heroId) {
   if (eventIndex === history.value.length - 1) undo();
 }
 
+const mobileBoardResistance = {
+  boardTop: null,
+  startScrollY: 0,
+  startTouchY: 0,
+  wheelRemaining: 0,
+  wheelTime: 0,
+};
+
+function startMobileBoardSwipe(event) {
+  if (
+    event.touches.length !== 1 ||
+    !window.matchMedia("(max-width: 620px)").matches ||
+    !draftBoardElement.value
+  ) return;
+
+  const boardRect = draftBoardElement.value.getBoundingClientRect();
+  const startedOnBoard = draftBoardElement.value.contains(event.target);
+  mobileBoardResistance.startTouchY = event.touches[0].clientY;
+  mobileBoardResistance.startScrollY = window.scrollY;
+  mobileBoardResistance.boardTop =
+    boardRect.top > 1
+      ? window.scrollY + boardRect.top
+      : startedOnBoard
+        ? window.scrollY
+        : null;
+}
+
+function resistMobileBoardSwipe(event) {
+  if (mobileBoardResistance.boardTop === null || event.touches.length !== 1) return;
+
+  const swipeDistance =
+    mobileBoardResistance.startTouchY - event.touches[0].clientY;
+  const intendedScrollY =
+    mobileBoardResistance.startScrollY + swipeDistance;
+  const distancePastBoard =
+    intendedScrollY - mobileBoardResistance.boardTop;
+
+  if (swipeDistance <= 0 || distancePastBoard <= 0) return;
+
+  const resistanceDistance = 96;
+  const resistanceRatio = 0.18;
+  const resistedDistance =
+    distancePastBoard <= resistanceDistance
+      ? distancePastBoard * resistanceRatio
+      : distancePastBoard -
+        resistanceDistance +
+        resistanceDistance * resistanceRatio;
+
+  if (event.cancelable) event.preventDefault();
+  window.scrollTo(0, mobileBoardResistance.boardTop + resistedDistance);
+}
+
+function endMobileBoardSwipe() {
+  mobileBoardResistance.boardTop = null;
+}
+
+function resistMobileBoardWheel(event) {
+  if (
+    event.deltaY <= 0 ||
+    !window.matchMedia("(max-width: 620px)").matches
+  ) return;
+
+  const now = performance.now();
+  if (now - mobileBoardResistance.wheelTime > 180) {
+    mobileBoardResistance.wheelRemaining = 96;
+  }
+  mobileBoardResistance.wheelTime = now;
+
+  const resistedAmount = Math.min(
+    event.deltaY,
+    mobileBoardResistance.wheelRemaining
+  );
+  if (resistedAmount <= 0) return;
+
+  mobileBoardResistance.wheelRemaining -= resistedAmount;
+  if (event.cancelable) event.preventDefault();
+  window.scrollBy(0, event.deltaY - resistedAmount + resistedAmount * 0.18);
+}
+
 onMounted(async () => {
   try {
     await loadSeasons();
@@ -1166,7 +1246,13 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <main class="simulator-page">
+  <main
+    class="simulator-page"
+    @touchstart="startMobileBoardSwipe"
+    @touchmove="resistMobileBoardSwipe"
+    @touchend="endMobileBoardSwipe"
+    @touchcancel="endMobileBoardSwipe"
+  >
     <header class="simulator-hero">
       <div>
         <p class="simulator-eyebrow">交互式模型</p>
@@ -1447,7 +1533,11 @@ onBeforeUnmount(() => {
       <div class="simulator-workspace">
         <div class="simulator-main-column">
           <section class="simulator-layout">
-            <div class="draft-board">
+            <div
+              ref="draftBoardElement"
+              class="draft-board"
+              @wheel="resistMobileBoardWheel"
+            >
               <section
                 v-for="group in boardGroups"
                 :key="group.key"
@@ -1691,6 +1781,7 @@ onBeforeUnmount(() => {
 @media (max-width:620px) {
   .settings-menu { left:0; right:auto; width:min(19rem, calc(100vw - 1rem)); }
   .forecast-panel { display:none; }
+  .simulator-layout { display:contents; }
   .recommendation-panel > header { align-items:stretch; flex-direction:column; }.recommendation-status { align-self:flex-start; }.recommendation-list dl { grid-template-columns:1fr 1fr; }
   .global-used > .used-team { display:none; }
   .mobile-used-hero-buttons { display:grid; grid-template-columns:1fr 1fr; grid-column:1 / -1; gap:.45rem; }
@@ -1713,13 +1804,17 @@ onBeforeUnmount(() => {
   .global-team-row { grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:.35rem; min-width:0; }
   .global-team-row :deep(.team-combobox) { min-width:0; }
   .draft-board {
+    position:sticky;
+    z-index:20;
+    top:0;
     grid-template-columns:repeat(2, minmax(0, 1fr));
     grid-template-areas:"blue-bans red-bans" "blue-picks red-picks";
     gap:1px;
     border:1px solid var(--line);
     background:var(--line);
+    box-shadow:0 2px 8px rgba(16,42,46,.1);
   }
-  .draft-group { min-height:0; padding:.55rem; border:0; background:rgba(255,255,255,.82); }
+  .draft-group { min-height:0; padding:.55rem; border:0; background:#fff; }
   .draft-group.blue_bans { grid-area:blue-bans; }
   .draft-group.red_bans { grid-area:red-bans; }
   .draft-group.blue_picks { grid-area:blue-picks; }
