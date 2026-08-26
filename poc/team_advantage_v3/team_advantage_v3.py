@@ -363,10 +363,57 @@ def parameter_candidates(trials: int, seed: int) -> list[dict[str, float]]:
     return selected[:trials]
 
 
+def battles_through_league(
+    battles: Sequence[Any], target_league_id: str
+) -> tuple[list[Any], list[str]]:
+    """Exclude seasons after the requested management-pipeline season."""
+    chronological_leagues = list(
+        dict.fromkeys(battle.league_id for battle in battles)
+    )
+    if target_league_id not in chronological_leagues:
+        raise ValueError(
+            f"Target league {target_league_id!r} has no completed battles"
+        )
+    target_index = chronological_leagues.index(target_league_id)
+    included_leagues = chronological_leagues[: target_index + 1]
+    included = set(included_leagues)
+    return (
+        [battle for battle in battles if battle.league_id in included],
+        included_leagues,
+    )
+
+
 def tune(args: argparse.Namespace) -> int:
     raw, grouped, mechanics_metadata = load_raw_mechanics(args.mechanics)
     battles, team_names, hero_names = V1.load_battles(args.db)
-    all_leagues = list(dict.fromkeys(battle.league_id for battle in battles))
+    if args.target_league_id:
+        battles, all_leagues = battles_through_league(
+            battles, args.target_league_id
+        )
+        active_team_ids = {
+            team_id
+            for battle in battles
+            for team_id in (battle.team_a_id, battle.team_b_id)
+        }
+        active_hero_ids = {
+            hero_id
+            for battle in battles
+            for hero_id in (*battle.heroes_a, *battle.heroes_b)
+        }
+        team_names = {
+            team_id: name
+            for team_id, name in team_names.items()
+            if team_id in active_team_ids
+        }
+        hero_names = {
+            hero_id: name
+            for hero_id, name in hero_names.items()
+            if hero_id in active_hero_ids
+        }
+    else:
+        all_leagues = list(
+            dict.fromkeys(battle.league_id for battle in battles)
+        )
     if len(all_leagues) < 3:
         raise ValueError("At least three chronological seasons are required")
     final_test_league = all_leagues[-1]
@@ -498,6 +545,7 @@ def tune(args: argparse.Namespace) -> int:
             "database_open_mode": "read_only",
             "battle_count": len(battles),
             "league_ids": all_leagues,
+            "target_league_id": args.target_league_id,
         },
         "warning": "Optimized advantage score POC; do not display as literal win probability.",
     }
@@ -594,6 +642,7 @@ def build_parser() -> argparse.ArgumentParser:
     tune_parser.add_argument("--trials", type=int, default=96)
     tune_parser.add_argument("--seed", type=int, default=17)
     tune_parser.add_argument("--objective", choices=("auc", "log_loss"), default="auc")
+    tune_parser.add_argument("--target-league-id")
     tune_parser.add_argument("--model-output", type=Path, default=MODEL_PATH)
     tune_parser.add_argument("--search-output", type=Path, default=SEARCH_PATH)
     tune_parser.add_argument("--validation-output", type=Path, default=VALIDATION_PATH)

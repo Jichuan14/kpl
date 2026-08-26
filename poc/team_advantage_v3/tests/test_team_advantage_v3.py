@@ -46,6 +46,22 @@ class MechanicsRuleTests(unittest.TestCase):
 
 
 class SearchTests(unittest.TestCase):
+    def test_target_league_filter_prevents_future_season_leakage(self):
+        battles = [
+            type("Battle", (), {"league_id": league_id})()
+            for league_id in ("s1", "s1", "s2", "s3")
+        ]
+
+        included, leagues = V3.battles_through_league(battles, "s2")
+
+        self.assertEqual(leagues, ["s1", "s2"])
+        self.assertEqual([battle.league_id for battle in included], ["s1", "s1", "s2"])
+
+    def test_target_league_filter_rejects_unknown_season(self):
+        battle = type("Battle", (), {"league_id": "s1"})()
+        with self.assertRaisesRegex(ValueError, "no completed battles"):
+            V3.battles_through_league([battle], "missing")
+
     def test_parameter_search_is_reproducible(self):
         first = V3.parameter_candidates(8, 17)
         second = V3.parameter_candidates(8, 17)

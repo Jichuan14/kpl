@@ -178,6 +178,13 @@ export function simulateDraft(state) {
   });
 }
 
+export function recommendLineup(state) {
+  return request("/api/simulations/recommend-lineup", {
+    method: "POST",
+    body: JSON.stringify(state),
+  });
+}
+
 export function fetchSelectionCommentary(state) {
   return request("/api/simulations/commentary", {
     method: "POST",

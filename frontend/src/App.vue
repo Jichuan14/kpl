@@ -121,6 +121,8 @@ const artifacts = computed(() => {
     draft_model: draftModel,
     learnable_draft_model: learnableDraftModel,
     sequence_draft_model: sequenceDraftModel,
+    lineup_value_model: lineupValueModel,
+    ban_value_model: banValueModel,
   } = dataStatus.value.artifacts;
   return [
     ...exports,
@@ -132,6 +134,8 @@ const artifacts = computed(() => {
     ...(draftModel ? [draftModel] : []),
     ...(learnableDraftModel ? [learnableDraftModel] : []),
     ...(sequenceDraftModel ? [sequenceDraftModel] : []),
+    ...(lineupValueModel ? [lineupValueModel] : []),
+    ...(banValueModel ? [banValueModel] : []),
   ];
 });
 

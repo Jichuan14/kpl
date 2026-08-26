@@ -112,6 +112,8 @@ class AnalysisRunRequest(BaseModel):
         "draft_model",
         "learnable_draft_model",
         "sequence_draft_model",
+        "ban_value_model",
+        "lineup_value_model",
         "display",
         "all",
     ] = "all"
@@ -143,6 +145,13 @@ class DraftSimulationRequest(BaseModel):
         if self.blue_team_id == self.red_team_id:
             raise ValueError("Blue and Red must be different teams")
         return self
+
+
+class LineupRecommendationRequest(DraftSimulationRequest):
+    """A live draft state plus presentation preferences for ranked actions."""
+
+    top_k: int = Field(default=3, ge=1, le=5)
+    risk_mode: Literal["safe", "balanced", "upside"] = "balanced"
 
 
 class HeroMatchupRecommendationRequest(BaseModel):

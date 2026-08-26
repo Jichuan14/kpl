@@ -17,6 +17,8 @@ PipelineStep = Literal[
     "draft_model",
     "learnable_draft_model",
     "sequence_draft_model",
+    "ban_value_model",
+    "lineup_value_model",
     "display",
     "all",
 ]
@@ -54,7 +56,13 @@ class AnalysisPipeline:
         ]
         steps = (
             display_steps
-            + ["draft_model", "learnable_draft_model", "sequence_draft_model"]
+            + [
+                "draft_model",
+                "learnable_draft_model",
+                "sequence_draft_model",
+                "ban_value_model",
+                "lineup_value_model",
+            ]
             if step == "all"
             else display_steps
             if step == "display"
@@ -84,7 +92,11 @@ class AnalysisPipeline:
         started = time.monotonic()
         outputs: list[str] = []
         for command in commands:
-            timeout_seconds = 900 if step == "sequence_draft_model" else 300
+            timeout_seconds = (
+                900
+                if step in {"sequence_draft_model", "lineup_value_model"}
+                else 300
+            )
             try:
                 process = subprocess.run(
                     command,
@@ -213,5 +225,25 @@ class AnalysisPipeline:
                 self.league_id,
                 "--use-series-context",
                 "--train-on-all-data",
+            ]
+        if step == "lineup_value_model":
+            return [
+                python,
+                str(ANALYSIS_DIR / "train_lineup_value_model.py"),
+                "--league-id",
+                self.league_id,
+                "--output-dir",
+                str(self.output_dir),
+            ]
+        if step == "ban_value_model":
+            return [
+                python,
+                str(ANALYSIS_DIR / "train_ban_value_model.py"),
+                "--league-id",
+                self.league_id,
+                "--output",
+                str(self.output_dir / "ban_value_model.json"),
+                "--validation-output",
+                str(self.output_dir / "ban_value_validation.json"),
             ]
         raise ValueError(f"Unknown pipeline step: {step}")

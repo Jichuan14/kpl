@@ -355,6 +355,53 @@ class PredictNextActionTest(unittest.TestCase):
                 max_actions=0,
             )
 
+    def test_forced_completion_keeps_candidate_and_samples_remaining_actions(self) -> None:
+        model = model_fixture()
+        sequence = model["draft_sequence"]
+        state = {
+            "bp_order": 1,
+            "blue_picks": [],
+            "red_picks": [],
+            "blue_bans": [],
+            "red_bans": [],
+        }
+        prepared = (
+            model,
+            None,
+            None,
+            sequence,
+            0,
+            sequence[0],
+            [
+                {"hero_id": 101, "hero_name": "A", "probability": 0.7},
+                {"hero_id": 102, "hero_name": "B", "probability": 0.3},
+            ],
+        )
+        with (
+            patch.object(draft_simulator, "_prepare_prediction", return_value=prepared),
+            patch.object(
+                draft_simulator,
+                "_predict",
+                return_value=[
+                    {"hero_id": 102, "hero_name": "B", "probability": 1.0}
+                ],
+            ),
+        ):
+            result = draft_simulator.sample_forced_draft_completions(
+                "league-1",
+                state,
+                forced_first_hero_id=101,
+                rollouts=2,
+                seed=1,
+            )
+
+        self.assertEqual(result["forced_policy_probability"], 0.7)
+        self.assertEqual(len(result["completions"]), 2)
+        for completion in result["completions"]:
+            self.assertTrue(completion["completed"])
+            self.assertEqual(completion["state"]["blue_bans"], [101])
+            self.assertEqual(completion["state"]["red_picks"], [102])
+
 
 if __name__ == "__main__":
     unittest.main()

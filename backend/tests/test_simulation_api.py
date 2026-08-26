@@ -113,6 +113,55 @@ class SimulationApiTest(unittest.TestCase):
             "20260003", {"rows": [{"hero_id": 101}]}, [101, 102], [201, 202], "mid", limit=6
         )
 
+    def test_lineup_recommendation_endpoint_validates_teams_and_calls_planner(self) -> None:
+        limiter = CoachRateLimiter(
+            per_ip_per_minute=10,
+            per_ip_per_day=10,
+            server_per_minute=10,
+            server_per_day=100,
+            max_active_per_ip=1,
+            max_active_server=2,
+        )
+        payload = {
+            **self.payload(),
+            "model_type": "sequence",
+            "top_k": 2,
+            "risk_mode": "safe",
+            "seed": 7,
+        }
+        with (
+            patch("app.api.simulation.simulation_rate_limiter", limiter),
+            patch(
+                "app.api.simulation.validate_season_team_pair",
+                return_value={
+                    "blue": {"team_name": "Official Blue"},
+                    "red": {"team_name": "Official Red"},
+                },
+            ),
+            patch(
+                "app.api.simulation.recommend_lineup",
+                return_value={"recommendations": [{"hero_id": 101}]},
+            ) as recommend,
+        ):
+            response = self.client.post(
+                "/api/simulations/recommend-lineup", json=payload
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["data"]["recommendations"][0]["hero_id"], 101)
+        self.assertEqual(recommend.call_args.kwargs["model_type"], "sequence")
+        self.assertEqual(recommend.call_args.kwargs["top_k"], 2)
+        self.assertEqual(recommend.call_args.kwargs["risk_mode"], "safe")
+        self.assertEqual(recommend.call_args.args[1]["blue_team_name"], "Official Blue")
+
+    def test_lineup_recommendation_rejects_compute_override(self) -> None:
+        response = self.client.post(
+            "/api/simulations/recommend-lineup",
+            json={**self.payload(), "rollouts": 1000},
+        )
+
+        self.assertEqual(response.status_code, 422)
+
 
 if __name__ == "__main__":
     unittest.main()

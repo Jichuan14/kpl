@@ -345,6 +345,53 @@ def data_status(
         except (OSError, ValueError, json.JSONDecodeError):
             sequence_draft_model["records"] = 0
 
+    lineup_value_model = artifact(
+        league_output_dir / "lineup_value_model.json",
+        "lineup_value_model",
+        "Completed-lineup value model",
+    )
+    lineup_value_model_path = league_output_dir / "lineup_value_model.json"
+    lineup_value_model["ready"] = bool(
+        match_export_path.is_file()
+        and lineup_value_model_path.is_file()
+        and lineup_value_model_path.stat().st_mtime
+        >= match_export_path.stat().st_mtime
+    )
+    if lineup_value_model["exists"]:
+        try:
+            with lineup_value_model_path.open(encoding="utf-8") as source:
+                lineup_value_payload = json.load(source)
+            lineup_value_model["records"] = int(
+                (lineup_value_payload.get("source") or {}).get(
+                    "battle_count", 0
+                )
+            )
+        except (OSError, ValueError, json.JSONDecodeError):
+            lineup_value_model["records"] = 0
+
+    ban_value_model = artifact(
+        league_output_dir / "ban_value_model.json",
+        "ban_value_model",
+        "Opponent-denial ban model",
+    )
+    ban_value_model_path = league_output_dir / "ban_value_model.json"
+    ban_value_model["ready"] = bool(
+        decision_mtime is not None
+        and ban_value_model_path.is_file()
+        and ban_value_model_path.stat().st_mtime >= decision_mtime
+    )
+    if ban_value_model["exists"]:
+        try:
+            with ban_value_model_path.open(encoding="utf-8") as source:
+                ban_value_payload = json.load(source)
+            ban_value_model["records"] = int(
+                (ban_value_payload.get("source") or {}).get(
+                    "ban_decisions", 0
+                )
+            )
+        except (OSError, ValueError, json.JSONDecodeError):
+            ban_value_model["records"] = 0
+
     power_rankings = artifact(
         league_output_dir / "power_rankings.json",
         "power_rankings",
@@ -417,6 +464,8 @@ def data_status(
         and draft_model["ready"]
         and learnable_draft_model["ready"]
         and sequence_draft_model["ready"]
+        and ban_value_model["ready"]
+        and lineup_value_model["ready"]
     )
     pipeline = [
         {
@@ -499,6 +548,18 @@ def data_status(
             "ready": sequence_draft_model["ready"],
             "detail": f'{sequence_draft_model["records"]:,} training decisions',
         },
+        {
+            "key": "ban_value_model",
+            "label": "Opponent-denial ban model",
+            "ready": ban_value_model["ready"],
+            "detail": f'{ban_value_model["records"]:,} ban decisions',
+        },
+        {
+            "key": "lineup_value_model",
+            "label": "Completed-lineup value model",
+            "ready": lineup_value_model["ready"],
+            "detail": f'{lineup_value_model["records"]:,} completed battles',
+        },
     ]
 
     return ApiResponse(
@@ -529,6 +590,8 @@ def data_status(
                 "draft_model": draft_model,
                 "learnable_draft_model": learnable_draft_model,
                 "sequence_draft_model": sequence_draft_model,
+                "lineup_value_model": lineup_value_model,
+                "ban_value_model": ban_value_model,
             },
             "frontend_assets": frontend_assets,
             "display_ready": display_ready,
