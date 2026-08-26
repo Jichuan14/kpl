@@ -60,6 +60,12 @@ DEFAULT_RECENCY_DECAY = 0.45
 DEFAULT_OWN_PICK_RELATION_WEIGHT = 2.0
 DEFAULT_META_WEIGHT = 0.65
 DEFAULT_MAX_META_LIFT = 4.0
+# A single player-role anomaly must not make a hero permanently eligible for
+# that lane. Retain only roles with both a useful sample and a meaningful share
+# of the hero's observed professional picks. If none qualify (for example a new
+# hero or a manual zero-count override), keep the most-observed role.
+MIN_ROLE_OBSERVATIONS = 3
+MIN_ROLE_PICK_SHARE = 0.05
 ROLE_FIELDS = {
     "own_pick": "current_team_picks",
     "opponent_pick": "current_opponent_picks",
@@ -124,7 +130,32 @@ def path_label(path: Path) -> str:
         return str(path)
 
 
-def load_hero_metadata() -> dict[int, dict[str, str]]:
+def credible_positions(position_counts: Iterable[tuple[int, int]]) -> list[int]:
+    """Return role eligibility after removing incidental observations."""
+    counts = [
+        (int(position), max(0, int(observations)))
+        for position, observations in position_counts
+        if int(position) > 0
+    ]
+    if not counts:
+        return []
+
+    total = sum(observations for _, observations in counts)
+    credible = sorted(
+        position
+        for position, observations in counts
+        if observations >= MIN_ROLE_OBSERVATIONS
+        and (total == 0 or observations / total >= MIN_ROLE_PICK_SHARE)
+    )
+    if credible:
+        return credible
+
+    # Preserve one deterministic role for sparse heroes and zero-count manual
+    # overrides so they remain selectable without accepting every noisy role.
+    return [max(counts, key=lambda row: (row[1], -row[0]))[0]]
+
+
+def load_hero_metadata() -> dict[int, dict[str, Any]]:
     """Use the local hero catalog so legal-but-unselected heroes keep labels."""
     try:
         with connect() as database:
@@ -144,14 +175,23 @@ def load_hero_metadata() -> dict[int, dict[str, str]]:
     try:
         with connect() as database:
             position_rows = database.execute(
-                "SELECT hero_id, position FROM hero_positions WHERE position > 0"
+                """
+                SELECT hero_id, position, observed_pick_count
+                FROM hero_positions
+                WHERE position > 0
+                """
             ).fetchall()
     except sqlite3.OperationalError:
         position_rows = []
+    position_counts: defaultdict[int, list[tuple[int, int]]] = defaultdict(list)
     for row in position_rows:
         hero_id = int(row["hero_id"])
         if hero_id in catalog:
-            catalog[hero_id]["positions"].append(int(row["position"]))
+            position_counts[hero_id].append(
+                (int(row["position"]), int(row["observed_pick_count"] or 0))
+            )
+    for hero_id, counts in position_counts.items():
+        catalog[hero_id]["positions"] = credible_positions(counts)
     return catalog
 
 
@@ -333,6 +373,8 @@ def build_model(
             "own_pick_relation_weight": own_pick_relation_weight,
             "meta_weight": meta_weight,
             "max_meta_lift": max_meta_lift,
+            "min_role_observations": MIN_ROLE_OBSERVATIONS,
+            "min_role_pick_share": MIN_ROLE_PICK_SHARE,
         },
         "base": base_rows,
         "action": action_rows,

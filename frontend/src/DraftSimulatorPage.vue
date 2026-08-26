@@ -313,7 +313,32 @@ function signedPoints(value) {
 }
 
 function confidenceLabel(value) {
-  return { high: "高置信", medium: "中等置信", low: "低置信" }[value] || value;
+  return {
+    high: "参考较可靠",
+    medium: "参考一般",
+    low: "谨慎参考",
+  }[value] || value;
+}
+
+function recommendationMetricLabel(metric, action) {
+  return {
+    score: action === "ban" ? "禁用效果评分" : "阵容对比评分",
+    delta: "比常规选择",
+    confidence: "参考可靠度",
+    policy: "职业选择倾向",
+  }[metric];
+}
+
+function recommendationMetricHelp(metric, action) {
+  return {
+    score:
+      action === "ban"
+        ? "综合对手偏好、英雄克制和历史禁用结果，分数越高越值得优先禁用；它不是胜率。"
+        : "模拟完整 BP 后，衡量己方最终阵容相对占优的程度；它不是比赛胜率。",
+    delta: "与模型在同一局面下的常规选择相比，正数表示这手预计更有利。",
+    confidence: "综合历史样本量、模拟完成情况和结果波动判断；“谨慎参考”表示不确定性较高。",
+    policy: "表示职业队在类似 BP 局面选择这名英雄的模型概率，不代表选择后的胜率。",
+  }[metric];
 }
 
 function recommendationReasonLabel(reason) {
@@ -1619,10 +1644,21 @@ onBeforeUnmount(() => {
                   </span>
                 </button>
                 <dl>
-                  <div><dt>{{ row.action === 'ban' ? '禁用价值分' : '阵容优势分' }}</dt><dd>{{ percent(row.expected_advantage) }}</dd></div>
-                  <div><dt>相对常规选择</dt><dd>{{ signedPoints(row.advantage_delta_vs_policy_baseline) }}</dd></div>
-                  <div><dt>稳定性</dt><dd>{{ confidenceLabel(row.confidence) }}</dd></div>
-                  <div><dt>BP 支持度</dt><dd>{{ percent(row.policy_probability) }}</dd></div>
+                  <div v-for="metric in ['score', 'delta', 'confidence', 'policy']" :key="metric">
+                    <dt>
+                      {{ recommendationMetricLabel(metric, row.action) }}
+                      <button
+                        type="button"
+                        class="metric-help"
+                        :aria-label="`${recommendationMetricLabel(metric, row.action)}说明：${recommendationMetricHelp(metric, row.action)}`"
+                        :data-help="recommendationMetricHelp(metric, row.action)"
+                      >?</button>
+                    </dt>
+                    <dd v-if="metric === 'score'">{{ percent(row.expected_advantage) }}</dd>
+                    <dd v-else-if="metric === 'delta'">{{ signedPoints(row.advantage_delta_vs_policy_baseline) }}</dd>
+                    <dd v-else-if="metric === 'confidence'">{{ confidenceLabel(row.confidence) }}</dd>
+                    <dd v-else>{{ percent(row.policy_probability) }}</dd>
+                  </div>
                 </dl>
                 <div class="recommendation-reasons">
                   <span v-for="reason in row.explanations.slice(0, 4)" :key="`${row.hero_id}-${reason.code}`">
@@ -1773,7 +1809,7 @@ onBeforeUnmount(() => {
 .forecast-panel { width: min(31%, 320px); min-width:250px; padding: 1rem; }.forecast-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }.forecast-heading h2 { font-size: 1.5rem; }.forecast-heading > span, .forecast-heading small { color: var(--ink-soft); font-size: .68rem; }
 .probability-list { margin-top: 1rem; }.probability-list > div { display: grid; grid-template-columns:2rem minmax(4rem,1.8fr) 3rem; gap: .55rem; align-items: center; margin-top: .55rem; font-size: .7rem; }.probability-list img { width:2rem; height:2rem; object-fit:cover; }.probability-list em { color: var(--ink-soft); font-style: normal; text-align: right; }.probability-track { height: .42rem; overflow: hidden; background: rgba(16,42,46,.1); }.probability-track i { display:block; height:100%; background: var(--accent); }
 .end-ban-list { margin-top: 1.2rem; padding-top: .85rem; border-top: 1px solid var(--line); }.end-ban-list p { margin:0 0 .5rem; color: var(--ink-soft); font-size:.65rem; }.end-ban-list span { display:inline-flex; align-items:center; gap:.25rem; margin:.25rem .6rem 0 0; font-size:.7rem; }.end-ban-list img { width:1.6rem; height:1.6rem; object-fit:cover; }
-.recommendation-panel { margin-top:.75rem; padding:1rem 1.15rem; border:1px solid var(--line); background:rgba(255,255,255,.8); }.recommendation-panel > header { display:flex; align-items:center; justify-content:space-between; gap:1rem; }.recommendation-panel h2 { margin:0; font:700 1.25rem var(--display); letter-spacing:-.035em; }.recommendation-panel header p:last-child { max-width:48rem; margin:.3rem 0 0; color:var(--ink-soft); font-size:.68rem; }.recommendation-status { padding:.38rem .55rem; border:1px solid var(--line); background:#edf8f3; color:var(--accent-deep); font:700 .6rem var(--mono); white-space:nowrap; }.recommendation-list { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.6rem; margin-top:.9rem; }.recommendation-list article { min-width:0; padding:.7rem; border:1px solid var(--line); background:#fff; }.recommendation-choice { display:grid; width:100%; grid-template-columns:auto 2.6rem minmax(0,1fr); gap:.45rem; align-items:center; padding:0 0 .6rem; border:0; border-bottom:1px solid var(--line); background:none; color:var(--ink); text-align:left; cursor:pointer; }.recommendation-choice:disabled { cursor:not-allowed; opacity:.55; }.recommendation-choice img { width:2.6rem; height:2.6rem; object-fit:cover; }.recommendation-choice span:last-child { display:grid; min-width:0; }.recommendation-choice strong { overflow:hidden; font:700 .78rem var(--mono); text-overflow:ellipsis; white-space:nowrap; }.recommendation-choice small { color:var(--ink-soft); font-size:.56rem; }.recommendation-rank { color:var(--accent-deep); font:700 .65rem var(--mono); }.recommendation-list dl { display:grid; grid-template-columns:1fr 1fr; gap:.35rem .55rem; margin:.65rem 0; }.recommendation-list dl div { min-width:0; }.recommendation-list dt { color:var(--ink-soft); font-size:.52rem; letter-spacing:.04em; }.recommendation-list dd { margin:.08rem 0 0; font:700 .66rem var(--mono); }.recommendation-reasons { display:flex; flex-wrap:wrap; gap:.25rem; }.recommendation-reasons span { padding:.2rem .3rem; background:#edf8f3; color:var(--accent-deep); font-size:.52rem; }.recommendation-list article > p { margin:.55rem 0 0; color:var(--ink-soft); font-size:.57rem; line-height:1.4; }.recommendation-warning { display:block; margin-top:.7rem; color:var(--ink-soft); font-size:.56rem; }.recommendation-error { margin:.7rem 0 0; color:var(--warn); font-size:.65rem; }
+.recommendation-panel { margin-top:.75rem; padding:1rem 1.15rem; border:1px solid var(--line); background:rgba(255,255,255,.8); }.recommendation-panel > header { display:flex; align-items:center; justify-content:space-between; gap:1rem; }.recommendation-panel h2 { margin:0; font:700 1.25rem var(--display); letter-spacing:-.035em; }.recommendation-panel header p:last-child { max-width:48rem; margin:.3rem 0 0; color:var(--ink-soft); font-size:.68rem; }.recommendation-status { padding:.38rem .55rem; border:1px solid var(--line); background:#edf8f3; color:var(--accent-deep); font:700 .6rem var(--mono); white-space:nowrap; }.recommendation-list { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.6rem; margin-top:.9rem; }.recommendation-list article { min-width:0; padding:.7rem; border:1px solid var(--line); background:#fff; }.recommendation-choice { display:grid; width:100%; grid-template-columns:auto 2.6rem minmax(0,1fr); gap:.45rem; align-items:center; padding:0 0 .6rem; border:0; border-bottom:1px solid var(--line); background:none; color:var(--ink); text-align:left; cursor:pointer; }.recommendation-choice:disabled { cursor:not-allowed; opacity:.55; }.recommendation-choice img { width:2.6rem; height:2.6rem; object-fit:cover; }.recommendation-choice span:last-child { display:grid; min-width:0; }.recommendation-choice strong { overflow:hidden; font:700 .78rem var(--mono); text-overflow:ellipsis; white-space:nowrap; }.recommendation-choice small { color:var(--ink-soft); font-size:.56rem; }.recommendation-rank { color:var(--accent-deep); font:700 .65rem var(--mono); }.recommendation-list dl { display:grid; grid-template-columns:1fr 1fr; gap:.35rem .55rem; margin:.65rem 0; }.recommendation-list dl div { min-width:0; }.recommendation-list dt { display:flex; align-items:center; gap:.2rem; color:var(--ink-soft); font-size:.52rem; letter-spacing:.04em; }.recommendation-list dd { margin:.08rem 0 0; font:700 .66rem var(--mono); }.metric-help { position:relative; display:inline-grid; width:.85rem; height:.85rem; flex:0 0 .85rem; place-items:center; padding:0; border:1px solid currentColor; border-radius:50%; background:#fff; color:var(--ink-soft); font:700 .5rem/1 var(--mono); cursor:help; }.metric-help::after { position:absolute; z-index:20; bottom:calc(100% + .4rem); left:50%; width:12rem; padding:.45rem .5rem; border:1px solid var(--line); background:var(--ink); color:#fff; box-shadow:0 .35rem .9rem rgba(16,42,46,.2); content:attr(data-help); font:.56rem/1.45 var(--mono); letter-spacing:0; opacity:0; pointer-events:none; text-align:left; transform:translate(-50%, .2rem); transition:opacity .15s ease, transform .15s ease; }.metric-help:hover::after,.metric-help:focus-visible::after { opacity:1; transform:translate(-50%, 0); }.recommendation-reasons { display:flex; flex-wrap:wrap; gap:.25rem; }.recommendation-reasons span { padding:.2rem .3rem; background:#edf8f3; color:var(--accent-deep); font-size:.52rem; }.recommendation-list article > p { margin:.55rem 0 0; color:var(--ink-soft); font-size:.57rem; line-height:1.4; }.recommendation-warning { display:block; margin-top:.7rem; color:var(--ink-soft); font-size:.56rem; }.recommendation-error { margin:.7rem 0 0; color:var(--warn); font-size:.65rem; }
 .commentary-panel { margin-top:.75rem; padding:1rem 1.15rem; border:1px solid var(--accent-deep); background:linear-gradient(120deg, rgba(232,191,108,.18), rgba(255,255,255,.84)); }.commentary-panel h2 { max-width:70rem; margin:.25rem 0 0; font:700 1rem/1.55 var(--display); letter-spacing:-.015em; }.commentary-loading { margin:0; color:var(--ink-soft); font-size:.75rem; }
 .hero-picker { margin-top: .75rem; padding: 1rem; }.picker-heading { display:flex; align-items:end; justify-content:space-between; gap:1rem; }.picker-heading h2 { font-size:1.4rem; }.picker-controls { display:flex; align-items:end; gap:.55rem; }.picker-controls input { width:min(100%, 260px); }.hero-lane-filter { display:grid; gap:.22rem; color:var(--ink-soft); font-size:.67rem; font-weight:700; letter-spacing:.04em; }.hero-lane-filter select { min-width:9.2rem; }.picker-targets { margin-top:.85rem; }.hero-options { display:grid; grid-template-columns:repeat(auto-fill, minmax(3.6rem, 1fr)); gap:.45rem; margin-top:1rem; max-height:360px; overflow:auto; }.hero-options button { position:relative; display:grid; place-items:center; aspect-ratio:1; padding:0; overflow:hidden; }.hero-options button img { width:100%; height:100%; object-fit:cover; }.hero-options button small { position:absolute; right:0; bottom:0; padding:.14rem .2rem; background:rgba(16,42,46,.84); color:#fff; font-size:.56rem; }.hero-options button:hover:not(:disabled), .draft-slots button:not(:disabled):hover { border-color: var(--accent); color: var(--accent-deep); }
 @media (max-width: 1000px) { .simulator-workspace { grid-template-columns:1fr; }.coach-rail { position:static; }.coach-rail { grid-row:1; }.simulator-main-column { grid-row:2; } }
