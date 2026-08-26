@@ -1119,6 +1119,91 @@ def predict_next_action(
     }
 
 
+def sample_forced_draft_completions(
+    league_id: str,
+    state: dict[str, Any],
+    *,
+    forced_first_hero_id: int,
+    rollouts: int,
+    seed: int | None,
+    model_type: str = "stats",
+) -> dict[str, Any]:
+    """Complete drafts after forcing one currently legal pick or ban.
+
+    This is the policy half of the recommendation workflow.  The caller owns
+    leaf-state evaluation so the existing prediction simulator remains
+    independent from any particular winner/value model.
+    """
+    if rollouts < 1:
+        raise ValueError("rollouts must be at least 1")
+    (
+        model,
+        learnable_model,
+        sequence_model,
+        sequence,
+        start_index,
+        next_step,
+        next_probabilities,
+    ) = _prepare_prediction(league_id, state, model_type)
+    probability_by_hero = {
+        int(row["hero_id"]): float(row["probability"])
+        for row in next_probabilities
+    }
+    forced = int(forced_first_hero_id)
+    if forced not in probability_by_hero:
+        raise ValueError(f"hero_id={forced} is not legal for the next action")
+
+    randomizer = random.Random(seed)
+    completions: list[dict[str, Any]] = []
+    remaining_sequence = sequence[start_index:]
+    for _ in range(rollouts):
+        current = json.loads(json.dumps(state))
+        path: list[dict[str, Any]] = []
+        completed = True
+        for index, step in enumerate(remaining_sequence):
+            if index == 0:
+                selected = forced
+            else:
+                probabilities = _predict(
+                    model, current, step, learnable_model, sequence_model
+                )
+                if not probabilities:
+                    completed = False
+                    break
+                selected = randomizer.choices(
+                    [int(row["hero_id"]) for row in probabilities],
+                    weights=[float(row["probability"]) for row in probabilities],
+                    k=1,
+                )[0]
+            path.append(
+                {
+                    "bp_order": int(step["bp_order"]),
+                    "side": str(step["side"]),
+                    "action": str(step["action"]),
+                    "hero_id": selected,
+                    "hero_name": model["hero_names"].get(str(selected), str(selected)),
+                }
+            )
+            _apply(current, step, selected)
+        completions.append(
+            {
+                "completed": completed,
+                "state": current,
+                "path": path,
+            }
+        )
+    return {
+        "model_generated_at": (
+            sequence_model or learnable_model or model
+        ).get("generated_at", model["generated_at"]),
+        "model_type": model_type,
+        "next_step": next_step,
+        "forced_hero_id": forced,
+        "forced_policy_probability": probability_by_hero[forced],
+        "completions": completions,
+    }
+
+
 def simulate(
     league_id: str,
     state: dict[str, Any],

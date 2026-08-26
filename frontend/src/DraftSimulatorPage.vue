@@ -10,6 +10,7 @@ import {
   fetchSeasonTeams,
   fetchUpcomingMatch,
   fetchVisualizationSeasons,
+  recommendLineup,
   simulateDraft,
 } from "./api";
 import DraftCoachPanel from "./DraftCoachPanel.vue";
@@ -23,11 +24,15 @@ const leagueId = selectedLeagueId;
 const seasons = ref([]);
 const model = ref(null);
 const result = ref(null);
+const recommendationResult = ref(null);
+const recommendationLoading = ref(false);
+const recommendationError = ref("");
 const commentary = ref(null);
 const commentaryLoading = ref(false);
 const commentaryEnabled = ref(false);
 const settingsOpen = ref(false);
 let commentaryRequestNumber = 0;
+let recommendationRequestNumber = 0;
 const loading = ref(false);
 const simulating = ref(false);
 const error = ref("");
@@ -299,6 +304,42 @@ const coachDraftState = computed(() => {
 
 function percent(value) {
   return `${(Number(value || 0) * 100).toFixed(1)}%`;
+}
+
+function signedPoints(value) {
+  const points = Number(value || 0) * 100;
+  return `${points >= 0 ? "+" : ""}${points.toFixed(1)} 分`;
+}
+
+function confidenceLabel(value) {
+  return { high: "高置信", medium: "中等置信", low: "低置信" }[value] || value;
+}
+
+function recommendationReasonLabel(reason) {
+  const labels = {
+    behavior_support: "符合战队 BP 倾向",
+    denies_opponent_comfort: "限制对手高频英雄",
+    protects_current_picks: "保护当前阵容免受克制",
+    breaks_opponent_synergy: "拆解对手阵容协同",
+    self_opportunity_cost: "也会损失己方可选英雄",
+    largest_ban_component: {
+      opponent_denial: "主要因素：对手英雄威胁",
+      context_denial: "主要因素：当前阵容克制",
+      observed_ban_outcome: "主要因素：历史禁用效果",
+    }[reason.component] || "禁用模型主要因素",
+    adds_frontline: "补充前排",
+    adds_primary_engage: "补充主动开团",
+    adds_hard_cc: "补充硬控",
+    mage_redundancy: "注意多法师重叠",
+    team_hero_familiarity: reason.value >= 0 ? "战队英雄历史表现较好" : "战队英雄历史表现偏弱",
+    largest_value_component: {
+      team_strength: "主要因素：战队实力",
+      selected_hero_familiarity: "主要因素：英雄熟练度",
+      hero_synergy: "主要因素：阵容协同",
+      hero_counters: "主要因素：历史克制",
+    }[reason.component] || "价值模型主要因素",
+  };
+  return labels[reason.code] || reason.code;
 }
 
 function number(value) {
@@ -856,15 +897,24 @@ async function loadModel() {
 }
 
 async function forecast() {
+  recommendationRequestNumber += 1;
+  recommendationLoading.value = false;
+  recommendationResult.value = null;
+  recommendationError.value = "";
   if (!teamsReady.value) {
     result.value = null;
     return;
   }
-  if (!model.value || !currentStep.value || simulating.value) return;
+  if (!model.value || !currentStep.value) {
+    result.value = null;
+    return;
+  }
+  if (simulating.value) return;
   const blue = selectedTeam(teamsBySide.value.blue);
   const red = selectedTeam(teamsBySide.value.red);
   simulating.value = true;
   error.value = "";
+  let forecastSucceeded = false;
   try {
     result.value = await simulateDraft({
       league_id: leagueId.value,
@@ -878,11 +928,50 @@ async function forecast() {
       blue_used_previous_battles: globalUsed.value[teamsBySide.value.blue],
       red_used_previous_battles: globalUsed.value[teamsBySide.value.red],
     });
+    forecastSucceeded = true;
   } catch (err) {
     result.value = null;
     error.value = err.message || "Could not simulate this draft state.";
   } finally {
     simulating.value = false;
+  }
+  if (forecastSucceeded) await recommendCurrentDraft();
+}
+
+async function recommendCurrentDraft() {
+  if (!teamsReady.value || !model.value || !currentStep.value) return;
+  const requestNumber = ++recommendationRequestNumber;
+  const blue = selectedTeam(teamsBySide.value.blue);
+  const red = selectedTeam(teamsBySide.value.red);
+  recommendationLoading.value = true;
+  recommendationError.value = "";
+  try {
+    const recommendations = await recommendLineup({
+      league_id: leagueId.value,
+      model_type: modelType,
+      blue_team_id: String(blue.team_id),
+      blue_team_name: blue.team_name,
+      red_team_id: String(red.team_id),
+      red_team_name: red.team_name,
+      bp_order: bpOrder.value,
+      ...board.value,
+      blue_used_previous_battles: globalUsed.value[teamsBySide.value.blue],
+      red_used_previous_battles: globalUsed.value[teamsBySide.value.red],
+      top_k: 3,
+      risk_mode: "balanced",
+    });
+    if (requestNumber === recommendationRequestNumber) {
+      recommendationResult.value = recommendations;
+    }
+  } catch (err) {
+    if (requestNumber === recommendationRequestNumber) {
+      recommendationResult.value = null;
+      recommendationError.value = err.message || "无法生成阵容建议。";
+    }
+  } finally {
+    if (requestNumber === recommendationRequestNumber) {
+      recommendationLoading.value = false;
+    }
   }
 }
 
@@ -1411,6 +1500,55 @@ onBeforeUnmount(() => {
             </aside>
           </section>
 
+          <section class="recommendation-panel">
+            <header>
+              <div>
+                <p class="simulator-eyebrow">BP 决策</p>
+                <h2>推荐下一手</h2>
+                <p>每次 BP 更新后，模型会自动尝试候选英雄、模拟后续选禁，并比较最终阵容的相对优势。</p>
+              </div>
+              <span class="recommendation-status" aria-live="polite">
+                {{ !currentStep ? '当前 BP 已完成' : recommendationLoading ? '正在自动搜索后续 BP…' : recommendationResult ? '已自动更新' : '等待 BP 状态' }}
+              </span>
+            </header>
+            <p v-if="recommendationError" class="recommendation-error">{{ recommendationError }}</p>
+            <div v-if="recommendationResult?.recommendations?.length" class="recommendation-list">
+              <article v-for="row in recommendationResult.recommendations" :key="row.hero_id">
+                <button
+                  type="button"
+                  class="recommendation-choice"
+                  :disabled="liveHeroSelectionLocked"
+                  :title="`采用 ${row.hero_name}`"
+                  @click="chooseHero(row.hero_id)"
+                >
+                  <span class="recommendation-rank">#{{ row.rank }}</span>
+                  <img :src="heroIcon(row.hero_id)" :alt="row.hero_name" />
+                  <span>
+                    <strong>{{ row.hero_name }}</strong>
+                    <small>点击采用这一手</small>
+                  </span>
+                </button>
+                <dl>
+                  <div><dt>{{ row.action === 'ban' ? '禁用价值分' : '阵容优势分' }}</dt><dd>{{ percent(row.expected_advantage) }}</dd></div>
+                  <div><dt>相对常规选择</dt><dd>{{ signedPoints(row.advantage_delta_vs_policy_baseline) }}</dd></div>
+                  <div><dt>稳定性</dt><dd>{{ confidenceLabel(row.confidence) }}</dd></div>
+                  <div><dt>BP 支持度</dt><dd>{{ percent(row.policy_probability) }}</dd></div>
+                </dl>
+                <div class="recommendation-reasons">
+                  <span v-for="reason in row.explanations.slice(0, 4)" :key="`${row.hero_id}-${reason.code}`">
+                    {{ recommendationReasonLabel(reason) }}
+                  </span>
+                </div>
+                <p v-if="row.likely_opponent_responses?.length">
+                  可能应对：{{ row.likely_opponent_responses.map((response) => response.hero_name).join('、') }}
+                </p>
+              </article>
+            </div>
+            <small v-if="recommendationResult" class="recommendation-warning">
+              {{ recommendationResult.recommender === 'ban_value' ? '禁用价值分综合对手英雄偏好、克制关系、历史禁用结果与 BP 真实性，不是因果胜率。' : '阵容优势分用于候选排序，不是承诺胜率；全局 BP 已使用英雄会在每次模拟中排除。' }}
+            </small>
+          </section>
+
           <section v-if="commentary || commentaryLoading" class="commentary-panel">
             <p class="simulator-eyebrow">BP 解说</p>
             <p v-if="commentaryLoading" class="commentary-loading">正在生成解说…</p>
@@ -1545,13 +1683,15 @@ onBeforeUnmount(() => {
 .forecast-panel { width: min(31%, 320px); min-width:250px; padding: 1rem; }.forecast-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }.forecast-heading h2 { font-size: 1.5rem; }.forecast-heading > span, .forecast-heading small { color: var(--ink-soft); font-size: .68rem; }
 .probability-list { margin-top: 1rem; }.probability-list > div { display: grid; grid-template-columns:2rem minmax(4rem,1.8fr) 3rem; gap: .55rem; align-items: center; margin-top: .55rem; font-size: .7rem; }.probability-list img { width:2rem; height:2rem; object-fit:cover; }.probability-list em { color: var(--ink-soft); font-style: normal; text-align: right; }.probability-track { height: .42rem; overflow: hidden; background: rgba(16,42,46,.1); }.probability-track i { display:block; height:100%; background: var(--accent); }
 .end-ban-list { margin-top: 1.2rem; padding-top: .85rem; border-top: 1px solid var(--line); }.end-ban-list p { margin:0 0 .5rem; color: var(--ink-soft); font-size:.65rem; }.end-ban-list span { display:inline-flex; align-items:center; gap:.25rem; margin:.25rem .6rem 0 0; font-size:.7rem; }.end-ban-list img { width:1.6rem; height:1.6rem; object-fit:cover; }
+.recommendation-panel { margin-top:.75rem; padding:1rem 1.15rem; border:1px solid var(--line); background:rgba(255,255,255,.8); }.recommendation-panel > header { display:flex; align-items:center; justify-content:space-between; gap:1rem; }.recommendation-panel h2 { margin:0; font:700 1.25rem var(--display); letter-spacing:-.035em; }.recommendation-panel header p:last-child { max-width:48rem; margin:.3rem 0 0; color:var(--ink-soft); font-size:.68rem; }.recommendation-status { padding:.38rem .55rem; border:1px solid var(--line); background:#edf8f3; color:var(--accent-deep); font:700 .6rem var(--mono); white-space:nowrap; }.recommendation-list { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.6rem; margin-top:.9rem; }.recommendation-list article { min-width:0; padding:.7rem; border:1px solid var(--line); background:#fff; }.recommendation-choice { display:grid; width:100%; grid-template-columns:auto 2.6rem minmax(0,1fr); gap:.45rem; align-items:center; padding:0 0 .6rem; border:0; border-bottom:1px solid var(--line); background:none; color:var(--ink); text-align:left; cursor:pointer; }.recommendation-choice:disabled { cursor:not-allowed; opacity:.55; }.recommendation-choice img { width:2.6rem; height:2.6rem; object-fit:cover; }.recommendation-choice span:last-child { display:grid; min-width:0; }.recommendation-choice strong { overflow:hidden; font:700 .78rem var(--mono); text-overflow:ellipsis; white-space:nowrap; }.recommendation-choice small { color:var(--ink-soft); font-size:.56rem; }.recommendation-rank { color:var(--accent-deep); font:700 .65rem var(--mono); }.recommendation-list dl { display:grid; grid-template-columns:1fr 1fr; gap:.35rem .55rem; margin:.65rem 0; }.recommendation-list dl div { min-width:0; }.recommendation-list dt { color:var(--ink-soft); font-size:.52rem; letter-spacing:.04em; }.recommendation-list dd { margin:.08rem 0 0; font:700 .66rem var(--mono); }.recommendation-reasons { display:flex; flex-wrap:wrap; gap:.25rem; }.recommendation-reasons span { padding:.2rem .3rem; background:#edf8f3; color:var(--accent-deep); font-size:.52rem; }.recommendation-list article > p { margin:.55rem 0 0; color:var(--ink-soft); font-size:.57rem; line-height:1.4; }.recommendation-warning { display:block; margin-top:.7rem; color:var(--ink-soft); font-size:.56rem; }.recommendation-error { margin:.7rem 0 0; color:var(--warn); font-size:.65rem; }
 .commentary-panel { margin-top:.75rem; padding:1rem 1.15rem; border:1px solid var(--accent-deep); background:linear-gradient(120deg, rgba(232,191,108,.18), rgba(255,255,255,.84)); }.commentary-panel h2 { max-width:70rem; margin:.25rem 0 0; font:700 1rem/1.55 var(--display); letter-spacing:-.015em; }.commentary-loading { margin:0; color:var(--ink-soft); font-size:.75rem; }
 .hero-picker { margin-top: .75rem; padding: 1rem; }.picker-heading { display:flex; align-items:end; justify-content:space-between; gap:1rem; }.picker-heading h2 { font-size:1.4rem; }.picker-controls { display:flex; align-items:end; gap:.55rem; }.picker-controls input { width:min(100%, 260px); }.hero-lane-filter { display:grid; gap:.22rem; color:var(--ink-soft); font-size:.67rem; font-weight:700; letter-spacing:.04em; }.hero-lane-filter select { min-width:9.2rem; }.picker-targets { margin-top:.85rem; }.hero-options { display:grid; grid-template-columns:repeat(auto-fill, minmax(3.6rem, 1fr)); gap:.45rem; margin-top:1rem; max-height:360px; overflow:auto; }.hero-options button { position:relative; display:grid; place-items:center; aspect-ratio:1; padding:0; overflow:hidden; }.hero-options button img { width:100%; height:100%; object-fit:cover; }.hero-options button small { position:absolute; right:0; bottom:0; padding:.14rem .2rem; background:rgba(16,42,46,.84); color:#fff; font-size:.56rem; }.hero-options button:hover:not(:disabled), .draft-slots button:not(:disabled):hover { border-color: var(--accent); color: var(--accent-deep); }
 @media (max-width: 1000px) { .simulator-workspace { grid-template-columns:1fr; }.coach-rail { position:static; }.coach-rail { grid-row:1; }.simulator-main-column { grid-row:2; } }
-@media (max-width: 860px) { .simulator-hero, .simulator-status, .simulator-layout { flex-direction:column; align-items:stretch; }.simulator-header-controls { justify-content:stretch; }.simulator-season, .forecast-panel { width:100%; }.simulator-season { min-width:0; }.simulator-settings { align-self:flex-end; }.forecast-panel { min-width:0; }.simulator-actions { justify-content:space-between; }.side-assignment { position:static; width:100%; transform:none; }.side-assignment label { flex:1; }.draft-board { grid-template-columns:1fr; }.global-bp-panel { grid-template-columns:1fr; }.global-used { grid-template-columns:1fr; }.next-battle { justify-self:start; } }
+@media (max-width: 860px) { .simulator-hero, .simulator-status, .simulator-layout { flex-direction:column; align-items:stretch; }.simulator-header-controls { justify-content:stretch; }.simulator-season, .forecast-panel { width:100%; }.simulator-season { min-width:0; }.simulator-settings { align-self:flex-end; }.forecast-panel { min-width:0; }.simulator-actions { justify-content:space-between; }.side-assignment { position:static; width:100%; transform:none; }.side-assignment label { flex:1; }.draft-board { grid-template-columns:1fr; }.global-bp-panel { grid-template-columns:1fr; }.global-used { grid-template-columns:1fr; }.next-battle { justify-self:start; }.recommendation-list { grid-template-columns:1fr; } }
 @media (max-width:620px) {
   .settings-menu { left:0; right:auto; width:min(19rem, calc(100vw - 1rem)); }
   .forecast-panel { display:none; }
+  .recommendation-panel > header { align-items:stretch; flex-direction:column; }.recommendation-status { align-self:flex-start; }.recommendation-list dl { grid-template-columns:1fr 1fr; }
   .global-used > .used-team { display:none; }
   .mobile-used-hero-buttons { display:grid; grid-template-columns:1fr 1fr; grid-column:1 / -1; gap:.45rem; }
   .mobile-used-hero-buttons button { display:grid; gap:.12rem; min-height:3rem; padding:.45rem .55rem; border:1px solid var(--line); background:rgba(255,255,255,.9); color:var(--ink); text-align:left; }

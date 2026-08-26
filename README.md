@@ -137,6 +137,8 @@ analysis/outputs/{league_id}/
   *_stats.jsonl
   *_draft_model.json
   sequence_draft_choice_model.json
+  lineup_value_model.json
+  ban_value_model.json
   power_rankings.json
   team_*.jsonl
 
@@ -166,8 +168,45 @@ endpoints are:
 | `POST` | `/api/pipeline/run` | Run one analysis step or the full pipeline |
 | `POST` | `/api/pipeline/publish` | Write browser-ready assets for a season |
 | `GET` | `/api/data/status` | Inspect local source and artifact readiness |
+| `POST` | `/api/simulations/recommend-lineup` | Rank realistic next picks or bans through policy-guided completed-draft rollouts |
 
 The interactive API reference at `/docs` is the authoritative request schema.
+
+## Lineup recommendation workflow
+
+After every BP-state change, the BP Simulator automatically evaluates the ten
+highest-probability legal actions from the selected draft policy. For each
+candidate it forces that action, samples 24 legal completions of the remaining
+draft, scores every completed 5v5 lineup, and displays the top three choices.
+
+The ranker combines:
+
+- the existing statistical, learnable, or sequence model as the behavior
+  policy;
+- role and Global-BP legality at every simulated action;
+- the v3 lineup-advantage artifact for team strength, team/hero familiarity,
+  role coverage, team-specific pairs, and historical counters;
+- a risk-mode uncertainty penalty over the rollout distribution.
+
+The management page's full analysis flow retrains that value model for the
+selected season and stores it beside the other season outputs. Training uses
+only that season and chronologically earlier seasons, so rebuilding an older
+season cannot learn from future match results. The API automatically prefers
+the managed season artifact and falls back to the bundled snapshot until the
+first successful build.
+
+Ban turns use a separate opponent-denial model. It combines opponent hero
+preference and results, visible-pick synergy and counter evidence, historical
+ban outcomes, the acting team's opportunity cost, and the BP policy's behavior
+probability. Pick turns continue to use completed-lineup rollouts. The API
+selects the appropriate recommender automatically from the next BP action.
+
+The returned `expected_advantage` is a relative ranking score, not a calibrated
+or guaranteed win probability. Tank, engage, hard-control, and mage counts are
+returned as explanations; they are not hard-coded automatic bonuses. The
+current production implementation optimizes the current game's completed
+lineup while enforcing prior-game Global-BP exclusions. Recursive BO5/BO7
+hero-pool opportunity cost remains a separate future model.
 
 ## macOS visitor widget
 

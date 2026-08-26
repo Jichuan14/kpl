@@ -30,6 +30,8 @@ hero may have several rows when it has been played in multiple positions.
 | `build_hero_tactical_roles.py` | Build the commentary-only hero class and tactical-role artifact from Tencent sources |
 | `build_draft_model.py` | Train an interpretable next-action probability model and run BP rollouts |
 | `train_learnable_draft_choice_model.ipynb` | Train the team-aware learnable choice model with acting-team and opponent-team embeddings |
+| `train_lineup_value_model.py` | Train the season-scoped completed-lineup value ranker used by recommendation rollouts |
+| `train_ban_value_model.py` | Train the season-scoped opponent-denial ranker used only on ban turns |
 
 The Vue management page runs the complete pipeline automatically after a
 league download, or lets each stage run separately. Its outputs are isolated
@@ -262,6 +264,36 @@ future holdout and production rollout benchmark.
 The management pipeline exposes training as the `sequence_draft_model` step.
 The `all`/full-update flow runs it after the existing learnable model, so
 refreshed BP decisions automatically produce a fresh sequence artifact.
+
+### Train the completed-lineup value model
+
+The management `lineup_value_model` step trains on the selected season and all
+chronologically earlier available seasons, runs chronological validation, and
+writes the model, validation, and search records under the season output
+directory:
+
+```bash
+python analysis/train_lineup_value_model.py \
+  --league-id 20260003 \
+  --output-dir analysis/outputs/20260003
+```
+
+The full management pipeline runs this after the draft-policy models. The live
+recommendation planner reloads the generated artifact automatically; the
+tracked v3 snapshot remains a startup fallback.
+
+### Train the dedicated ban-value model
+
+```bash
+python analysis/train_ban_value_model.py --league-id 20260003
+```
+
+The trainer uses every available chronological decision export through the
+target season, preparing a missing historical export from the local database
+when necessary. It writes `ban_value_model.json` and
+`ban_value_validation.json` under the target season output directory. Ban
+turns route to this artifact automatically; pick turns remain on the lineup
+value rollout model.
 
 ### Build hero tactical roles for commentary
 

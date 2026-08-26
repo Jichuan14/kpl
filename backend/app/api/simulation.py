@@ -8,6 +8,7 @@ from app.schemas import (
     DraftSelectionCommentaryRequest,
     DraftSimulationRequest,
     HeroMatchupRecommendationRequest,
+    LineupRecommendationRequest,
 )
 from app.services.draft_commentary import build_selection_commentary
 from app.services.draft_simulator import (
@@ -20,6 +21,7 @@ from app.services.season_teams import validate_season_team_pair
 from app.services.coach_rate_limit import CoachRateLimiter
 from app.services.request_identity import client_key
 from app.services.hero_matchup import recommend_heroes
+from app.services.lineup_recommender import recommend_lineup
 
 router = APIRouter(prefix="/api/simulations", tags=["simulations"])
 
@@ -144,6 +146,56 @@ def draft_simulation(
                 FIXED_ROLLOUTS,
                 body.seed,
                 model_type=body.model_type,
+            )
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    finally:
+        simulation_rate_limiter.release(key)
+
+
+@router.post("/recommend-lineup")
+def lineup_recommendation(
+    body: LineupRecommendationRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> ApiResponse:
+    """Route picks to lineup value and bans to opponent-denial value."""
+    key = _simulation_client_key(request)
+    decision = simulation_rate_limiter.acquire(key)
+    if not decision.allowed:
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "code": "simulation_rate_limited",
+                "message": "The recommendation planner is busy. Try again shortly.",
+            },
+            headers={"Retry-After": str(decision.retry_after_seconds)},
+        )
+    state = body.model_dump(
+        exclude={"league_id", "model_type", "seed", "top_k", "risk_mode"}
+    )
+    try:
+        teams = validate_season_team_pair(
+            db,
+            body.league_id,
+            body.blue_team_id,
+            body.red_team_id,
+        )
+        state.update(
+            blue_team_name=teams["blue"]["team_name"],
+            red_team_name=teams["red"]["team_name"],
+        )
+        return ApiResponse(
+            data=recommend_lineup(
+                body.league_id,
+                state,
+                model_type=body.model_type,
+                seed=body.seed,
+                top_k=body.top_k,
+                risk_mode=body.risk_mode,
             )
         )
     except FileNotFoundError as exc:
