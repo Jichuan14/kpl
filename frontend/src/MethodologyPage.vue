@@ -440,13 +440,12 @@ onBeforeUnmount(() => {
             下一手预测回答“历史上更可能选谁”，并不等于“选谁以后阵容更强”。因此 Pick 推荐会把候选英雄带入后续 BP，模拟双方继续 Ban/Pick，等两边都形成五人阵容后，再由一个独立的阵容价值模型评价结果。
           </p>
 
-          <h3>7.1 八组阵容特征</h3>
-          <p>每个完整 5v5 会被转换成八个蓝方相对红方的差值。正值通常有利于蓝方，负值通常有利于红方。</p>
+          <h3>7.1 七组阵容特征</h3>
+          <p>每个完整 5v5 会被转换成七个蓝方相对红方的差值。正值通常有利于蓝方，负值通常有利于红方。</p>
 
           <ul>
             <li><strong>队伍强度：</strong>双方赛前 Elo 的差值，并除以 400 统一尺度。</li>
             <li><strong>英雄熟练度：</strong>双方队伍使用各自五名英雄时的历史表现差。</li>
-            <li><strong>分路覆盖：</strong>阵容能否较完整地覆盖五个位置，以及是否需要明显的错位安排。</li>
             <li><strong>机制协同：</strong>同队英雄在坦度、开团、控制、伤害类型等结构上的互补程度。</li>
             <li><strong>机制反制：</strong>双方英雄机制在对位层面的克制关系。</li>
             <li><strong>联赛组合协同：</strong>英雄两两同队出现时，在整个联赛中的历史超额表现。</li>
@@ -473,7 +472,7 @@ onBeforeUnmount(() => {
             <li><code>evidence</code>：证据充分度，范围为 0 到 1。</li>
           </ul>
 
-          <p>八个特征先按训练数据中的均值和尺度标准化，再由逻辑回归合并：</p>
+          <p>七个特征先按训练数据中的均值和尺度标准化，再由逻辑回归合并：</p>
 
           <pre>contributionᵢ = ((featureᵢ − meanᵢ) / scaleᵢ) × coefficientᵢ</pre>
           <pre>logit = intercept + Σ contributionᵢ</pre>
@@ -576,11 +575,11 @@ onBeforeUnmount(() => {
             <li><strong>蓝方阵容分 / 红方阵容分：</strong>由 <code>sigmoid(logit)</code> 得到，双方互补为 100%。它适合比较同一赛季、同一模型下的相对阵容优势，不应直接当作经过校准的赛场胜率。</li>
             <li><strong>队伍强度：</strong>只汇总 Elo 差带来的贡献。</li>
             <li><strong>英雄熟练度：</strong>只汇总双方对所选英雄历史掌握程度的贡献。</li>
-            <li><strong>阵容协同：</strong>汇总分路覆盖、机制协同、联赛组合协同和队伍组合协同。</li>
+            <li><strong>阵容协同：</strong>汇总机制协同、联赛组合协同和队伍组合协同。</li>
             <li><strong>英雄反制：</strong>汇总机制反制与 25 组方向性历史反制效果。</li>
           </ul>
 
-          <pre>hero_synergy = role_coverage + mechanics_ally
+          <pre>hero_synergy = mechanics_ally
              + league_pair_synergy + team_pair_synergy</pre>
           <pre>hero_counters = mechanics_counter + historical_counter</pre>
 

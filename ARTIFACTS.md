@@ -82,7 +82,7 @@ features used by website models and explanations.
 | `analysis/hero_tactical_roles.json` | Tactical-role descriptions used by Draft Coach | Tracked |
 | `analysis/hero_features.json` | Source specialty data for tactical roles and learnable-model metadata | Generated/supporting input |
 | `analysis/hero_specialty_vectors_thermometer.json` | Legacy fallback feature source used when current draft vectors are unavailable | Generated/supporting input |
-| `poc/team_advantage_v3/artifacts/team_advantage_model_v3.json` | Bundled fallback used only when the selected season has not yet built its managed lineup-value artifact | Tracked model snapshot |
+| `analysis/artifacts/lineup_value_model.json` | Bundled fallback used only when the selected season has not yet built its managed lineup-value artifact | Rebuildable model snapshot |
 
 `analysis/hero_feature_coverage.json` is a build-quality report and
 `analysis/example_draft_state.json` is a manual example. They are JSON files in

@@ -101,6 +101,10 @@ class BanRecommendationTests(unittest.TestCase):
         self.assertEqual(result["recommendations"][0]["hero_id"], 101)
         self.assertEqual(result["recommendations"][0]["action"], "ban")
         self.assertFalse(result["methodology"]["pick_model_used"])
+        self.assertNotIn(
+            "mechanics_role_coverage",
+            result["recommendations"][0]["ban_value_components"],
+        )
 
     def test_missing_artifact_falls_back_to_behavior_ranking(self) -> None:
         with patch.object(

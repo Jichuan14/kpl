@@ -11,17 +11,17 @@ from typing import Sequence
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-V3_PATH = REPO_ROOT / "poc" / "team_advantage_v3" / "team_advantage_v3.py"
+TRAINER_PATH = REPO_ROOT / "analysis" / "lineup_value" / "training.py"
 DEFAULT_DB = REPO_ROOT / "backend" / "data" / "kpl_bp.db"
 DEFAULT_MECHANICS = REPO_ROOT / "analysis" / "hero_draft_feature_vectors.json"
 
 
 def load_trainer():
     spec = importlib.util.spec_from_file_location(
-        "managed_team_advantage_v3", V3_PATH
+        "managed_lineup_value_training", TRAINER_PATH
     )
     if spec is None or spec.loader is None:
-        raise RuntimeError(f"Cannot load lineup value trainer: {V3_PATH}")
+        raise RuntimeError(f"Cannot load lineup value trainer: {TRAINER_PATH}")
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)

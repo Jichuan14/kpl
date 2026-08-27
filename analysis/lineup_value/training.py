@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tune and query a mechanics-aware team advantage score."""
+"""Train, validate, and inspect the maintained lineup value model."""
 
 from __future__ import annotations
 
@@ -17,16 +17,16 @@ from typing import Any, Sequence
 import numpy as np
 
 
-V3_DIR = Path(__file__).resolve().parent
-REPO_ROOT = V3_DIR.parents[1]
-V2_PATH = REPO_ROOT / "poc" / "team_score_v2" / "team_score_v2.py"
+MODULE_DIR = Path(__file__).resolve().parent
+REPO_ROOT = MODULE_DIR.parents[1]
+HISTORY_PATH = MODULE_DIR / "history.py"
 MECHANICS_PATH = REPO_ROOT / "analysis" / "hero_draft_feature_vectors.json"
 DB_PATH = REPO_ROOT / "backend" / "data" / "kpl_bp.db"
-ARTIFACT_DIR = V3_DIR / "artifacts"
-MODEL_PATH = ARTIFACT_DIR / "team_advantage_model_v3.json"
-SEARCH_PATH = ARTIFACT_DIR / "parameter_search_v3.json"
-VALIDATION_PATH = ARTIFACT_DIR / "validation_v3.json"
-VERSION = "team-advantage-poc-v4"
+ARTIFACT_DIR = REPO_ROOT / "analysis" / "artifacts"
+MODEL_PATH = ARTIFACT_DIR / "lineup_value_model.json"
+SEARCH_PATH = ARTIFACT_DIR / "lineup_value_parameter_search.json"
+VALIDATION_PATH = ARTIFACT_DIR / "lineup_value_validation.json"
+VERSION = "lineup-value-model-v1"
 
 
 def import_module(name: str, path: Path):
@@ -39,8 +39,7 @@ def import_module(name: str, path: Path):
     return module
 
 
-V2 = import_module("team_score_v2_for_v3", V2_PATH)
-V1 = V2.V1
+V1 = import_module("lineup_value_history", HISTORY_PATH)
 
 FEATURE_NAMES = (
     "team_strength",
@@ -50,14 +49,6 @@ FEATURE_NAMES = (
     "league_pair_synergy",
     "team_pair_synergy",
     "historical_counter_advantage",
-)
-
-LANE_FEATURES = (
-    "lane__clash",
-    "lane__mid",
-    "lane__jungle",
-    "lane__farm",
-    "lane__roam",
 )
 
 # A rule fires when any source mechanic on one hero complements/counters any
@@ -82,8 +73,7 @@ COUNTER_RULES = (
 )
 
 REQUIRED_FEATURES = sorted(
-    set(LANE_FEATURES)
-    | {
+    {
         feature
         for rules in (ALLY_RULES, COUNTER_RULES)
         for source, target in rules
@@ -94,7 +84,7 @@ REQUIRED_FEATURES = sorted(
 
 def load_raw_mechanics(
     path: Path,
-) -> tuple[dict[int, dict[str, float]], dict[int, dict[str, list[float]]], dict[str, Any]]:
+) -> tuple[dict[int, dict[str, float]], dict[str, Any]]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     names = list(payload["feature_names"])
     indexes = {name: index for index, name in enumerate(names)}
@@ -110,17 +100,6 @@ def load_raw_mechanics(
                 name: float(vector[indexes[name]]) for name in REQUIRED_FEATURES
             }
 
-    # Reuse V2's role-coverage implementation through its expected grouped map.
-    grouped = {
-        hero_id: {
-            "roles": [values[name] for name in LANE_FEATURES],
-            "damage": [0.0, 0.0, 0.0],
-            "control": [0.0],
-            "mobility": [0.0],
-            "sustain_support": [0.0],
-        }
-        for hero_id, values in raw.items()
-    }
     metadata = {
         "path": str(path.resolve()),
         "schema_version": payload.get("schema_version"),
@@ -129,7 +108,7 @@ def load_raw_mechanics(
         "ally_rules": ALLY_RULES,
         "counter_rules": COUNTER_RULES,
     }
-    return raw, grouped, metadata
+    return raw, metadata
 
 
 def rule_density(
@@ -189,8 +168,10 @@ def mechanics_counter(
 
 
 @dataclass
-class HistoricalStateV3(V2.HistoricalStateV2):
+class HistoricalStateV3(V1.HistoricalState):
+    team_pair_prior: float = 45.0
     raw_mechanics: dict[int, dict[str, float]] = field(default_factory=dict)
+    team_pair: dict[tuple[str, int, int], Any] = field(default_factory=dict)
 
     def features(
         self,
@@ -199,8 +180,20 @@ class HistoricalStateV3(V2.HistoricalStateV2):
         team_b_id: str,
         heroes_b: Sequence[int],
     ) -> tuple[list[float], dict[str, float]]:
-        v2_features, evidence = super().features(
+        base_features, evidence = super().features(
             team_a_id, heroes_a, team_b_id, heroes_b
+        )
+        team_pair_a = self._average(
+            self._stat(
+                self.team_pair, (team_a_id, *tuple(sorted(pair)))
+            ).effect(self.team_pair_prior)
+            for pair in combinations(heroes_a, 2)
+        )
+        team_pair_b = self._average(
+            self._stat(
+                self.team_pair, (team_b_id, *tuple(sorted(pair)))
+            ).effect(self.team_pair_prior)
+            for pair in combinations(heroes_b, 2)
         )
         ally_a, ally_coverage_a = ally_compatibility(heroes_a, self.raw_mechanics)
         ally_b, ally_coverage_b = ally_compatibility(heroes_b, self.raw_mechanics)
@@ -213,52 +206,73 @@ class HistoricalStateV3(V2.HistoricalStateV2):
         evidence["mechanics_counter_coverage"] = counter_coverage
         return (
             [
-                v2_features[0],
-                v2_features[1],
+                base_features[0],
+                base_features[1],
                 ally_a - ally_b,
                 counter,
-                v2_features[6],
-                v2_features[7],
-                v2_features[8],
+                base_features[2],
+                team_pair_a - team_pair_b,
+                base_features[3],
             ],
             evidence,
         )
+
+    def update(self, battle: Any) -> None:
+        expected_a = V1.elo_probability(
+            self.rating(battle.team_a_id), self.rating(battle.team_b_id)
+        )
+        residual_a = float(battle.team_a_won) - expected_a
+        residual_b = -residual_a
+        super().update(battle)
+        for pair in combinations(battle.heroes_a, 2):
+            key = (battle.team_a_id, *tuple(sorted(pair)))
+            self.team_pair.setdefault(key, V1.ResidualStat()).update(residual_a)
+        for pair in combinations(battle.heroes_b, 2):
+            key = (battle.team_b_id, *tuple(sorted(pair)))
+            self.team_pair.setdefault(key, V1.ResidualStat()).update(residual_b)
+
+    def advance_season(self) -> None:
+        super().advance_season()
+        for stat in self.team_pair.values():
+            stat.decay(self.season_decay)
+
+    def to_dict(self) -> dict[str, Any]:
+        payload = super().to_dict()
+        payload["config"]["team_pair_prior"] = self.team_pair_prior
+        payload["team_pair"] = [
+            [*key, round(stat.residual_sum, 10), round(stat.count, 10)]
+            for key, stat in sorted(self.team_pair.items())
+        ]
+        return payload
 
     @classmethod
     def from_dict(
         cls,
         payload: dict[str, Any],
         raw_mechanics: dict[int, dict[str, float]],
-        grouped_mechanics: dict[int, dict[str, list[float]]],
     ) -> "HistoricalStateV3":
-        v2 = V2.HistoricalStateV2.from_dict(payload, grouped_mechanics)
+        config = dict(payload["config"])
+        team_pair_prior = float(config.pop("team_pair_prior"))
+        base_payload = dict(payload)
+        base_payload["config"] = config
+        base = V1.HistoricalState.from_dict(base_payload)
         state = cls(
-            elo_k=v2.elo_k,
-            season_decay=v2.season_decay,
-            familiarity_prior=v2.familiarity_prior,
-            synergy_prior=v2.synergy_prior,
-            counter_prior=v2.counter_prior,
-            team_pair_prior=v2.team_pair_prior,
-            mechanics=grouped_mechanics,
+            team_pair_prior=team_pair_prior,
             raw_mechanics=raw_mechanics,
+            **config,
         )
-        for name in (
-            "ratings",
-            "team_games",
-            "team_wins",
-            "team_hero",
-            "ally_pair",
-            "counters",
-            "team_pair",
-        ):
-            setattr(state, name, getattr(v2, name))
+        for name in ("ratings", "team_games", "team_wins", "team_hero", "ally_pair", "counters"):
+            setattr(state, name, getattr(base, name))
+        for row in payload["team_pair"]:
+            state.team_pair[(str(row[0]), int(row[1]), int(row[2]))] = V1.ResidualStat(
+                float(row[3]), float(row[4])
+            )
         return state
 
 
 def make_state(
     config: dict[str, float],
     raw: dict[int, dict[str, float]],
-    grouped: dict[int, dict[str, list[float]]],
 ) -> HistoricalStateV3:
     return HistoricalStateV3(
         elo_k=config["elo_k"],
@@ -267,7 +281,6 @@ def make_state(
         synergy_prior=config["synergy_prior"],
         counter_prior=config["counter_prior"],
         team_pair_prior=config["team_pair_prior"],
-        mechanics=grouped,
         raw_mechanics=raw,
     )
 
@@ -382,7 +395,7 @@ def battles_through_league(
 
 
 def tune(args: argparse.Namespace) -> int:
-    raw, grouped, mechanics_metadata = load_raw_mechanics(args.mechanics)
+    raw, mechanics_metadata = load_raw_mechanics(args.mechanics)
     battles, team_names, hero_names = V1.load_battles(args.db)
     if args.target_league_id:
         battles, all_leagues = battles_through_league(
@@ -427,7 +440,7 @@ def tune(args: argparse.Namespace) -> int:
         return float(metrics["log_loss"]), -float(metrics["auc"])
 
     for index, config in enumerate(parameter_candidates(args.trials, args.seed), 1):
-        state = make_state(config, raw, grouped)
+        state = make_state(config, raw)
         features, outcomes, leagues, final_state = V1.build_prequential_features(
             battles, state=state
         )
@@ -474,7 +487,7 @@ def tune(args: argparse.Namespace) -> int:
         "elo_only": (0,),
         "team_and_familiarity": (0, 1),
         "without_rule_mechanics": (0, 1, 4, 5, 6),
-        "full_v4": tuple(range(len(FEATURE_NAMES))),
+        "full_lineup_value": tuple(range(len(FEATURE_NAMES))),
     }
     final_comparison: dict[str, Any] = {}
     for name, columns in comparisons.items():
@@ -525,7 +538,7 @@ def tune(args: argparse.Namespace) -> int:
             "folds": final_folds,
             "comparisons": final_comparison,
         },
-        "interpretation": "Advantage-ranking POC; score is not asserted to be a calibrated win probability.",
+        "interpretation": "Lineup advantage ranking; score is not asserted to be a calibrated win probability.",
     }
     model_payload = {
         "version": VERSION,
@@ -534,7 +547,6 @@ def tune(args: argparse.Namespace) -> int:
         "model": final_model,
         "state": final_state.to_dict(),
         "raw_mechanics": {str(key): value for key, value in raw.items()},
-        "grouped_mechanics": {str(key): value for key, value in grouped.items()},
         "mechanics_metadata": mechanics_metadata,
         "team_names": team_names,
         "hero_names": {str(key): value for key, value in hero_names.items()},
@@ -545,7 +557,7 @@ def tune(args: argparse.Namespace) -> int:
             "league_ids": all_leagues,
             "target_league_id": args.target_league_id,
         },
-        "warning": "Optimized advantage score POC; do not display as literal win probability.",
+        "warning": "Optimized lineup advantage score; do not display as literal win probability.",
     }
     for path, payload in (
         (args.search_output, search_payload),
@@ -571,7 +583,6 @@ def score(args: argparse.Namespace) -> int:
     team_names = {str(key): str(value) for key, value in payload["team_names"].items()}
     hero_names = {int(key): str(value) for key, value in payload["hero_names"].items()}
     raw = {int(key): value for key, value in payload["raw_mechanics"].items()}
-    grouped = {int(key): value for key, value in payload["grouped_mechanics"].items()}
     team_a = V1.resolve_team(args.team_a, team_names)
     team_b = V1.resolve_team(args.team_b, team_names)
     if team_a == team_b:
@@ -580,7 +591,7 @@ def score(args: argparse.Namespace) -> int:
     heroes_b = V1.resolve_heroes(args.heroes_b, hero_names)
     if set(heroes_a) & set(heroes_b):
         raise ValueError("A hero cannot appear on both sides")
-    state = HistoricalStateV3.from_dict(payload["state"], raw, grouped)
+    state = HistoricalStateV3.from_dict(payload["state"], raw)
     features, evidence = state.features(team_a, heroes_a, team_b, heroes_b)
     feature_array = np.asarray([features], dtype=float)
     model = payload["model"]

@@ -1,8 +1,7 @@
-"""Score completed KPL lineups with the validated v3 advantage artifact.
+"""Score completed KPL lineups with the maintained lineup-value artifact.
 
-The underlying model was trained as an advantage-ranking proof of concept.  It
-is useful for ordering candidate drafts, but its 0..1 output is intentionally
-not exposed as a literal win probability.
+The model orders candidate drafts, but its 0..1 output is intentionally not
+exposed as a literal win probability.
 """
 
 from __future__ import annotations
@@ -18,31 +17,22 @@ from typing import Any, Iterable, Sequence
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_MODEL_PATH = (
     REPO_ROOT
-    / "poc"
-    / "team_advantage_v3"
+    / "analysis"
     / "artifacts"
-    / "team_advantage_model_v3.json"
+    / "lineup_value_model.json"
 )
 GENERATED_MODEL_ROOT = REPO_ROOT / "analysis" / "outputs"
 TACTICAL_ROLES_PATH = REPO_ROOT / "analysis" / "hero_tactical_roles.json"
-SUPPORTED_VERSION = "team-advantage-poc-v3"
+SUPPORTED_VERSION = "lineup-value-model-v1"
 
 FEATURE_NAMES = (
     "team_strength",
     "hero_familiarity",
-    "mechanics_role_coverage",
     "mechanics_ally_compatibility",
     "mechanics_counter_advantage",
     "league_pair_synergy",
     "team_pair_synergy",
     "historical_counter_advantage",
-)
-LANE_FEATURES = (
-    "lane__clash",
-    "lane__mid",
-    "lane__jungle",
-    "lane__farm",
-    "lane__roam",
 )
 ALLY_RULES = (
     (("mechanic__debuff_armor",), ("damage__physical",)),
@@ -162,7 +152,7 @@ def _rule_density(
 
 
 class LineupValueModel:
-    """Read-only, in-memory adapter around the v3 JSON artifact."""
+    """Read-only, in-memory adapter around the lineup-value JSON artifact."""
 
     def __init__(self, payload: dict[str, Any], tactical_payload: dict[str, Any] | None = None):
         if payload.get("version") != SUPPORTED_VERSION:
@@ -185,13 +175,6 @@ class LineupValueModel:
         self.raw_mechanics = {
             int(hero_id): {name: float(value) for name, value in values.items()}
             for hero_id, values in payload.get("raw_mechanics", {}).items()
-        }
-        self.grouped_mechanics = {
-            int(hero_id): {
-                group: [float(value) for value in values]
-                for group, values in groups.items()
-            }
-            for hero_id, groups in payload.get("grouped_mechanics", {}).items()
         }
         self.hero_names = {
             int(hero_id): str(name) for hero_id, name in payload.get("hero_names", {}).items()
@@ -235,15 +218,6 @@ class LineupValueModel:
     def _stat(self, mapping: dict[tuple[Any, ...], ResidualStat], key: tuple[Any, ...]) -> ResidualStat:
         return mapping.get(key, ResidualStat())
 
-    def _composition_role_coverage(self, heroes: Sequence[int]) -> tuple[float, float]:
-        known = [self.grouped_mechanics[hero] for hero in heroes if hero in self.grouped_mechanics]
-        if not known:
-            return 0.0, 0.0
-        coverage = sum(
-            any(hero["roles"][index] > 0 for hero in known) for index in range(5)
-        ) / 5.0
-        return coverage, len(known) / len(heroes) if heroes else 0.0
-
     def team_hero_signal(self, team_id: str, hero_id: int) -> dict[str, float]:
         stat = self._stat(self.team_hero, (str(team_id), int(hero_id)))
         prior = self.config["familiarity_prior"]
@@ -273,7 +247,6 @@ class LineupValueModel:
                     roles[key] = roles.get(key, 0) + 1
             if self.raw_mechanics.get(hero_id, {}).get("control__strong", 0.0) > 0:
                 hard_cc += 1
-        role_coverage, mechanics_coverage = self._composition_role_coverage(hero_ids)
         return {
             "hero_count": float(len(hero_ids)),
             "tank_count": float(classes.get("tank", 0)),
@@ -284,9 +257,7 @@ class LineupValueModel:
             "secondary_engage_count": float(roles.get("secondary_engage", 0)),
             "multi_target_control_count": float(roles.get("multi_target_control", 0)),
             "hard_cc_count": float(hard_cc),
-            "role_coverage": role_coverage,
             "tactical_coverage": known / len(hero_ids) if hero_ids else 0.0,
-            "mechanics_coverage": mechanics_coverage,
         }
 
     def score(
@@ -318,8 +289,6 @@ class LineupValueModel:
             self._stat(self.team_hero, (str(red_team_id), hero)).effect(familiarity_prior)
             for hero in red
         )
-        role_blue, mechanics_coverage_blue = self._composition_role_coverage(blue)
-        role_red, mechanics_coverage_red = self._composition_role_coverage(red)
         ally_blue, ally_coverage_blue = _rule_density(
             blue, blue, self.raw_mechanics, ALLY_RULES, exclude_self=True
         )
@@ -363,7 +332,6 @@ class LineupValueModel:
         features = (
             strength,
             familiarity_blue - familiarity_red,
-            role_blue - role_red,
             ally_blue - ally_red,
             mechanics_blue_to_red - mechanics_red_to_blue,
             league_pair_blue - league_pair_red,
@@ -389,7 +357,6 @@ class LineupValueModel:
             "hero_synergy": sum(
                 contributions[name]
                 for name in (
-                    "mechanics_role_coverage",
                     "mechanics_ally_compatibility",
                     "league_pair_synergy",
                     "team_pair_synergy",
@@ -444,7 +411,6 @@ class LineupValueModel:
                 for blue_hero in blue
                 for red_hero in red
             ),
-            "mechanics_coverage": (mechanics_coverage_blue + mechanics_coverage_red) / 2.0,
             "mechanics_ally_coverage": (ally_coverage_blue + ally_coverage_red) / 2.0,
             "mechanics_counter_coverage": (
                 counter_coverage_blue + counter_coverage_red

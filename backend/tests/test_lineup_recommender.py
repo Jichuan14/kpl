@@ -47,6 +47,9 @@ class LineupValueIntegrationTest(unittest.TestCase):
         )
         self.assertEqual(result["blue_composition"]["hero_count"], 5.0)
         self.assertIn("hero_synergy", result["grouped_contributions"])
+        self.assertNotIn("mechanics_role_coverage", model.model["feature_names"])
+        self.assertNotIn("mechanics_role_coverage", result["features"])
+        self.assertNotIn("mechanics_role_coverage", result["contributions"])
         self.assertIn("not literal win probability", result["interpretation"])
 
     def test_value_model_rejects_partial_lineups(self) -> None:

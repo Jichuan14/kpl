@@ -15,9 +15,6 @@ RUN pip install --no-cache-dir \
 
 COPY backend /app/backend
 COPY analysis /app/analysis
-COPY poc/team_score/team_score_poc.py /app/poc/team_score/team_score_poc.py
-COPY poc/team_score_v2/team_score_v2.py /app/poc/team_score_v2/team_score_v2.py
-COPY poc/team_advantage_v3/team_advantage_v3.py /app/poc/team_advantage_v3/team_advantage_v3.py
 
 WORKDIR /app/backend
 
