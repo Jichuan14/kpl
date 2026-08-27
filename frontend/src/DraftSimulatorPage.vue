@@ -27,6 +27,7 @@ const result = ref(null);
 const recommendationResult = ref(null);
 const recommendationLoading = ref(false);
 const recommendationError = ref("");
+const expandedRecommendationIds = ref([]);
 const commentary = ref(null);
 const commentaryLoading = ref(false);
 const commentaryEnabled = ref(false);
@@ -339,6 +340,17 @@ function recommendationMetricHelp(metric, action) {
     confidence: "综合历史样本量、模拟完成情况和结果波动判断；“谨慎参考”表示不确定性较高。",
     policy: "表示职业队在类似 BP 局面选择这名英雄的模型概率，不代表选择后的胜率。",
   }[metric];
+}
+
+function recommendationDetailsExpanded(heroId) {
+  return expandedRecommendationIds.value.includes(Number(heroId));
+}
+
+function toggleRecommendationDetails(heroId) {
+  const id = Number(heroId);
+  expandedRecommendationIds.value = recommendationDetailsExpanded(id)
+    ? expandedRecommendationIds.value.filter((candidate) => candidate !== id)
+    : [...expandedRecommendationIds.value, id];
 }
 
 function recommendationReasonLabel(reason) {
@@ -967,6 +979,7 @@ async function forecast() {
 async function recommendCurrentDraft() {
   if (!teamsReady.value || !model.value || !currentStep.value) return;
   const requestNumber = ++recommendationRequestNumber;
+  expandedRecommendationIds.value = [];
   const blue = selectedTeam(teamsBySide.value.blue);
   const red = selectedTeam(teamsBySide.value.red);
   recommendationLoading.value = true;
@@ -1643,6 +1656,19 @@ onBeforeUnmount(() => {
                     <small>点击采用这一手</small>
                   </span>
                 </button>
+                <button
+                  type="button"
+                  class="recommendation-detail-toggle"
+                  :aria-expanded="recommendationDetailsExpanded(row.hero_id)"
+                  @click="toggleRecommendationDetails(row.hero_id)"
+                >
+                  {{ recommendationDetailsExpanded(row.hero_id) ? '收起评分详情' : '查看评分详情' }}
+                  <span aria-hidden="true">{{ recommendationDetailsExpanded(row.hero_id) ? '−' : '+' }}</span>
+                </button>
+                <div
+                  class="recommendation-details"
+                  :class="{ expanded: recommendationDetailsExpanded(row.hero_id) }"
+                >
                 <dl>
                   <div v-for="metric in ['score', 'delta', 'confidence', 'policy']" :key="metric">
                     <dt>
@@ -1668,6 +1694,7 @@ onBeforeUnmount(() => {
                 <p v-if="row.likely_opponent_responses?.length">
                   可能应对：{{ row.likely_opponent_responses.map((response) => response.hero_name).join('、') }}
                 </p>
+                </div>
               </article>
             </div>
             <small v-if="recommendationResult" class="recommendation-warning">
@@ -1810,6 +1837,9 @@ onBeforeUnmount(() => {
 .probability-list { margin-top: 1rem; }.probability-list > div { display: grid; grid-template-columns:2rem minmax(4rem,1.8fr) 3rem; gap: .55rem; align-items: center; margin-top: .55rem; font-size: .7rem; }.probability-list img { width:2rem; height:2rem; object-fit:cover; }.probability-list em { color: var(--ink-soft); font-style: normal; text-align: right; }.probability-track { height: .42rem; overflow: hidden; background: rgba(16,42,46,.1); }.probability-track i { display:block; height:100%; background: var(--accent); }
 .end-ban-list { margin-top: 1.2rem; padding-top: .85rem; border-top: 1px solid var(--line); }.end-ban-list p { margin:0 0 .5rem; color: var(--ink-soft); font-size:.65rem; }.end-ban-list span { display:inline-flex; align-items:center; gap:.25rem; margin:.25rem .6rem 0 0; font-size:.7rem; }.end-ban-list img { width:1.6rem; height:1.6rem; object-fit:cover; }
 .recommendation-panel { margin-top:.75rem; padding:1rem 1.15rem; border:1px solid var(--line); background:rgba(255,255,255,.8); }.recommendation-panel > header { display:flex; align-items:center; justify-content:space-between; gap:1rem; }.recommendation-panel h2 { margin:0; font:700 1.25rem var(--display); letter-spacing:-.035em; }.recommendation-panel header p:last-child { max-width:48rem; margin:.3rem 0 0; color:var(--ink-soft); font-size:.68rem; }.recommendation-status { padding:.38rem .55rem; border:1px solid var(--line); background:#edf8f3; color:var(--accent-deep); font:700 .6rem var(--mono); white-space:nowrap; }.recommendation-list { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.6rem; margin-top:.9rem; }.recommendation-list article { min-width:0; padding:.7rem; border:1px solid var(--line); background:#fff; }.recommendation-choice { display:grid; width:100%; grid-template-columns:auto 2.6rem minmax(0,1fr); gap:.45rem; align-items:center; padding:0 0 .6rem; border:0; border-bottom:1px solid var(--line); background:none; color:var(--ink); text-align:left; cursor:pointer; }.recommendation-choice:disabled { cursor:not-allowed; opacity:.55; }.recommendation-choice img { width:2.6rem; height:2.6rem; object-fit:cover; }.recommendation-choice span:last-child { display:grid; min-width:0; }.recommendation-choice strong { overflow:hidden; font:700 .78rem var(--mono); text-overflow:ellipsis; white-space:nowrap; }.recommendation-choice small { color:var(--ink-soft); font-size:.56rem; }.recommendation-rank { color:var(--accent-deep); font:700 .65rem var(--mono); }.recommendation-list dl { display:grid; grid-template-columns:1fr 1fr; gap:.35rem .55rem; margin:.65rem 0; }.recommendation-list dl div { min-width:0; }.recommendation-list dt { display:flex; align-items:center; gap:.2rem; color:var(--ink-soft); font-size:.52rem; letter-spacing:.04em; }.recommendation-list dd { margin:.08rem 0 0; font:700 .66rem var(--mono); }.metric-help { position:relative; display:inline-grid; width:.85rem; height:.85rem; flex:0 0 .85rem; place-items:center; padding:0; border:1px solid currentColor; border-radius:50%; background:#fff; color:var(--ink-soft); font:700 .5rem/1 var(--mono); cursor:help; }.metric-help::after { position:absolute; z-index:20; bottom:calc(100% + .4rem); left:50%; width:12rem; padding:.45rem .5rem; border:1px solid var(--line); background:var(--ink); color:#fff; box-shadow:0 .35rem .9rem rgba(16,42,46,.2); content:attr(data-help); font:.56rem/1.45 var(--mono); letter-spacing:0; opacity:0; pointer-events:none; text-align:left; transform:translate(-50%, .2rem); transition:opacity .15s ease, transform .15s ease; }.metric-help:hover::after,.metric-help:focus-visible::after { opacity:1; transform:translate(-50%, 0); }.recommendation-reasons { display:flex; flex-wrap:wrap; gap:.25rem; }.recommendation-reasons span { padding:.2rem .3rem; background:#edf8f3; color:var(--accent-deep); font-size:.52rem; }.recommendation-list article > p { margin:.55rem 0 0; color:var(--ink-soft); font-size:.57rem; line-height:1.4; }.recommendation-warning { display:block; margin-top:.7rem; color:var(--ink-soft); font-size:.56rem; }.recommendation-error { margin:.7rem 0 0; color:var(--warn); font-size:.65rem; }
+.metric-help { box-sizing:border-box; min-width:.85rem; max-width:.85rem; min-height:.85rem; max-height:.85rem; aspect-ratio:1; appearance:none; border-radius:999px; }
+.recommendation-detail-toggle { display:none; }
+.recommendation-details > p { margin:.55rem 0 0; color:var(--ink-soft); font-size:.57rem; line-height:1.4; }
 .commentary-panel { margin-top:.75rem; padding:1rem 1.15rem; border:1px solid var(--accent-deep); background:linear-gradient(120deg, rgba(232,191,108,.18), rgba(255,255,255,.84)); }.commentary-panel h2 { max-width:70rem; margin:.25rem 0 0; font:700 1rem/1.55 var(--display); letter-spacing:-.015em; }.commentary-loading { margin:0; color:var(--ink-soft); font-size:.75rem; }
 .hero-picker { margin-top: .75rem; padding: 1rem; }.picker-heading { display:flex; align-items:end; justify-content:space-between; gap:1rem; }.picker-heading h2 { font-size:1.4rem; }.picker-controls { display:flex; align-items:end; gap:.55rem; }.picker-controls input { width:min(100%, 260px); }.hero-lane-filter { display:grid; gap:.22rem; color:var(--ink-soft); font-size:.67rem; font-weight:700; letter-spacing:.04em; }.hero-lane-filter select { min-width:9.2rem; }.picker-targets { margin-top:.85rem; }.hero-options { display:grid; grid-template-columns:repeat(auto-fill, minmax(3.6rem, 1fr)); gap:.45rem; margin-top:1rem; max-height:360px; overflow:auto; }.hero-options button { position:relative; display:grid; place-items:center; aspect-ratio:1; padding:0; overflow:hidden; }.hero-options button img { width:100%; height:100%; object-fit:cover; }.hero-options button small { position:absolute; right:0; bottom:0; padding:.14rem .2rem; background:rgba(16,42,46,.84); color:#fff; font-size:.56rem; }.hero-options button:hover:not(:disabled), .draft-slots button:not(:disabled):hover { border-color: var(--accent); color: var(--accent-deep); }
 @media (max-width: 1000px) { .simulator-workspace { grid-template-columns:1fr; }.coach-rail { position:static; }.coach-rail { grid-row:1; }.simulator-main-column { grid-row:2; } }
@@ -1819,6 +1849,11 @@ onBeforeUnmount(() => {
   .forecast-panel { display:none; }
   .simulator-layout { display:contents; }
   .recommendation-panel > header { align-items:stretch; flex-direction:column; }.recommendation-status { align-self:flex-start; }.recommendation-list dl { grid-template-columns:1fr 1fr; }
+  .recommendation-detail-toggle { display:flex; width:100%; align-items:center; justify-content:space-between; margin-top:.55rem; padding:.45rem .1rem 0; border:0; border-top:1px solid var(--line); background:transparent; color:var(--accent-deep); font:700 .61rem var(--mono); }
+  .recommendation-detail-toggle span { font-size:.9rem; }
+  .recommendation-details:not(.expanded) { display:none; }
+  .metric-help::after { right:-.4rem; left:auto; width:min(12rem, calc(100vw - 3rem)); transform:translateY(.2rem); }
+  .metric-help:hover::after,.metric-help:focus-visible::after { transform:translateY(0); }
   .global-used > .used-team { display:none; }
   .mobile-used-hero-buttons { display:grid; grid-template-columns:1fr 1fr; grid-column:1 / -1; gap:.45rem; }
   .mobile-used-hero-buttons button { display:grid; gap:.12rem; min-height:3rem; padding:.45rem .55rem; border:1px solid var(--line); background:rgba(255,255,255,.9); color:var(--ink); text-align:left; }
