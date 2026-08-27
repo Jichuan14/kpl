@@ -16,7 +16,7 @@ from app.services.ban_recommender import recommend_ban
 
 
 CANDIDATE_POOL_SIZE = 10
-ROLLOUTS_PER_CANDIDATE = 24
+ROLLOUTS_PER_CANDIDATE = 12
 RISK_PENALTIES = {"safe": 0.75, "balanced": 0.35, "upside": 0.0}
 
 

@@ -35,7 +35,7 @@ DRAFT_FEATURES_PATH = ANALYSIS_DIR / "hero_draft_feature_vectors.json"
 # count.  Keep the low-level ``simulate`` function parameterized for offline
 # analysis and deterministic unit tests, but do not expose that control at an
 # HTTP or model-tool boundary.
-FIXED_ROLLOUTS = 100
+FIXED_ROLLOUTS = 50
 
 
 def model_path(league_id: str) -> Path:
