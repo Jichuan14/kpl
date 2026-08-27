@@ -98,7 +98,18 @@ export function fetchLiveWinnerPredictions({ leagueId, matchId, gameNumber }) {
   return request(`/api/leagues/${encodeURIComponent(leagueId)}/live-match/predictions?${params}`);
 }
 
-export function saveLiveWinnerPrediction({ leagueId, visitorId, matchId, gameNumber, teamAId, teamBId, winnerTeamId }) {
+export function saveLiveWinnerPrediction({
+  leagueId,
+  visitorId,
+  matchId,
+  gameNumber,
+  teamAId,
+  teamBId,
+  winnerTeamId,
+  bestOf = null,
+  teamAScore = null,
+  teamBScore = null,
+}) {
   return request(`/api/leagues/${encodeURIComponent(leagueId)}/live-match/predictions`, {
     method: "POST",
     body: JSON.stringify({
@@ -108,6 +119,9 @@ export function saveLiveWinnerPrediction({ leagueId, visitorId, matchId, gameNum
       team_a_id: teamAId,
       team_b_id: teamBId,
       winner_team_id: winnerTeamId,
+      best_of: bestOf,
+      team_a_score: teamAScore,
+      team_b_score: teamBScore,
     }),
   });
 }
@@ -182,6 +196,13 @@ export function recommendLineup(state) {
   return request("/api/simulations/recommend-lineup", {
     method: "POST",
     body: JSON.stringify(state),
+  });
+}
+
+export function scoreLineup(payload) {
+  return request("/api/simulations/score-lineup", {
+    method: "POST",
+    body: JSON.stringify(payload),
   });
 }
 

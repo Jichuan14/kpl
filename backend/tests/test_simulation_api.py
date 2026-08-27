@@ -162,6 +162,84 @@ class SimulationApiTest(unittest.TestCase):
 
         self.assertEqual(response.status_code, 422)
 
+    def test_completed_lineup_score_validates_teams_and_uses_season_model(self) -> None:
+        limiter = CoachRateLimiter(
+            per_ip_per_minute=10,
+            per_ip_per_day=10,
+            server_per_minute=10,
+            server_per_day=100,
+            max_active_per_ip=1,
+            max_active_server=2,
+        )
+
+        class FakeLineupModel:
+            payload = {
+                "version": "test-value-v1",
+                "generated_at": "2026-08-26T00:00:00Z",
+                "source": {"battle_count": 100},
+            }
+
+            def score(self, blue_team, blue_heroes, red_team, red_heroes):
+                return {
+                    "blue_advantage": 0.61,
+                    "red_advantage": 0.39,
+                    "grouped_contributions": {"team_strength": 0.2},
+                }
+
+        payload = {
+            "league_id": "20260003",
+            "blue_team_id": "blue-1",
+            "red_team_id": "red-1",
+            "blue_hero_ids": [101, 102, 103, 104, 105],
+            "red_hero_ids": [201, 202, 203, 204, 205],
+        }
+        model = FakeLineupModel()
+        with (
+            patch("app.api.simulation.simulation_rate_limiter", limiter),
+            patch(
+                "app.api.simulation.validate_season_team_pair",
+                return_value={
+                    "blue": {"team_name": "Official Blue"},
+                    "red": {"team_name": "Official Red"},
+                },
+            ),
+            patch(
+                "app.api.simulation.load_lineup_value_model",
+                return_value=model,
+            ) as load_model,
+            patch.object(model, "score", wraps=model.score) as score,
+        ):
+            response = self.client.post(
+                "/api/simulations/score-lineup", json=payload
+            )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()["data"]
+        self.assertEqual(data["blue_advantage"], 0.61)
+        self.assertEqual(data["blue_team"]["team_name"], "Official Blue")
+        load_model.assert_called_once_with("20260003")
+        score.assert_called_once_with(
+            "blue-1",
+            [101, 102, 103, 104, 105],
+            "red-1",
+            [201, 202, 203, 204, 205],
+        )
+
+    def test_completed_lineup_score_rejects_duplicate_or_overlapping_heroes(self) -> None:
+        payload = {
+            "league_id": "20260003",
+            "blue_team_id": "blue-1",
+            "red_team_id": "red-1",
+            "blue_hero_ids": [101, 101, 103, 104, 105],
+            "red_hero_ids": [101, 202, 203, 204, 205],
+        }
+
+        response = self.client.post(
+            "/api/simulations/score-lineup", json=payload
+        )
+
+        self.assertEqual(response.status_code, 422)
+
 
 if __name__ == "__main__":
     unittest.main()

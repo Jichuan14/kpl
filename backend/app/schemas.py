@@ -40,13 +40,40 @@ class LiveWinnerPredictionRequest(BaseModel):
     team_a_id: str = Field(min_length=1, max_length=32)
     team_b_id: str = Field(min_length=1, max_length=32)
     winner_team_id: str = Field(min_length=1, max_length=32)
+    best_of: int | None = Field(default=None, ge=1, le=7)
+    team_a_score: int | None = Field(default=None, ge=0, le=4)
+    team_b_score: int | None = Field(default=None, ge=0, le=4)
 
     @model_validator(mode="after")
-    def validate_winner_is_in_match(self) -> "LiveWinnerPredictionRequest":
+    def validate_prediction(self) -> "LiveWinnerPredictionRequest":
         if self.team_a_id == self.team_b_id:
             raise ValueError("A prediction requires two different teams")
         if self.winner_team_id not in {self.team_a_id, self.team_b_id}:
             raise ValueError("The predicted winner must be one of the match teams")
+        score_fields = (self.best_of, self.team_a_score, self.team_b_score)
+        if self.game_number == 0 and any(value is None for value in score_fields):
+            raise ValueError("A pre-match prediction requires an exact series score")
+        if any(value is not None for value in score_fields):
+            if any(value is None for value in score_fields):
+                raise ValueError("Best-of and both team scores must be provided together")
+            if self.best_of not in {1, 3, 5, 7}:
+                raise ValueError("Best-of must be one of 1, 3, 5, or 7")
+            wins_required = self.best_of // 2 + 1
+            winner_score = (
+                self.team_a_score
+                if self.winner_team_id == self.team_a_id
+                else self.team_b_score
+            )
+            loser_score = (
+                self.team_b_score
+                if self.winner_team_id == self.team_a_id
+                else self.team_a_score
+            )
+            if winner_score != wins_required or not 0 <= loser_score < wins_required:
+                raise ValueError(
+                    f"A BO{self.best_of} prediction must end "
+                    f"{wins_required}-0 through {wins_required}-{wins_required - 1}"
+                )
         return self
 
 
@@ -152,6 +179,32 @@ class LineupRecommendationRequest(DraftSimulationRequest):
 
     top_k: int = Field(default=3, ge=1, le=5)
     risk_mode: Literal["safe", "balanced", "upside"] = "balanced"
+
+
+class LineupScoreRequest(BaseModel):
+    """Two completed lineups to compare with the season value artifact."""
+
+    model_config = {"extra": "forbid"}
+
+    league_id: str = Field(min_length=1, max_length=32)
+    blue_team_id: str = Field(min_length=1, max_length=32)
+    red_team_id: str = Field(min_length=1, max_length=32)
+    blue_hero_ids: list[int] = Field(min_length=5, max_length=5)
+    red_hero_ids: list[int] = Field(min_length=5, max_length=5)
+
+    @model_validator(mode="after")
+    def validate_complete_lineups(self) -> "LineupScoreRequest":
+        if self.blue_team_id == self.red_team_id:
+            raise ValueError("Blue and Red must be different teams")
+        if any(hero_id <= 0 for hero_id in self.blue_hero_ids + self.red_hero_ids):
+            raise ValueError("Hero IDs must be positive")
+        if len(set(self.blue_hero_ids)) != 5:
+            raise ValueError("Blue lineup must contain five distinct heroes")
+        if len(set(self.red_hero_ids)) != 5:
+            raise ValueError("Red lineup must contain five distinct heroes")
+        if set(self.blue_hero_ids).intersection(self.red_hero_ids):
+            raise ValueError("A hero cannot appear on both sides")
+        return self
 
 
 class HeroMatchupRecommendationRequest(BaseModel):

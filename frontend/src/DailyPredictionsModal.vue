@@ -12,13 +12,17 @@ const props = defineProps({
 });
 const emit = defineEmits(["close"]);
 const selections = ref({});
+const scoreSelections = ref({});
 const totals = ref({});
 const saving = ref({});
 const sharing = ref("");
 const shareNotice = ref("");
 const storageKey = "kpl-series-winner-predictions";
+const scoreStorageKey = "kpl-series-score-predictions";
 const predictedMatches = computed(() =>
-  props.matches.filter((match) => selections.value[match.match_id])
+  props.matches.filter(
+    (match) => selections.value[match.match_id] && scoreSelections.value[match.match_id]
+  )
 );
 
 function savedSelections() {
@@ -44,6 +48,45 @@ function saveSelection(matchId, teamId) {
   window.localStorage.setItem(storageKey, JSON.stringify(selections.value));
 }
 
+function savedScores() {
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(scoreStorageKey) || "{}");
+    return saved && typeof saved === "object" ? saved : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveScore(matchId, teamAScore, teamBScore) {
+  scoreSelections.value = {
+    ...scoreSelections.value,
+    [matchId]: { team_a_score: teamAScore, team_b_score: teamBScore },
+  };
+  window.localStorage.setItem(scoreStorageKey, JSON.stringify(scoreSelections.value));
+}
+
+function scoreOptions(match, winnerIndex) {
+  const bestOf = Number(match.bo);
+  if (![1, 3, 5, 7].includes(bestOf)) return [];
+  const winsRequired = Math.floor(bestOf / 2) + 1;
+  return Array.from({ length: winsRequired }, (_, loserScore) => {
+    const scores = winnerIndex === 0
+      ? [winsRequired, loserScore]
+      : [loserScore, winsRequired];
+    return {
+      teamAScore: scores[0],
+      teamBScore: scores[1],
+      label: `${scores[0]}–${scores[1]}`,
+    };
+  });
+}
+
+function isSelectedScore(match, score) {
+  const selected = scoreSelections.value[match.match_id];
+  return selected?.team_a_score === score.teamAScore
+    && selected?.team_b_score === score.teamBScore;
+}
+
 function voteCount(match, teamId) {
   return totals.value[match.match_id]?.votes_by_team?.[String(teamId)] || 0;
 }
@@ -67,8 +110,13 @@ async function loadTotals(match) {
   }
 }
 
-async function predict(match, teamId) {
-  if (selections.value[match.match_id] || saving.value[match.match_id]) return;
+async function predict(match, teamId, score) {
+  const savedWinner = selections.value[match.match_id];
+  if (
+    saving.value[match.match_id]
+    || scoreSelections.value[match.match_id]
+    || (savedWinner && savedWinner !== String(teamId))
+  ) return;
   saving.value = { ...saving.value, [match.match_id]: true };
   try {
     const [teamA, teamB] = match.teams;
@@ -80,12 +128,20 @@ async function predict(match, teamId) {
       teamAId: String(teamA.team_id),
       teamBId: String(teamB.team_id),
       winnerTeamId: String(teamId),
+      bestOf: Number(match.bo),
+      teamAScore: score.teamAScore,
+      teamBScore: score.teamBScore,
     });
     totals.value = {
       ...totals.value,
       [match.match_id]: response,
     };
     saveSelection(match.match_id, response.your_winner_team_id || teamId);
+    saveScore(
+      match.match_id,
+      response.your_team_a_score ?? score.teamAScore,
+      response.your_team_b_score ?? score.teamBScore
+    );
   } finally {
     saving.value = { ...saving.value, [match.match_id]: false };
   }
@@ -94,6 +150,17 @@ async function predict(match, teamId) {
 function drawText(context, text, x, y, size, color = "#102a2e") {
   context.fillStyle = color;
   context.font = `700 ${size}px system-ui, sans-serif`;
+  context.fillText(text, x, y);
+}
+
+function drawFittedText(context, text, x, y, maxWidth, size, color = "#102a2e") {
+  let fittedSize = size;
+  context.font = `700 ${fittedSize}px system-ui, sans-serif`;
+  while (fittedSize > 16 && context.measureText(text).width > maxWidth) {
+    fittedSize -= 1;
+    context.font = `700 ${fittedSize}px system-ui, sans-serif`;
+  }
+  context.fillStyle = color;
   context.fillText(text, x, y);
 }
 
@@ -135,8 +202,24 @@ async function createPredictionImageBlob() {
       drawText(context, `${match.teams[0].team_name}  vs  ${match.teams[1].team_name}`, 82, rowY, 28);
       drawText(context, `BO${match.bo || "?"}`, 82, rowY + 42, 20, "#526467");
       context.fillStyle = "#e8bf6c";
-      roundedRect(context, 520, rowY + 8, 470, 42, 12);
-      drawText(context, `预测赢家  ${winner?.team_name || ""}`, 546, rowY + 38, 25, "#102a2e");
+      roundedRect(context, 350, rowY + 8, 640, 42, 12);
+      const score = scoreSelections.value[match.match_id];
+      const winnerIndex = match.teams.findIndex(
+        (team) => String(team.team_id) === String(selections.value[match.match_id])
+      );
+      const loser = match.teams[winnerIndex === 0 ? 1 : 0];
+      const winnerScore = winnerIndex === 0 ? score?.team_a_score : score?.team_b_score;
+      const loserScore = winnerIndex === 0 ? score?.team_b_score : score?.team_a_score;
+      const scoreText = score ? `${winnerScore}–${loserScore}` : "胜";
+      drawFittedText(
+        context,
+        `${winner?.team_name || ""}  ${scoreText}  ${loser?.team_name || ""}`,
+        374,
+        rowY + 38,
+        592,
+        25,
+        "#102a2e"
+      );
       rowY += 116;
     }
     context.fillStyle = "#102a2e";
@@ -191,6 +274,7 @@ async function shareAllPredictions() {
 
 onMounted(() => {
   selections.value = savedSelections();
+  scoreSelections.value = savedScores();
   props.matches.forEach(loadTotals);
 });
 </script>
@@ -201,8 +285,8 @@ onMounted(() => {
       <header>
         <div>
           <p>今日 KPL 赛事 · {{ date }}</p>
-          <h2 id="daily-prediction-title">选出你看好的队伍</h2>
-          <small>每场比赛只能提交一次预测。</small>
+          <h2 id="daily-prediction-title">预测比赛赢家和比分</h2>
+          <small>选择一个符合 BO 赛制的最终比分；每场比赛只能提交一次。</small>
         </div>
         <button type="button" aria-label="关闭今日赛事预测" @click="emit('close')">×</button>
       </header>
@@ -211,19 +295,50 @@ onMounted(() => {
           <small>{{ match.league_name }} · {{ match.start_time }} · BO{{ match.bo || '?' }}</small>
           <h3>{{ match.teams[0].team_name }} <span>vs</span> {{ match.teams[1].team_name }}</h3>
           <div class="daily-team-choices">
-            <button
-              v-for="team in match.teams"
+            <div
+              v-for="(team, teamIndex) in match.teams"
               :key="team.team_id"
-              type="button"
-              :class="{ active: selections[match.match_id] === String(team.team_id) }"
-              :disabled="Boolean(selections[match.match_id]) || saving[match.match_id]"
-              @click="predict(match, team.team_id)"
+              class="daily-team-choice"
             >
-              {{ team.team_name }} 胜 <small>{{ voteCount(match, team.team_id) }} 票</small>
-            </button>
+              <div class="daily-team-heading">
+                <strong>{{ team.team_name }} 胜</strong>
+                <small>{{ voteCount(match, team.team_id) }} 票</small>
+              </div>
+              <div class="daily-score-choices">
+                <button
+                  v-for="score in scoreOptions(match, teamIndex)"
+                  :key="score.label"
+                  type="button"
+                  :class="{
+                    active:
+                      selections[match.match_id] === String(team.team_id)
+                      && isSelectedScore(match, score)
+                  }"
+                  :disabled="
+                    saving[match.match_id]
+                    || Boolean(scoreSelections[match.match_id])
+                    || (
+                      Boolean(selections[match.match_id])
+                      && selections[match.match_id] !== String(team.team_id)
+                    )
+                  "
+                  :aria-label="`${team.team_name} 以 ${score.label} 获胜`"
+                  @click="predict(match, team.team_id, score)"
+                >
+                  {{ score.label }}
+                </button>
+              </div>
+            </div>
           </div>
+          <p v-if="!scoreOptions(match, 0).length" class="invalid-best-of">
+            暂不支持此比赛的 BO 类型。
+          </p>
           <footer v-if="selections[match.match_id]">
-            已预测 · {{ totalVotes(match) }} 人参与
+            {{ scoreSelections[match.match_id] ? '已预测' : '已选择赢家，请补充精确比分' }}
+            <template v-if="scoreSelections[match.match_id]">
+              · {{ scoreSelections[match.match_id].team_a_score }}–{{ scoreSelections[match.match_id].team_b_score }}
+            </template>
+            · {{ totalVotes(match) }} 人参与
           </footer>
         </article>
       </div>
@@ -239,9 +354,9 @@ onMounted(() => {
 
 <style scoped>
 .daily-prediction-scrim { position:fixed; z-index:80; inset:0; display:grid; place-items:center; padding:1rem; background:rgba(16,42,46,.58); }
-.daily-prediction-modal { width:min(100%, 42rem); max-height:min(88vh, 42rem); overflow:auto; padding:1rem; border:1px solid var(--line); background:#fdfbf5; box-shadow:0 22px 60px rgba(0,0,0,.28); }
+.daily-prediction-modal { width:min(100%, 52rem); max-height:min(92vh, 50rem); overflow:auto; padding:1rem; border:1px solid var(--line); background:#fdfbf5; box-shadow:0 22px 60px rgba(0,0,0,.28); }
 header { display:flex; justify-content:space-between; gap:.75rem; padding-bottom:.7rem; border-bottom:1px solid var(--line); } header p, header small, .daily-match-card > small { margin:0; color:var(--ink-soft); font-size:.61rem; } h2 { margin:.1rem 0; font:700 1.4rem var(--display); } header > button { width:1.8rem; height:1.8rem; border:1px solid var(--line); background:#fff; font-size:1.2rem; cursor:pointer; }
-.daily-match-list { display:grid; gap:.45rem; margin-top:.65rem; }.daily-match-card { padding:.7rem .75rem; border:1px solid var(--line); background:#fff; }.daily-match-card h3 { margin:.2rem 0 .45rem; font:700 .9rem var(--display); }.daily-match-card h3 span { color:var(--ink-soft); font-size:.65rem; }.daily-team-choices { display:flex; flex-wrap:wrap; gap:.3rem; }.daily-team-choices button { min-height:30px; padding:.3rem .45rem; border:1px solid #9ab9cd; background:#f3f9fd; color:var(--ink); font:700 .61rem var(--mono); cursor:pointer; }.daily-team-choices button.active { border-color:var(--accent-deep); background:var(--ink); color:#fff; }.daily-team-choices button:disabled { cursor:not-allowed; opacity:.6; }.daily-team-choices small { color:inherit; opacity:.7; } footer { margin-top:.45rem; color:var(--ink-soft); font-size:.61rem; }
+.daily-match-list { display:grid; gap:.45rem; margin-top:.65rem; }.daily-match-card { padding:.7rem .75rem; border:1px solid var(--line); background:#fff; }.daily-match-card h3 { margin:.25rem 0 .55rem; font:700 1.05rem var(--display); }.daily-match-card h3 span { margin:0 .2rem; color:var(--ink-soft); font-size:.65rem; }.daily-team-choices { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:.5rem; }.daily-team-choice { padding:.55rem; border:1px solid #9ab9cd; background:#f3f9fd; }.daily-team-heading { display:flex; align-items:center; justify-content:space-between; gap:1.5rem; margin-bottom:.5rem; }.daily-team-heading strong { color:var(--ink); font:800 .78rem var(--display); line-height:1.25; }.daily-team-heading small { color:var(--ink-soft); font:700 .58rem var(--mono); white-space:nowrap; }.daily-score-choices { display:flex; flex-wrap:wrap; gap:.3rem; }.daily-score-choices button { min-width:3rem; min-height:30px; padding:.3rem .45rem; border:1px solid #9ab9cd; background:#fff; color:var(--ink); font:700 .61rem var(--mono); cursor:pointer; }.daily-score-choices button.active { border-color:var(--accent-deep); background:var(--ink); color:#fff; }.daily-score-choices button:disabled { cursor:not-allowed; opacity:.6; }.invalid-best-of { margin:.4rem 0 0; color:#9a3f34; font-size:.61rem; } footer { margin-top:.45rem; color:var(--ink-soft); font-size:.61rem; }
 .combined-share { display:flex; align-items:center; justify-content:space-between; gap:.6rem; margin-top:.65rem; padding:.5rem .6rem; border:1px solid #d9b663; background:#fff8e7; color:var(--ink-soft); font-size:.62rem; }.combined-share button { min-height:32px; padding:.35rem .5rem; border:1px solid var(--accent-deep); background:var(--accent-deep); color:#fff; font:700 .61rem var(--mono); cursor:pointer; }.combined-share button:disabled { cursor:not-allowed; opacity:.6; }
-@media (max-width: 520px) { .daily-prediction-modal { padding:.8rem; }.daily-team-choices button { flex:1; }.combined-share { align-items:stretch; flex-direction:column; }.combined-share button { width:100%; } }
+@media (max-width: 520px) { .daily-prediction-modal { padding:.8rem; }.daily-team-choices { grid-template-columns:1fr; }.daily-score-choices button { flex:1; }.combined-share { align-items:stretch; flex-direction:column; }.combined-share button { width:100%; } }
 </style>

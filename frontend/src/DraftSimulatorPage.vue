@@ -11,6 +11,7 @@ import {
   fetchUpcomingMatch,
   fetchVisualizationSeasons,
   recommendLineup,
+  scoreLineup,
   simulateDraft,
 } from "./api";
 import DraftCoachPanel from "./DraftCoachPanel.vue";
@@ -27,6 +28,9 @@ const result = ref(null);
 const recommendationResult = ref(null);
 const recommendationLoading = ref(false);
 const recommendationError = ref("");
+const lineupScore = ref(null);
+const lineupScoreLoading = ref(false);
+const lineupScoreError = ref("");
 const expandedRecommendationIds = ref([]);
 const commentary = ref(null);
 const commentaryLoading = ref(false);
@@ -34,6 +38,7 @@ const commentaryEnabled = ref(false);
 const settingsOpen = ref(false);
 let commentaryRequestNumber = 0;
 let recommendationRequestNumber = 0;
+let lineupScoreRequestNumber = 0;
 const loading = ref(false);
 const simulating = ref(false);
 const error = ref("");
@@ -97,6 +102,10 @@ const currentStep = computed(() =>
   model.value?.draft_sequence?.find(
     (step) => Number(step.bp_order) === Number(bpOrder.value)
   ) || null
+);
+
+const lineupComplete = computed(
+  () => board.value.blue_picks.length === 5 && board.value.red_picks.length === 5
 );
 
 const currentLabel = computed(() => {
@@ -313,6 +322,11 @@ function signedPoints(value) {
   return `${points >= 0 ? "+" : ""}${points.toFixed(1)} 分`;
 }
 
+function signedContribution(value) {
+  const numberValue = Number(value || 0);
+  return `${numberValue >= 0 ? "+" : ""}${numberValue.toFixed(3)}`;
+}
+
 function confidenceLabel(value) {
   return {
     high: "参考较可靠",
@@ -378,6 +392,15 @@ function recommendationReasonLabel(reason) {
     }[reason.component] || "价值模型主要因素",
   };
   return labels[reason.code] || reason.code;
+}
+
+function lineupComponentLabel(component) {
+  return {
+    team_strength: "战队实力",
+    selected_hero_familiarity: "英雄熟练度",
+    hero_synergy: "阵容协同",
+    hero_counters: "英雄克制",
+  }[component] || component;
 }
 
 function number(value) {
@@ -885,6 +908,10 @@ async function loadModel() {
   loading.value = true;
   error.value = "";
   result.value = null;
+  lineupScoreRequestNumber += 1;
+  lineupScore.value = null;
+  lineupScoreLoading.value = false;
+  lineupScoreError.value = "";
   commentary.value = null;
   model.value = null;
   seasonTeams.value = [];
@@ -939,11 +966,24 @@ async function forecast() {
   recommendationLoading.value = false;
   recommendationResult.value = null;
   recommendationError.value = "";
+  lineupScoreRequestNumber += 1;
+  lineupScore.value = null;
+  lineupScoreLoading.value = false;
+  lineupScoreError.value = "";
   if (!teamsReady.value) {
     result.value = null;
     return;
   }
-  if (!model.value || !currentStep.value) {
+  if (!model.value) {
+    result.value = null;
+    return;
+  }
+  if (lineupComplete.value) {
+    result.value = null;
+    await scoreCompletedLineup();
+    return;
+  }
+  if (!currentStep.value) {
     result.value = null;
     return;
   }
@@ -974,6 +1014,32 @@ async function forecast() {
     simulating.value = false;
   }
   if (forecastSucceeded) await recommendCurrentDraft();
+}
+
+async function scoreCompletedLineup() {
+  if (!teamsReady.value || !lineupComplete.value) return;
+  const requestNumber = ++lineupScoreRequestNumber;
+  const blue = selectedTeam(teamsBySide.value.blue);
+  const red = selectedTeam(teamsBySide.value.red);
+  lineupScoreLoading.value = true;
+  lineupScoreError.value = "";
+  try {
+    const score = await scoreLineup({
+      league_id: leagueId.value,
+      blue_team_id: String(blue.team_id),
+      red_team_id: String(red.team_id),
+      blue_hero_ids: [...board.value.blue_picks],
+      red_hero_ids: [...board.value.red_picks],
+    });
+    if (requestNumber === lineupScoreRequestNumber) lineupScore.value = score;
+  } catch (err) {
+    if (requestNumber === lineupScoreRequestNumber) {
+      lineupScore.value = null;
+      lineupScoreError.value = err.message || "无法评分当前完整阵容。";
+    }
+  } finally {
+    if (requestNumber === lineupScoreRequestNumber) lineupScoreLoading.value = false;
+  }
 }
 
 async function recommendCurrentDraft() {
@@ -1628,6 +1694,55 @@ onBeforeUnmount(() => {
             </aside>
           </section>
 
+          <section v-if="lineupComplete || lineupScoreLoading || lineupScoreError" class="lineup-score-panel">
+            <header>
+              <div>
+                <p class="simulator-eyebrow">完整阵容评分</p>
+                <h2>5v5 阵容对比</h2>
+                <p>使用当前赛季阵容价值模型直接比较双方最终五人阵容。</p>
+              </div>
+              <span class="recommendation-status" aria-live="polite">
+                {{ lineupScoreLoading ? '正在评分…' : lineupScore ? '评分已更新' : '等待完整阵容' }}
+              </span>
+            </header>
+            <p v-if="lineupScoreError" class="recommendation-error">{{ lineupScoreError }}</p>
+            <template v-if="lineupScore">
+              <div class="lineup-score-teams">
+                <article class="blue">
+                  <small>{{ lineupScore.blue_team.team_name }}</small>
+                  <strong>{{ percent(lineupScore.blue_advantage) }}</strong>
+                  <span>蓝方相对阵容优势</span>
+                </article>
+                <article class="red">
+                  <small>{{ lineupScore.red_team.team_name }}</small>
+                  <strong>{{ percent(lineupScore.red_advantage) }}</strong>
+                  <span>红方相对阵容优势</span>
+                </article>
+              </div>
+              <div class="lineup-score-breakdown">
+                <div>
+                  <h3>蓝方视角贡献</h3>
+                  <dl>
+                    <div v-for="(value, component) in lineupScore.grouped_contributions" :key="component">
+                      <dt>{{ lineupComponentLabel(component) }}</dt>
+                      <dd :class="{ positive: Number(value) > 0, negative: Number(value) < 0 }">{{ signedContribution(value) }}</dd>
+                    </div>
+                  </dl>
+                </div>
+                <div>
+                  <h3>阵容结构</h3>
+                  <dl>
+                    <div><dt>蓝方前排 / 硬控</dt><dd>{{ lineupScore.blue_composition.frontline_count }} / {{ lineupScore.blue_composition.hard_cc_count }}</dd></div>
+                    <div><dt>红方前排 / 硬控</dt><dd>{{ lineupScore.red_composition.frontline_count }} / {{ lineupScore.red_composition.hard_cc_count }}</dd></div>
+                    <div><dt>蓝方开团点</dt><dd>{{ lineupScore.blue_composition.primary_engage_count }}</dd></div>
+                    <div><dt>红方开团点</dt><dd>{{ lineupScore.red_composition.primary_engage_count }}</dd></div>
+                  </dl>
+                </div>
+              </div>
+              <small class="recommendation-warning">这是相对阵容排序分，不是比赛胜率；正贡献偏向蓝方，负贡献偏向红方。</small>
+            </template>
+          </section>
+
           <section class="recommendation-panel">
             <header>
               <div>
@@ -1837,20 +1952,23 @@ onBeforeUnmount(() => {
 .probability-list { margin-top: 1rem; }.probability-list > div { display: grid; grid-template-columns:2rem minmax(4rem,1.8fr) 3rem; gap: .55rem; align-items: center; margin-top: .55rem; font-size: .7rem; }.probability-list img { width:2rem; height:2rem; object-fit:cover; }.probability-list em { color: var(--ink-soft); font-style: normal; text-align: right; }.probability-track { height: .42rem; overflow: hidden; background: rgba(16,42,46,.1); }.probability-track i { display:block; height:100%; background: var(--accent); }
 .end-ban-list { margin-top: 1.2rem; padding-top: .85rem; border-top: 1px solid var(--line); }.end-ban-list p { margin:0 0 .5rem; color: var(--ink-soft); font-size:.65rem; }.end-ban-list span { display:inline-flex; align-items:center; gap:.25rem; margin:.25rem .6rem 0 0; font-size:.7rem; }.end-ban-list img { width:1.6rem; height:1.6rem; object-fit:cover; }
 .recommendation-panel { margin-top:.75rem; padding:1rem 1.15rem; border:1px solid var(--line); background:rgba(255,255,255,.8); }.recommendation-panel > header { display:flex; align-items:center; justify-content:space-between; gap:1rem; }.recommendation-panel h2 { margin:0; font:700 1.25rem var(--display); letter-spacing:-.035em; }.recommendation-panel header p:last-child { max-width:48rem; margin:.3rem 0 0; color:var(--ink-soft); font-size:.68rem; }.recommendation-status { padding:.38rem .55rem; border:1px solid var(--line); background:#edf8f3; color:var(--accent-deep); font:700 .6rem var(--mono); white-space:nowrap; }.recommendation-list { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.6rem; margin-top:.9rem; }.recommendation-list article { min-width:0; padding:.7rem; border:1px solid var(--line); background:#fff; }.recommendation-choice { display:grid; width:100%; grid-template-columns:auto 2.6rem minmax(0,1fr); gap:.45rem; align-items:center; padding:0 0 .6rem; border:0; border-bottom:1px solid var(--line); background:none; color:var(--ink); text-align:left; cursor:pointer; }.recommendation-choice:disabled { cursor:not-allowed; opacity:.55; }.recommendation-choice img { width:2.6rem; height:2.6rem; object-fit:cover; }.recommendation-choice span:last-child { display:grid; min-width:0; }.recommendation-choice strong { overflow:hidden; font:700 .78rem var(--mono); text-overflow:ellipsis; white-space:nowrap; }.recommendation-choice small { color:var(--ink-soft); font-size:.56rem; }.recommendation-rank { color:var(--accent-deep); font:700 .65rem var(--mono); }.recommendation-list dl { display:grid; grid-template-columns:1fr 1fr; gap:.35rem .55rem; margin:.65rem 0; }.recommendation-list dl div { min-width:0; }.recommendation-list dt { display:flex; align-items:center; gap:.2rem; color:var(--ink-soft); font-size:.52rem; letter-spacing:.04em; }.recommendation-list dd { margin:.08rem 0 0; font:700 .66rem var(--mono); }.metric-help { position:relative; display:inline-grid; width:.85rem; height:.85rem; flex:0 0 .85rem; place-items:center; padding:0; border:1px solid currentColor; border-radius:50%; background:#fff; color:var(--ink-soft); font:700 .5rem/1 var(--mono); cursor:help; }.metric-help::after { position:absolute; z-index:20; bottom:calc(100% + .4rem); left:50%; width:12rem; padding:.45rem .5rem; border:1px solid var(--line); background:var(--ink); color:#fff; box-shadow:0 .35rem .9rem rgba(16,42,46,.2); content:attr(data-help); font:.56rem/1.45 var(--mono); letter-spacing:0; opacity:0; pointer-events:none; text-align:left; transform:translate(-50%, .2rem); transition:opacity .15s ease, transform .15s ease; }.metric-help:hover::after,.metric-help:focus-visible::after { opacity:1; transform:translate(-50%, 0); }.recommendation-reasons { display:flex; flex-wrap:wrap; gap:.25rem; }.recommendation-reasons span { padding:.2rem .3rem; background:#edf8f3; color:var(--accent-deep); font-size:.52rem; }.recommendation-list article > p { margin:.55rem 0 0; color:var(--ink-soft); font-size:.57rem; line-height:1.4; }.recommendation-warning { display:block; margin-top:.7rem; color:var(--ink-soft); font-size:.56rem; }.recommendation-error { margin:.7rem 0 0; color:var(--warn); font-size:.65rem; }
+.lineup-score-panel { margin-top:.75rem; padding:1rem 1.15rem; border:1px solid var(--line); background:linear-gradient(135deg,rgba(237,248,243,.95),rgba(255,255,255,.92)); }.lineup-score-panel > header { display:flex; align-items:center; justify-content:space-between; gap:1rem; }.lineup-score-panel h2 { margin:0; font:700 1.25rem var(--display); letter-spacing:-.035em; }.lineup-score-panel header p:last-child { margin:.3rem 0 0; color:var(--ink-soft); font-size:.68rem; }.lineup-score-teams { display:grid; grid-template-columns:1fr 1fr; gap:.7rem; margin-top:.9rem; }.lineup-score-teams article { display:grid; gap:.18rem; padding:.85rem; border:1px solid var(--line); background:#fff; }.lineup-score-teams article.red { text-align:right; }.lineup-score-teams small,.lineup-score-teams span { color:var(--ink-soft); font-size:.58rem; }.lineup-score-teams strong { font:700 1.8rem var(--display); }.lineup-score-teams .blue strong { color:#247aa5; }.lineup-score-teams .red strong { color:#b74942; }.lineup-score-breakdown { display:grid; grid-template-columns:1fr 1fr; gap:.7rem; margin-top:.7rem; }.lineup-score-breakdown > div { padding:.75rem; border:1px solid var(--line); background:rgba(255,255,255,.8); }.lineup-score-breakdown h3 { margin:0 0 .55rem; font:700 .72rem var(--mono); }.lineup-score-breakdown dl { display:grid; grid-template-columns:1fr 1fr; gap:.45rem .7rem; margin:0; }.lineup-score-breakdown dl div { min-width:0; }.lineup-score-breakdown dt { color:var(--ink-soft); font-size:.54rem; }.lineup-score-breakdown dd { margin:.08rem 0 0; font:700 .67rem var(--mono); }.lineup-score-breakdown dd.positive { color:#167451; }.lineup-score-breakdown dd.negative { color:#a8463f; }
 .metric-help { box-sizing:border-box; min-width:.85rem; max-width:.85rem; min-height:.85rem; max-height:.85rem; aspect-ratio:1; appearance:none; border-radius:999px; }
 .recommendation-detail-toggle { display:none; }
 .recommendation-details > p { margin:.55rem 0 0; color:var(--ink-soft); font-size:.57rem; line-height:1.4; }
 .commentary-panel { margin-top:.75rem; padding:1rem 1.15rem; border:1px solid var(--accent-deep); background:linear-gradient(120deg, rgba(232,191,108,.18), rgba(255,255,255,.84)); }.commentary-panel h2 { max-width:70rem; margin:.25rem 0 0; font:700 1rem/1.55 var(--display); letter-spacing:-.015em; }.commentary-loading { margin:0; color:var(--ink-soft); font-size:.75rem; }
 .hero-picker { margin-top: .75rem; padding: 1rem; }.picker-heading { display:flex; align-items:end; justify-content:space-between; gap:1rem; }.picker-heading h2 { font-size:1.4rem; }.picker-controls { display:flex; align-items:end; gap:.55rem; }.picker-controls input { width:min(100%, 260px); }.hero-lane-filter { display:grid; gap:.22rem; color:var(--ink-soft); font-size:.67rem; font-weight:700; letter-spacing:.04em; }.hero-lane-filter select { min-width:9.2rem; }.picker-targets { margin-top:.85rem; }.hero-options { display:grid; grid-template-columns:repeat(auto-fill, minmax(3.6rem, 1fr)); gap:.45rem; margin-top:1rem; max-height:360px; overflow:auto; }.hero-options button { position:relative; display:grid; place-items:center; aspect-ratio:1; padding:0; overflow:hidden; }.hero-options button img { width:100%; height:100%; object-fit:cover; }.hero-options button small { position:absolute; right:0; bottom:0; padding:.14rem .2rem; background:rgba(16,42,46,.84); color:#fff; font-size:.56rem; }.hero-options button:hover:not(:disabled), .draft-slots button:not(:disabled):hover { border-color: var(--accent); color: var(--accent-deep); }
 @media (max-width: 1000px) { .simulator-workspace { grid-template-columns:1fr; }.coach-rail { position:static; }.coach-rail { grid-row:1; }.simulator-main-column { grid-row:2; } }
-@media (max-width: 860px) { .simulator-hero, .simulator-status, .simulator-layout { flex-direction:column; align-items:stretch; }.simulator-header-controls { justify-content:stretch; }.simulator-season, .forecast-panel { width:100%; }.simulator-season { min-width:0; }.simulator-settings { align-self:flex-end; }.forecast-panel { min-width:0; }.simulator-actions { justify-content:space-between; }.side-assignment { position:static; width:100%; transform:none; }.side-assignment label { flex:1; }.draft-board { grid-template-columns:1fr; }.global-bp-panel { grid-template-columns:1fr; }.global-used { grid-template-columns:1fr; }.next-battle { justify-self:start; }.recommendation-list { grid-template-columns:1fr; } }
+@media (max-width: 860px) { .simulator-hero, .simulator-status, .simulator-layout { flex-direction:column; align-items:stretch; }.simulator-header-controls { justify-content:stretch; }.simulator-season, .forecast-panel { width:100%; }.simulator-season { min-width:0; }.simulator-settings { align-self:flex-end; }.forecast-panel { min-width:0; }.simulator-actions { justify-content:space-between; }.side-assignment { position:static; width:100%; transform:none; }.side-assignment label { flex:1; }.draft-board { grid-template-columns:1fr; }.global-bp-panel { grid-template-columns:1fr; }.global-used { grid-template-columns:1fr; }.next-battle { justify-self:start; }.recommendation-list,.lineup-score-breakdown { grid-template-columns:1fr; } }
 @media (max-width:620px) {
   .settings-menu { left:0; right:auto; width:min(19rem, calc(100vw - 1rem)); }
   .forecast-panel { display:none; }
   .simulator-layout { display:contents; }
   .recommendation-panel > header { align-items:stretch; flex-direction:column; }.recommendation-status { align-self:flex-start; }.recommendation-list dl { grid-template-columns:1fr 1fr; }
-  .recommendation-detail-toggle { display:flex; width:100%; align-items:center; justify-content:space-between; margin-top:.55rem; padding:.45rem .1rem 0; border:0; border-top:1px solid var(--line); background:transparent; color:var(--accent-deep); font:700 .61rem var(--mono); }
-  .recommendation-detail-toggle span { font-size:.9rem; }
+  .recommendation-list article { position:relative; }
+  .recommendation-choice { min-height:2.6rem; padding-right:7.2rem; padding-bottom:0; border-bottom:0; }
+  .recommendation-detail-toggle { position:absolute; top:1.05rem; right:.7rem; display:flex; width:auto; min-height:1.75rem; align-items:center; gap:.35rem; margin:0; padding:.3rem .45rem; border:1px solid var(--line); border-radius:.3rem; background:#fff; color:var(--accent-deep); font:700 .58rem var(--mono); }
+  .recommendation-detail-toggle span { font-size:.78rem; line-height:1; }
   .recommendation-details:not(.expanded) { display:none; }
   .metric-help::after { right:-.4rem; left:auto; width:min(12rem, calc(100vw - 3rem)); transform:translateY(.2rem); }
   .metric-help:hover::after,.metric-help:focus-visible::after { transform:translateY(0); }

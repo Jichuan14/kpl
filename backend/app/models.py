@@ -266,6 +266,9 @@ class LiveMatchWinnerPrediction(Base):
     game_number: Mapped[int] = mapped_column(Integer, index=True)
     visitor_hash: Mapped[str] = mapped_column(String(64), index=True)
     winner_team_id: Mapped[str] = mapped_column(String(32), index=True)
+    best_of: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    team_a_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    team_b_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()
     )

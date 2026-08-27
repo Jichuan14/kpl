@@ -169,6 +169,7 @@ endpoints are:
 | `POST` | `/api/pipeline/publish` | Write browser-ready assets for a season |
 | `GET` | `/api/data/status` | Inspect local source and artifact readiness |
 | `POST` | `/api/simulations/recommend-lineup` | Rank realistic next picks or bans through policy-guided completed-draft rollouts |
+| `POST` | `/api/simulations/score-lineup` | Directly score one complete legal 5v5 lineup comparison |
 
 The interactive API reference at `/docs` is the authoritative request schema.
 

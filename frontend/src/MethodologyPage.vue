@@ -66,13 +66,21 @@ const sections = [
   ["scoring", "4. 候选英雄打分"],
   ["fusion", "5. 两个分支如何合并"],
   ["training", "6. 训练、评估与线上推理"],
+  ["lineup-value", "7. 完整阵容价值模型"],
+  ["ban-value", "8. 专用 Ban 价值模型"],
+  ["lineup-scoring", "9. 完整 5v5 阵容评分"],
 ];
 
 function scrollToSection(id) {
+  activeSection.value = id;
   document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function updateActiveSection() {
+  if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4) {
+    activeSection.value = sections.at(-1)[0];
+    return;
+  }
   const current = sections
     .map(([id]) => document.getElementById(id))
     .filter(Boolean)
@@ -110,9 +118,9 @@ onBeforeUnmount(() => {
   <main class="methodology-page">
     <header class="page-header">
       <p class="eyebrow">方法说明</p>
-      <h1>BP 下一手预测：统计关系与 GRU 模型</h1>
+      <h1>BP 预测、Ban/Pick 推荐与阵容评分</h1>
       <p>
-        本页说明网站目前使用的 BP 预测方法。线上预测使用的是 Bag + GRU 模型：Bag 分支判断当前局面，GRU 分支补充严格的 BP 顺序信息；在 BO 系列赛中，模型还会参考此前小局双方已经使用过的英雄。
+        本页说明网站目前使用的三层方法。Bag + GRU 模型先判断职业比赛中下一手最可能出现什么；Pick 推荐再模拟后续 BP，并用完整阵容价值模型评价最终 5v5；Ban 推荐则由专用 Ban 价值模型估计限制对手的收益。完整阵容确定后，页面还可以直接给双方阵容评分和各项贡献。
       </p>
       <p v-if="model?.sequenceModel?.available" class="model-note">
         当前线上模型：{{ model.sequenceModel.name }}；隐藏维度 {{ model.sequenceModel.hiddenDim }}；残差系数 α = {{ Number(model.sequenceModel.residualAlpha).toFixed(4) }}。
@@ -424,6 +432,170 @@ onBeforeUnmount(() => {
           </p>
 
           <span id="rankings" aria-hidden="true"></span>
+        </section>
+
+        <section id="lineup-value">
+          <h2>7. 完整阵容价值模型</h2>
+          <p>
+            下一手预测回答“历史上更可能选谁”，并不等于“选谁以后阵容更强”。因此 Pick 推荐会把候选英雄带入后续 BP，模拟双方继续 Ban/Pick，等两边都形成五人阵容后，再由一个独立的阵容价值模型评价结果。
+          </p>
+
+          <h3>7.1 八组阵容特征</h3>
+          <p>每个完整 5v5 会被转换成八个蓝方相对红方的差值。正值通常有利于蓝方，负值通常有利于红方。</p>
+
+          <ul>
+            <li><strong>队伍强度：</strong>双方赛前 Elo 的差值，并除以 400 统一尺度。</li>
+            <li><strong>英雄熟练度：</strong>双方队伍使用各自五名英雄时的历史表现差。</li>
+            <li><strong>分路覆盖：</strong>阵容能否较完整地覆盖五个位置，以及是否需要明显的错位安排。</li>
+            <li><strong>机制协同：</strong>同队英雄在坦度、开团、控制、伤害类型等结构上的互补程度。</li>
+            <li><strong>机制反制：</strong>双方英雄机制在对位层面的克制关系。</li>
+            <li><strong>联赛组合协同：</strong>英雄两两同队出现时，在整个联赛中的历史超额表现。</li>
+            <li><strong>队伍组合协同：</strong>同一英雄组合在指定队伍手中的历史超额表现。</li>
+            <li><strong>历史反制优势：</strong>蓝方五名英雄对红方五名英雄的 25 组方向性历史对抗效果。</li>
+          </ul>
+
+          <p>
+            “双坦克”“强开团”或“硬控较多”会进入机制描述，但不会被人工固定为加分规则。模型只会在历史数据证明该信息能提供额外预测力时给予权重。这样可以避免把直觉重复计分，也避免在版本变化后继续沿用已经失效的经验。
+          </p>
+
+          <h3>7.2 小样本收缩与最终分数</h3>
+          <p>
+            熟练度、组合协同和反制效果都可能遇到小样本。系统先计算相对于基础胜率的残差，再向零收缩：样本越少，效果越接近中性；样本越多，历史信号保留得越完整。
+          </p>
+
+          <pre>effect = 4 × residual_sum / (observations + prior)</pre>
+          <pre>evidence = observations / (observations + prior)</pre>
+
+          <ul>
+            <li><code>residual_sum</code>：实际结果相对于该场基础预期的累计偏差。</li>
+            <li><code>observations</code>：该队伍、英雄组合或对位的有效历史样本数。</li>
+            <li><code>prior</code>：收缩强度。它越大，小样本越不容易产生极端结论。</li>
+            <li><code>evidence</code>：证据充分度，范围为 0 到 1。</li>
+          </ul>
+
+          <p>八个特征先按训练数据中的均值和尺度标准化，再由逻辑回归合并：</p>
+
+          <pre>contributionᵢ = ((featureᵢ − meanᵢ) / scaleᵢ) × coefficientᵢ</pre>
+          <pre>logit = intercept + Σ contributionᵢ</pre>
+          <pre>blue_advantage = sigmoid(logit)</pre>
+          <pre>red_advantage = 1 − blue_advantage</pre>
+
+          <p>
+            页面展示的每一项贡献就是上式中的 <code>contributionᵢ</code>。贡献为正表示该项把结果推向蓝方，为负表示推向红方；绝对值越大，说明该项对本次相对排序的影响越大。它不是单独的一项胜率。
+          </p>
+
+          <h3>7.3 Pick 推荐如何使用阵容模型</h3>
+          <p>
+            系统先由 Bag + GRU 模型保留当前最符合真实 BP 行为的 10 个合法 Pick。对每个候选，系统强制执行这一手，再按策略模型模拟 24 条合法的后续 BP 路径，直到得到完整阵容。阵容价值模型会分别评价这 24 个终局，并转换为当前行动方的收益。
+          </p>
+
+          <pre>expected_value = 24 个模拟终局收益的平均值</pre>
+          <pre>uncertainty = 24 个模拟终局收益的标准差</pre>
+          <pre>robust_value = expected_value − risk_penalty × uncertainty</pre>
+
+          <p>
+            平衡模式的风险系数为 0.35，稳健模式为 0.75，进取模式为 0。也就是说，稳健模式会更明显地降低“平均结果不错、但不同后续走向差异很大”的候选；进取模式只比较平均收益。
+          </p>
+        </section>
+
+        <section id="ban-value">
+          <h2>8. 专用 Ban 价值模型</h2>
+          <p>
+            Ban 的目标不是完成我方阵容，而是减少对手下一阶段可获得的价值。用阵容模型猜测若干未来 Pick，容易把“模型想象中的未来”误当成真实 Ban 理由。因此当前 Ban 推荐使用独立模型，并只在策略模型认为行为合理的 30 个合法 Ban 中比较。
+          </p>
+
+          <h3>8.1 先把历史结果向联赛基准平滑</h3>
+          <p>全局英雄表现、队伍英雄表现、对手英雄表现和历史 Ban 结果都使用相同的小样本保护：</p>
+
+          <pre>smoothed_rate = (weighted_wins + prior × baseline) / (weighted_games + prior)</pre>
+          <pre>signal = smoothed_rate − baseline</pre>
+          <pre>evidence = weighted_games / (weighted_games + prior)</pre>
+
+          <p>
+            越新的赛季权重越高，向前每隔一个赛季乘以 0.65。线上工件会使用目标赛季及此前所有可用赛季，而不是固定只取最近四季；这样较早数据仍能提供稀有英雄和组合的基础信息，但影响会逐季下降。
+          </p>
+
+          <h3>8.2 Ban 价值的五个组成部分</h3>
+          <p>候选英雄的原始 Ban 分数由限制对手的收益减去对我方自己的损失，再加入行为真实性修正：</p>
+
+          <pre>opponent_denial = 0.75 × global_pick_effect
+                + 1.35 × opponent_team_hero_effect
+                + 0.35 × opponent_preference</pre>
+          <pre>context_denial = 0.70 × synergy_with_opponent_visible_picks
+               + 0.85 × counter_strength_against_our_visible_picks</pre>
+          <pre>observed_ban_outcome = 0.45 × global_ban_effect
+                     + 0.70 × ban_effect_against_this_opponent</pre>
+          <pre>self_cost = 0.75 × acting_team_hero_effect
+          + 0.25 × acting_team_preference</pre>
+
+          <p>
+            <code>opponent_denial</code> 评价候选是否是对手擅长或偏好的英雄；<code>context_denial</code> 评价它与对方已亮英雄的协同，以及对我方已亮英雄的克制；<code>observed_ban_outcome</code> 参考历史上禁掉该英雄后的关联结果；<code>self_cost</code> 防止系统优先禁掉我方自己更需要的英雄。
+          </p>
+
+          <p>模型还会保留职业 BP 的行为约束，避免推荐理论分数很高、但真实赛场几乎不会出现的 Ban：</p>
+
+          <pre>learned_behavior = 0.65 × global_ban_frequency
+                 + 0.35 × opponent_specific_ban_frequency</pre>
+          <pre>combined_behavior = 0.70 × BP_policy_probability
+                  + 0.30 × learned_behavior</pre>
+          <pre>behavior_realism = 0.08 × log(combined_behavior / strongest_policy_probability)</pre>
+          <pre>raw_ban_value = opponent_denial + context_denial
+              + observed_ban_outcome − self_cost + behavior_realism</pre>
+          <pre>ban_value = sigmoid(4 × raw_ban_value)</pre>
+
+          <h3>8.3 不确定性与 Global BP</h3>
+          <p>
+            Ban 模型也会根据各项历史证据计算不确定性，并使用与 Pick 推荐相同的稳健分数。证据较少时，不确定性最多增加 0.08；稳健模式会更明显地惩罚这类候选。
+          </p>
+
+          <pre>uncertainty = 0.08 × (1 − average_evidence)</pre>
+          <pre>robust_value = ban_value − risk_penalty × uncertainty</pre>
+
+          <p>
+            在 Global BP 中，如果对手已经在本系列使用过某英雄、因而不能再 Pick，该英雄的对手威胁和阵容上下文收益会归零；如果我方已经使用过它，自我损失也会归零。模型因此按当前系列赛真正剩余的英雄池计算，而不是照搬普通 BP 的偏好。
+          </p>
+
+          <blockquote>
+            Ban value 是历史关联、对手限制价值和行为真实性的综合排序，不是“执行这一 Ban 后必然获胜”的因果概率。历史 Ban 的复现指标也只说明模型能否接近真实选择，不能证明真实选择本身就是最优策略。
+          </blockquote>
+        </section>
+
+        <section id="lineup-scoring">
+          <h2>9. 完整 5v5 阵容评分</h2>
+          <p>
+            当双方都已经有五名不重复英雄时，模拟器会自动调用同一个完整阵容价值模型，并直接计算一次精确评分。这里不会继续生成未来 BP，也不会平均多条模拟路径。
+          </p>
+
+          <pre>当前 BP 状态
+├─ 下一手是 Pick → 策略模型筛选候选 → 每个候选模拟 24 个终局 → 阵容价值排序
+├─ 下一手是 Ban  → 策略模型筛选候选 → 专用 Ban 价值模型排序
+└─ 已完成 5v5    → 对当前两套阵容直接评分一次</pre>
+
+          <h3>9.1 页面上的分数代表什么</h3>
+          <ul>
+            <li><strong>蓝方阵容分 / 红方阵容分：</strong>由 <code>sigmoid(logit)</code> 得到，双方互补为 100%。它适合比较同一赛季、同一模型下的相对阵容优势，不应直接当作经过校准的赛场胜率。</li>
+            <li><strong>队伍强度：</strong>只汇总 Elo 差带来的贡献。</li>
+            <li><strong>英雄熟练度：</strong>只汇总双方对所选英雄历史掌握程度的贡献。</li>
+            <li><strong>阵容协同：</strong>汇总分路覆盖、机制协同、联赛组合协同和队伍组合协同。</li>
+            <li><strong>英雄反制：</strong>汇总机制反制与 25 组方向性历史反制效果。</li>
+          </ul>
+
+          <pre>hero_synergy = role_coverage + mechanics_ally
+             + league_pair_synergy + team_pair_synergy</pre>
+          <pre>hero_counters = mechanics_counter + historical_counter</pre>
+
+          <p>
+            分组贡献为正时推动蓝方得分，为负时推动红方得分。它们是在标准化后乘以模型系数得到的 logit 贡献，因此不能直接相加为百分点，也不能脱离当前模型与基准单独解释。
+          </p>
+
+          <h3>9.2 直接评分与 Pick 推荐的区别</h3>
+          <p>
+            直接评分评价的是页面上已经确定的唯一一套 5v5；Pick 推荐评价的是“现在选择某英雄后，24 种可能后续 BP 的平均结果”。因此推荐值会同时受到未来路径和不确定性的影响，即使最终某一套阵容的直接评分很高，也不表示在更早的 BP 阶段一定容易走到这套阵容。
+          </p>
+
+          <p class="plain-note">
+            完整阵容评分只使用现有的赛季阵容模型工件进行计算，不需要为每次评分生成新的后端数据。重新训练或切换赛季后，均值、尺度、系数和历史关系统计会随对应工件一起更新。
+          </p>
         </section>
       </article>
     </div>

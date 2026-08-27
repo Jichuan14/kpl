@@ -45,22 +45,30 @@ def ensure_schema_compatibility(target_engine: Engine = engine) -> list[str]:
     """Apply safe, additive compatibility migrations and return added columns."""
     if target_engine.dialect.name != "sqlite":
         return []
-    if not inspect(target_engine).has_table("battle_players"):
-        return []
-
-    existing = {
-        column["name"]
-        for column in inspect(target_engine).get_columns("battle_players")
+    tables = {
+        "battle_players": BATTLE_PLAYER_PERFORMANCE_COLUMNS,
+        "live_match_winner_predictions": {
+            "best_of": "INTEGER",
+            "team_a_score": "INTEGER",
+            "team_b_score": "INTEGER",
+        },
     }
     added: list[str] = []
     with target_engine.begin() as connection:
-        for name, declaration in BATTLE_PLAYER_PERFORMANCE_COLUMNS.items():
-            if name in existing:
+        for table, columns in tables.items():
+            if not inspect(target_engine).has_table(table):
                 continue
-            connection.exec_driver_sql(
-                f'ALTER TABLE battle_players ADD COLUMN "{name}" {declaration}'
-            )
-            added.append(name)
+            existing = {
+                column["name"]
+                for column in inspect(target_engine).get_columns(table)
+            }
+            for name, declaration in columns.items():
+                if name in existing:
+                    continue
+                connection.exec_driver_sql(
+                    f'ALTER TABLE "{table}" ADD COLUMN "{name}" {declaration}'
+                )
+                added.append(name if table == "battle_players" else f"{table}.{name}")
     return added
 
 

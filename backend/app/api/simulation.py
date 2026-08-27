@@ -9,6 +9,7 @@ from app.schemas import (
     DraftSimulationRequest,
     HeroMatchupRecommendationRequest,
     LineupRecommendationRequest,
+    LineupScoreRequest,
 )
 from app.services.draft_commentary import build_selection_commentary
 from app.services.draft_simulator import (
@@ -22,6 +23,7 @@ from app.services.coach_rate_limit import CoachRateLimiter
 from app.services.request_identity import client_key
 from app.services.hero_matchup import recommend_heroes
 from app.services.lineup_recommender import recommend_lineup
+from app.services.lineup_value import load_lineup_value_model
 
 router = APIRouter(prefix="/api/simulations", tags=["simulations"])
 
@@ -197,6 +199,67 @@ def lineup_recommendation(
                 top_k=body.top_k,
                 risk_mode=body.risk_mode,
             )
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    finally:
+        simulation_rate_limiter.release(key)
+
+
+@router.post("/score-lineup")
+def lineup_score(
+    body: LineupScoreRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> ApiResponse:
+    """Score one completed 5v5 lineup comparison without BP rollouts."""
+    key = _simulation_client_key(request)
+    decision = simulation_rate_limiter.acquire(key)
+    if not decision.allowed:
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "code": "simulation_rate_limited",
+                "message": "The lineup scorer is busy. Try again shortly.",
+            },
+            headers={"Retry-After": str(decision.retry_after_seconds)},
+        )
+    try:
+        teams = validate_season_team_pair(
+            db,
+            body.league_id,
+            body.blue_team_id,
+            body.red_team_id,
+        )
+        model = load_lineup_value_model(body.league_id)
+        result = model.score(
+            body.blue_team_id,
+            body.blue_hero_ids,
+            body.red_team_id,
+            body.red_hero_ids,
+        )
+        return ApiResponse(
+            data={
+                "league_id": body.league_id,
+                "blue_team": {
+                    "team_id": body.blue_team_id,
+                    "team_name": str(teams["blue"]["team_name"]),
+                    "hero_ids": body.blue_hero_ids,
+                },
+                "red_team": {
+                    "team_id": body.red_team_id,
+                    "team_name": str(teams["red"]["team_name"]),
+                    "hero_ids": body.red_hero_ids,
+                },
+                **result,
+                "value_model": {
+                    "version": model.payload["version"],
+                    "generated_at": model.payload.get("generated_at"),
+                    "source": model.payload.get("source", {}),
+                },
+            }
         )
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

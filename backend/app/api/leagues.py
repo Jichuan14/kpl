@@ -233,11 +233,29 @@ def save_live_winner_prediction(
             game_number=body.game_number,
             visitor_hash=visitor_hash,
             winner_team_id=body.winner_team_id,
+            best_of=body.best_of,
+            team_a_score=body.team_a_score,
+            team_b_score=body.team_b_score,
         )
         db.add(prediction)
         db.commit()
+    elif (
+        body.game_number == 0
+        and prediction.winner_team_id == body.winner_team_id
+        and prediction.team_a_score is None
+        and prediction.team_b_score is None
+    ):
+        # Let predictions made before exact scores were introduced be completed
+        # once, without allowing the original winner pick to change.
+        prediction.best_of = body.best_of
+        prediction.team_a_score = body.team_a_score
+        prediction.team_b_score = body.team_b_score
+        db.commit()
     totals = _winner_prediction_totals(db, league_id, body.match_id, body.game_number)
     totals["your_winner_team_id"] = prediction.winner_team_id
+    totals["your_best_of"] = prediction.best_of
+    totals["your_team_a_score"] = prediction.team_a_score
+    totals["your_team_b_score"] = prediction.team_b_score
     return ApiResponse(
         message="winner prediction saved" if created else "winner prediction already saved",
         data=totals,
