@@ -1,5 +1,6 @@
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -31,6 +32,10 @@ class Settings(BaseSettings):
     kimi_max_tool_rounds: int = 3
     kimi_max_tool_calls: int = 8
     kimi_max_output_tokens: int = 600
+    # Production orchestrator is LangGraph. `legacy` remains an explicit
+    # rollback to the original for-loop. Security policy and tool dispatch
+    # are shared.
+    coach_orchestration: Literal["legacy", "langgraph"] = "langgraph"
     scout_report_max_output_tokens: int = 1200
     coach_ip_requests_per_minute: int = 5
     coach_ip_requests_per_day: int = 50

@@ -58,36 +58,45 @@ class CoachPatchToolTest(unittest.TestCase):
             "search_patch_notes",
             '{"query":"刘备最近有什么改动？","hero_name":"刘备"}',
         )
-        client = FakeClient(
-            [
-                response(FakeMessage(tool_calls=[call])),
-                response(FakeMessage(content="刘备在官方公告中有改动。")),
-            ],
-            scope_responses=[
-                response(
-                    FakeMessage(
-                        content=(
-                            '{"decision":"allow","intent":"patch_notes",'
-                            '"reason_code":"official_patch_question"}'
+        for orchestration in ("legacy", "langgraph"):
+            with self.subTest(orchestration=orchestration):
+                client = FakeClient(
+                    [
+                        response(FakeMessage(tool_calls=[call])),
+                        response(FakeMessage(content="刘备在官方公告中有改动。")),
+                    ],
+                    scope_responses=[
+                        response(
+                            FakeMessage(
+                                content=(
+                                    '{"decision":"allow","intents":["patch_notes"],'
+                                    '"reason_code":"official_patch_question"}'
+                                )
+                            )
                         )
-                    )
+                    ],
                 )
-            ],
-        )
-        service = KimiCoachService(client=client, settings=settings())
-
-        with patch("app.agent.service.invoke_tool", return_value=PATCH_RESULT) as invoke:
-            result = service.ask(
-                CoachInput(message="刘备最近有什么改动？", league_id="20260002"),
-                request_id="coach-patch-request",
-            )
-
-        self.assertTrue(result["tool_calls"][0]["success"])
-        self.assertEqual(invoke.call_args.args[0], "search_patch_notes")
-        self.assertEqual(
-            invoke.call_args.args[1],
-            {"query": "刘备最近有什么改动？", "hero_name": "刘备"},
-        )
+                service = KimiCoachService(
+                    client=client,
+                    settings=settings(coach_orchestration=orchestration),
+                )
+                with patch(
+                    "app.agent.service.invoke_tool",
+                    return_value=PATCH_RESULT,
+                ) as invoke:
+                    result = service.ask(
+                        CoachInput(
+                            message="刘备最近有什么改动？",
+                            league_id="20260002",
+                        ),
+                        request_id="coach-patch-request",
+                    )
+                self.assertTrue(result["tool_calls"][0]["success"])
+                self.assertEqual(invoke.call_args.args[0], "search_patch_notes")
+                self.assertEqual(
+                    invoke.call_args.args[1],
+                    {"query": "刘备最近有什么改动？", "hero_name": "刘备"},
+                )
 
 
 if __name__ == "__main__":

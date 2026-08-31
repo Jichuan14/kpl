@@ -147,6 +147,28 @@ class CoachApiTest(unittest.TestCase):
         self.assertGreaterEqual(int(response.headers["Retry-After"]), 1)
         self.assertEqual(service.ask.call_count, 1)
 
+    def test_provider_rate_limit_includes_retry_after(self) -> None:
+        import httpx
+        from openai import RateLimitError
+
+        request = httpx.Request("POST", "https://api.moonshot.cn/v1/chat/completions")
+        limited = httpx.Response(429, request=request, json={"error": {"message": "rpm"}})
+        service = Mock()
+        service.ask.side_effect = RateLimitError(
+            "Error code: 429 - please try again after 1 seconds",
+            response=limited,
+            body=limited.json(),
+        )
+        with patch("app.api.coach.KimiCoachService", return_value=service):
+            response = self.client.post(
+                "/api/coach",
+                json={"message": "Hello", "league_id": "20260002"},
+            )
+
+        self.assertEqual(response.status_code, 429)
+        self.assertEqual(response.json()["detail"]["code"], "coach_rate_limited")
+        self.assertGreaterEqual(int(response.headers["Retry-After"]), 20)
+
     def test_direct_loopback_bypasses_the_coach_rate_limiter(self) -> None:
         limiter = CoachRateLimiter(
             per_ip_per_minute=1,

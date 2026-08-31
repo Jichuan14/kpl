@@ -71,7 +71,7 @@ class FakeCompletions:
             return response(
                 FakeMessage(
                     content=(
-                        '{"decision":"allow","intent":"draft_prediction",'
+                        '{"decision":"allow","intents":["draft_prediction"],'
                         '"query_scope":"current_draft",'
                         '"reason_code":"supported_kpl_question"}'
                     )
@@ -97,12 +97,21 @@ def settings(**overrides) -> Settings:
         "kimi_max_tool_rounds": 3,
         "kimi_max_tool_calls": 8,
         "kimi_max_output_tokens": 600,
+        "coach_orchestration": "langgraph",
     }
     values.update(overrides)
     return Settings(_env_file=None, **values)
 
 
 class KimiCoachServiceTest(unittest.TestCase):
+    orchestration = "legacy"
+
+    def make_service(self, client, **overrides) -> KimiCoachService:
+        return KimiCoachService(
+            client=client,
+            settings=settings(coach_orchestration=self.orchestration, **overrides),
+        )
+
     def test_missing_key_is_rejected_before_importing_provider(self) -> None:
         configuration = settings(moonshot_api_key=None)
 
@@ -116,7 +125,7 @@ class KimiCoachServiceTest(unittest.TestCase):
 
     def test_returns_direct_answer_without_tools(self) -> None:
         client = FakeClient([response(FakeMessage(content="Choose Hero A."))])
-        service = KimiCoachService(client=client, settings=settings())
+        service = self.make_service(client)
 
         result = service.ask(
             CoachInput(message="What is next?", league_id="20260002"),
@@ -163,7 +172,11 @@ class KimiCoachServiceTest(unittest.TestCase):
                 "markdown_tables": False,
             },
         )
+        self.assertEqual(user_payload["intents"], ["draft_prediction"])
         self.assertEqual(user_payload["analysis_scope"], "current_draft")
+        self.assertFalse(user_payload["dropped_unrelated"])
+        self.assertTrue(user_payload["missing_live_board"])
+        self.assertIn("No active draft board", user_payload["note"])
 
     def test_rewrites_provider_planning_text_before_returning_it(self) -> None:
         client = FakeClient(
@@ -176,7 +189,7 @@ class KimiCoachServiceTest(unittest.TestCase):
                 response(FakeMessage(content="抱歉，我目前无法查询这项数据。")),
             ]
         )
-        service = KimiCoachService(client=client, settings=settings())
+        service = self.make_service(client)
 
         result = service.ask(
             CoachInput(message="谁在狼队？", league_id="20260002"),
@@ -201,7 +214,7 @@ class KimiCoachServiceTest(unittest.TestCase):
                 response(FakeMessage(content="Hero A is most likely.")),
             ]
         )
-        service = KimiCoachService(client=client, settings=settings())
+        service = self.make_service(client)
         tool_result = {
             "candidate_count": 1,
             "next_action_probabilities": [
@@ -240,7 +253,7 @@ class KimiCoachServiceTest(unittest.TestCase):
                 response(
                     FakeMessage(
                         content=(
-                            '{"decision":"allow","intent":"hero_relationships",'
+                            '{"decision":"allow","intents":["hero_relationships"],'
                             '"query_scope":"league_wide",'
                             '"reason_code":"general_counter_pick"}'
                         )
@@ -248,7 +261,7 @@ class KimiCoachServiceTest(unittest.TestCase):
                 )
             ],
         )
-        service = KimiCoachService(client=client, settings=settings())
+        service = self.make_service(client)
 
         service.ask(
             CoachInput(
@@ -271,11 +284,13 @@ class KimiCoachServiceTest(unittest.TestCase):
         names = [tool["function"]["name"] for tool in provider_call["tools"]]
         self.assertIn("get_hero_relationships", names)
         self.assertNotIn("predict_next_draft_action", names)
+        self.assertNotIn("recommend_value_draft_action", names)
+        self.assertNotIn("score_current_lineup", names)
         self.assertNotIn("get_team_draft_tendencies", names)
 
     def test_relays_only_server_filtered_history_as_untrusted_context(self) -> None:
         client = FakeClient([response(FakeMessage(content="It refers to Wolves."))])
-        service = KimiCoachService(client=client, settings=settings())
+        service = self.make_service(client)
 
         service.ask(
             CoachInput(
@@ -318,7 +333,7 @@ class KimiCoachServiceTest(unittest.TestCase):
                 response(FakeMessage(content="Hero A is most likely.")),
             ]
         )
-        service = KimiCoachService(client=client, settings=settings())
+        service = self.make_service(client)
 
         with patch(
             "app.agent.service.invoke_tool",
@@ -361,7 +376,7 @@ class KimiCoachServiceTest(unittest.TestCase):
                 response(FakeMessage(content="I need the current board.")),
             ]
         )
-        service = KimiCoachService(client=client, settings=settings())
+        service = self.make_service(client)
 
         result = service.ask(
             CoachInput(message="What is next?", league_id="20260002")
@@ -378,16 +393,127 @@ class KimiCoachServiceTest(unittest.TestCase):
                 response(FakeMessage(tool_calls=[repeated])),
             ]
         )
-        service = KimiCoachService(
-            client=client,
-            settings=settings(kimi_max_tool_rounds=1),
-        )
+        service = self.make_service(client, kimi_max_tool_rounds=1)
 
         with patch("app.agent.service.invoke_tool", return_value={"rows": []}):
             with self.assertRaisesRegex(CoachLoopLimitError, "tool-round limit"):
                 service.ask(
                     CoachInput(message="Keep searching", league_id="20260002")
                 )
+
+    def test_retries_provider_rate_limit_then_answers(self) -> None:
+        import httpx
+        from openai import RateLimitError
+
+        request = httpx.Request("POST", "https://api.moonshot.cn/v1/chat/completions")
+        limited = httpx.Response(429, request=request, json={"error": {"message": "rpm"}})
+        rate_limit_error = RateLimitError(
+            "Error code: 429 - please try again after 1 seconds",
+            response=limited,
+            body=limited.json(),
+        )
+        inner = FakeClient([response(FakeMessage(content="Choose Hero A."))])
+        original_create = inner.chat.completions.create
+        state = {"calls": 0}
+
+        def flaky_create(**kwargs):
+            state["calls"] += 1
+            if state["calls"] == 2:
+                raise rate_limit_error
+            return original_create(**kwargs)
+
+        inner.chat.completions.create = flaky_create
+        service = self.make_service(inner)
+
+        with patch("app.agent.service.sleep") as sleeper:
+            result = service.ask(
+                CoachInput(message="What is next?", league_id="20260002"),
+                request_id="request-retry",
+            )
+
+        self.assertEqual(result["answer"], "Choose Hero A.")
+        sleeper.assert_called_once()
+        self.assertGreaterEqual(sleeper.call_args.args[0], 20)
+
+    def test_total_tool_call_limit_stops_before_dispatch(self) -> None:
+        client = FakeClient(
+            [
+                response(
+                    FakeMessage(
+                        tool_calls=[
+                            tool_call("get_meta_heroes", "{}", "call-1"),
+                            tool_call("get_meta_heroes", "{}", "call-2"),
+                            tool_call("get_meta_heroes", "{}", "call-3"),
+                        ]
+                    )
+                )
+            ]
+        )
+        service = self.make_service(client, kimi_max_tool_calls=2)
+
+        with patch("app.agent.service.invoke_tool") as invoke:
+            with self.assertRaisesRegex(CoachLoopLimitError, "total tool-call limit"):
+                service.ask(
+                    CoachInput(message="Keep searching", league_id="20260002")
+                )
+
+        invoke.assert_not_called()
+
+    def test_lineup_recommendation_tool_receives_authoritative_board(self) -> None:
+        call = tool_call(
+            "recommend_value_draft_action",
+            json.dumps({"league_id": "wrong-league", "top_k": 2, "bp_order": 1}),
+        )
+        client = FakeClient(
+            [
+                response(FakeMessage(tool_calls=[call])),
+                response(FakeMessage(content="Hero A has higher relative lineup advantage.")),
+            ],
+            scope_responses=[
+                response(
+                    FakeMessage(
+                        content=(
+                            '{"decision":"allow","intents":["lineup_recommendation"],'
+                            '"reason_code":"value_ranked_next_action"}'
+                        )
+                    )
+                )
+            ],
+        )
+        service = self.make_service(client)
+        tool_result = {
+            "result_count": 1,
+            "recommendations": [{"hero_id": 101, "hero_name": "Hero A"}],
+            "interpretation": "relative lineup advantage, not literal win probability",
+        }
+
+        with patch("app.agent.service.invoke_tool", return_value=tool_result) as invoke:
+            result = service.ask(
+                CoachInput(
+                    message="Which next pick has the highest relative lineup advantage?",
+                    league_id="20260003",
+                    draft_state={
+                        "bp_order": 17,
+                        "blue_team_id": "blue-1",
+                        "blue_team_name": "Blue Club",
+                        "red_team_id": "red-1",
+                        "red_team_name": "Red Club",
+                    },
+                )
+            )
+
+        self.assertIn("relative lineup advantage", result["answer"])
+        names = [tool["function"]["name"] for tool in client.chat.completions.calls[0]["tools"]]
+        self.assertEqual(names, ["recommend_value_draft_action"])
+        arguments = invoke.call_args.args[1]
+        self.assertEqual(arguments["league_id"], "20260003")
+        self.assertEqual(arguments["bp_order"], 17)
+        self.assertEqual(arguments["top_k"], 2)
+        self.assertEqual(arguments["blue_team_id"], "blue-1")
+
+
+class KimiCoachServiceLangGraphTest(KimiCoachServiceTest):
+    orchestration = "langgraph"
 
 
 if __name__ == "__main__":
