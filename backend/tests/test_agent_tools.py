@@ -36,7 +36,7 @@ class AgentToolRegistryTest(unittest.TestCase):
     def test_definitions_expose_only_registered_tools(self) -> None:
         definitions = available_tool_definitions()
 
-        self.assertEqual(len(definitions), 14)
+        self.assertEqual(len(definitions), 16)
         functions = {
             definition["function"]["name"]: definition["function"]
             for definition in definitions
@@ -47,6 +47,8 @@ class AgentToolRegistryTest(unittest.TestCase):
                 "get_team_roster",
                 "predict_next_draft_action",
                 "simulate_future_draft",
+                "recommend_value_draft_action",
+                "score_current_lineup",
                 "get_hero_relationships",
                 "get_team_synergies",
                 "get_meta_heroes",
@@ -257,6 +259,108 @@ class AgentToolRegistryTest(unittest.TestCase):
                     )
 
         self.assertIn("agent_tool_no_data", logs.output[0])
+
+
+class LineupCoachToolTest(unittest.TestCase):
+    def board(self, *, complete: bool = False) -> dict:
+        blue_picks = [101, 102, 103, 104, 105] if complete else [101]
+        red_picks = [201, 202, 203, 204, 205] if complete else []
+        return {
+            "league_id": "20260003",
+            "model_type": "stats",
+            "blue_team_id": "blue-1",
+            "blue_team_name": "Blue Club",
+            "red_team_id": "red-1",
+            "red_team_name": "Red Club",
+            "bp_order": 20 if complete else 3,
+            "blue_picks": blue_picks,
+            "red_picks": red_picks,
+            "blue_bans": [],
+            "red_bans": [],
+            "blue_used_previous_battles": [],
+            "red_used_previous_battles": [],
+        }
+
+    def test_value_recommendation_tool_compacts_service_output(self) -> None:
+        raw = {
+            "next_step": {"bp_order": 17, "side": "blue", "action": "pick"},
+            "acting_team": {"side": "blue", "team_id": "blue-1", "team_name": "Blue"},
+            "risk_mode": "balanced",
+            "recommendations": [
+                {
+                    "rank": 1,
+                    "hero_id": 101,
+                    "hero_name": "Hero A",
+                    "action": "pick",
+                    "side": "blue",
+                    "policy_probability": 0.4,
+                    "expected_advantage": 0.62,
+                    "robust_advantage": 0.58,
+                    "advantage_delta_vs_policy_baseline": 0.04,
+                    "confidence": "medium",
+                    "explanations": [{"text": "Adds a frontline option."}],
+                    "likely_opponent_responses": [{"hero_id": 201, "hero_name": "Hero B"}],
+                }
+            ],
+            "value_model": {
+                "interpretation": "relative lineup advantage, not literal win probability",
+                "warning": "ranking only",
+            },
+        }
+        with patch(
+            "app.agent.tools.lineup.recommend_lineup",
+            return_value=raw,
+        ) as recommend:
+            result = invoke_tool(
+                "recommend_value_draft_action",
+                {**self.board(), "top_k": 2, "risk_mode": "balanced"},
+            )
+
+        self.assertEqual(result["result_count"], 1)
+        self.assertEqual(result["recommendations"][0]["hero_id"], 101)
+        self.assertEqual(result["recommendations"][0]["explanations"], ["Adds a frontline option."])
+        self.assertIn("not literal win probability", result["interpretation"])
+        recommend.assert_called_once()
+        self.assertEqual(recommend.call_args.args[0], "20260003")
+        self.assertEqual(recommend.call_args.kwargs["top_k"], 2)
+
+    def test_lineup_score_tool_requires_a_completed_5v5(self) -> None:
+        with self.assertRaisesRegex(ValueError, "completed 5v5"):
+            invoke_tool("score_current_lineup", self.board(complete=False))
+
+    def test_lineup_score_tool_returns_relative_advantage(self) -> None:
+        class FakeModel:
+            hero_names = {101: "A", 102: "B", 103: "C", 104: "D", 105: "E", 201: "F"}
+
+            def score(self, blue_team_id, blue, red_team_id, red):
+                return {
+                    "blue_advantage": 0.61,
+                    "red_advantage": 0.39,
+                    "grouped_contributions": {"hero_synergy": 0.1},
+                    "blue_composition": {
+                        "frontline_count": 1.0,
+                        "primary_engage_count": 1.0,
+                        "hard_cc_count": 2.0,
+                    },
+                    "red_composition": {
+                        "frontline_count": 0.0,
+                        "primary_engage_count": 0.0,
+                        "hard_cc_count": 1.0,
+                    },
+                    "interpretation": "relative lineup advantage, not literal win probability",
+                    "warning": "",
+                }
+
+        with patch(
+            "app.agent.tools.lineup.load_lineup_value_model",
+            return_value=FakeModel(),
+        ) as load_model:
+            result = invoke_tool("score_current_lineup", self.board(complete=True))
+
+        self.assertEqual(result["blue_advantage"], 0.61)
+        self.assertEqual(result["blue_team"]["heroes"][0], "A")
+        self.assertIn("not literal win probability", result["interpretation"])
+        load_model.assert_called_once_with("20260003")
 
 
 if __name__ == "__main__":

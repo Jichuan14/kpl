@@ -22,6 +22,7 @@ from app.agent.service import (
     CoachLoopLimitError,
     KimiCoachService,
     KimiConfigurationError,
+    provider_retry_after_seconds,
 )
 from app.agent.scout_report import ScoutReportInput, ScoutReportService
 from app.agent.scout_report_cache import scout_report_cache, scout_report_cache_key
@@ -161,15 +162,23 @@ def ask_coach(
             request_id=request_id,
         )
     except RateLimitError as exc:
+        retry_after = provider_retry_after_seconds(exc)
         logger.warning(
             "coach_api_rate_limited",
-            extra={"request_id": request_id, "error_type": type(exc).__name__},
+            extra={
+                "request_id": request_id,
+                "error_type": type(exc).__name__,
+                "retry_after_seconds": retry_after,
+            },
         )
-        _http_error(
+        raise HTTPException(
             status_code=429,
-            code="coach_rate_limited",
-            message="The Draft Coach is temporarily rate limited. Try again later.",
-            request_id=request_id,
+            detail={
+                "code": "coach_rate_limited",
+                "message": "The Draft Coach is temporarily rate limited. Try again later.",
+                "request_id": request_id,
+            },
+            headers={"Retry-After": str(retry_after)},
         )
     except APITimeoutError as exc:
         logger.warning(
@@ -315,12 +324,23 @@ def prepare_scout_report(
             request_id=request_id,
         )
     except RateLimitError as exc:
-        logger.warning("scout_report_rate_limited", extra={"request_id": request_id, "error_type": type(exc).__name__})
-        _http_error(
+        retry_after = provider_retry_after_seconds(exc)
+        logger.warning(
+            "scout_report_rate_limited",
+            extra={
+                "request_id": request_id,
+                "error_type": type(exc).__name__,
+                "retry_after_seconds": retry_after,
+            },
+        )
+        raise HTTPException(
             status_code=429,
-            code="coach_rate_limited",
-            message="The Draft Coach provider is temporarily rate limited. Try again later.",
-            request_id=request_id,
+            detail={
+                "code": "coach_rate_limited",
+                "message": "The Draft Coach provider is temporarily rate limited. Try again later.",
+                "request_id": request_id,
+            },
+            headers={"Retry-After": str(retry_after)},
         )
     except APITimeoutError as exc:
         logger.warning("scout_report_timeout", extra={"request_id": request_id, "error_type": type(exc).__name__})

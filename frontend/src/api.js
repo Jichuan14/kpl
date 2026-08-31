@@ -29,6 +29,8 @@ async function request(path, options = {}) {
     const retryAfter = Number(res.headers.get("Retry-After"));
     if (Number.isFinite(retryAfter) && retryAfter > 0) {
       error.retryAfter = retryAfter;
+    } else if (res.status === 429) {
+      error.retryAfter = 20;
     }
     throw error;
   }

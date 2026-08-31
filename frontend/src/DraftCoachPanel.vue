@@ -12,23 +12,31 @@ const props = defineProps({
 });
 
 const sessionHistoryKey = "kpl-draft-coach-session-history";
+const legacyHistoryKeys = [
+  `${sessionHistoryKey}-draft`,
+  `${sessionHistoryKey}-research`,
+];
 
-function historyStorageKey(mode) {
-  return `${sessionHistoryKey}-${mode}`;
-}
-
-function loadSessionHistory(mode) {
+function readStoredMessages(key) {
   try {
-    const stored = JSON.parse(
-      window.sessionStorage.getItem(historyStorageKey(mode)) || "[]"
-    );
-    return Array.isArray(stored) ? stored.slice(-20) : [];
+    const stored = JSON.parse(window.sessionStorage.getItem(key) || "[]");
+    return Array.isArray(stored) ? stored : [];
   } catch {
     return [];
   }
 }
 
-function persistSessionHistory(value, mode) {
+function loadSessionHistory() {
+  const unified = readStoredMessages(sessionHistoryKey);
+  if (unified.length) return unified.slice(-20);
+  const merged = legacyHistoryKeys.flatMap((key) => readStoredMessages(key));
+  return merged.slice(-20).map((message, index) => ({
+    ...message,
+    id: index + 1,
+  }));
+}
+
+function persistSessionHistory(value) {
   const completed = value
     .filter((message) => !message.loading)
     .slice(-20)
@@ -38,6 +46,7 @@ function persistSessionHistory(value, mode) {
       context: message.context,
       error: message.error,
       loading: false,
+      scoutReport: Boolean(message.scoutReport),
       response: message.response
         ? {
             request_id: message.response.request_id,
@@ -49,13 +58,12 @@ function persistSessionHistory(value, mode) {
           }
         : null,
     }));
-  window.sessionStorage.setItem(historyStorageKey(mode), JSON.stringify(completed));
+  window.sessionStorage.setItem(sessionHistoryKey, JSON.stringify(completed));
 }
 
 const question = ref("");
 const loading = ref(false);
-const coachMode = ref("draft");
-const messages = ref(loadSessionHistory(coachMode.value));
+const messages = ref(loadSessionHistory());
 const thread = ref(null);
 let messageId = Math.max(0, ...messages.value.map((message) => Number(message.id) || 0));
 const isChinese = computed(() => props.forceChinese || language.value === "zh-CN");
@@ -65,7 +73,6 @@ const contextKey = computed(() =>
 );
 const hasBoardContext = computed(() => Boolean(props.draftState));
 const canPrepareScoutReport = computed(() =>
-  coachMode.value === "draft" &&
   Boolean(
     props.draftState?.blue_team_id &&
       props.draftState?.red_team_id &&
@@ -161,56 +168,40 @@ function randomSuggestionIndexes() {
     .map((item, index) => ({ item, index }))
     .filter(({ item }) => item.phase === 2)
     .map(({ index }) => index);
-  const required = [randomItem(phase1), randomItem(phase2)];
-  const remaining = suggestionPairs
-    .map((_, index) => index)
-    .filter((index) => !required.includes(index));
-  return [...required, randomItem(remaining)].sort(() => Math.random() - 0.5);
+  return {
+    draft: [randomItem(phase1), randomItem(phase2)],
+    research: Math.floor(Math.random() * researchSuggestions.length),
+  };
 }
 
-const suggestionIndexes = ref(randomSuggestionIndexes());
-const suggestions = computed(() =>
-  coachMode.value === "research"
-    ? researchSuggestions.map((item) =>
-        isChinese.value ? item.zh : item.en
-      )
-    : suggestionIndexes.value.map((index) =>
-        isChinese.value
-          ? suggestionPairs[index].zh
-          : suggestionPairs[index].en
-      )
-);
+const suggestionPick = ref(randomSuggestionIndexes());
+const suggestions = computed(() => {
+  const draft = suggestionPick.value.draft.map((index) =>
+    isChinese.value ? suggestionPairs[index].zh : suggestionPairs[index].en
+  );
+  const research = researchSuggestions[suggestionPick.value.research];
+  const items = [
+    ...draft.map((text) => ({ kind: "chat", text })),
+    { kind: "chat", text: isChinese.value ? research.zh : research.en },
+  ];
+  if (canPrepareScoutReport.value) {
+    items.push({ kind: "scout", text: scoutReportLabel.value });
+  }
+  return items;
+});
 
 const welcomeTitle = computed(() =>
-  coachMode.value === "research"
-    ? isChinese.value
-      ? "版本资料查询"
-      : "Patch research"
-    : isChinese.value
-      ? "询问当前 BP"
-      : "Ask about this draft"
+  isChinese.value ? "询问 BP 教练" : "Ask the Draft Coach"
 );
 const welcomeCopy = computed(() =>
-  coachMode.value === "research"
-    ? isChinese.value
-      ? "可查询英雄或游戏改动。每条回答下方的来源卡片会链接至腾讯官方公告。"
-      : "Ask about official hero or game changes. Source cards below each answer link back to Tencent announcements."
-    : isChinese.value
-      ? "询问 KPL 相关问题。Kimi 会使用已批准的本地工具，并自动附加当前赛季和 BP 面板。"
-      : "Ask a KPL question. Kimi uses approved local tools and attaches the current season and board automatically."
+  isChinese.value
+    ? "在同一对话里询问当前 BP、战队倾向或官方版本改动。选择双方后，也可以生成赛前侦察报告。回答会附带本地工具证据或腾讯官方来源。"
+    : "Ask about this draft, team tendencies, or official patch changes in one thread. After both teams are selected, you can also prepare a pre-match scout report. Answers cite local tools or Tencent announcements."
 );
 const composerPlaceholder = computed(() =>
-  coachMode.value === "research"
-    ? isChinese.value
-      ? "询问英雄或官方版本调整…"
-      : "Ask about an official hero or patch change…"
-    : isChinese.value ? "询问 KPL BP 问题…" : "Ask a KPL draft question…"
-);
-const draftModeLabel = computed(() =>
-  isChinese.value ? "BP 分析" : "Draft analysis"
-);
-const researchModeLabel = computed(() =>
-  isChinese.value ? "版本资料" : "Patch research"
+  isChinese.value
+    ? "询问 BP、战队、英雄或官方版本调整…"
+    : "Ask about the draft, a team, a hero, or an official patch…"
 );
 const officialSourcesLabel = computed(() =>
   isChinese.value ? "官方版本来源" : "Official patch sources"
@@ -233,6 +224,18 @@ const coachDisclaimer = computed(() =>
 );
 const scoutReportLabel = computed(() =>
   isChinese.value ? "生成对阵侦察报告" : "Prepare scout report"
+);
+const scoutReportBadge = computed(() =>
+  isChinese.value ? "侦察报告" : "Scout report"
+);
+const contextLabel = computed(() =>
+  hasBoardContext.value
+    ? isChinese.value
+      ? "已附加 BP 面板"
+      : "Board attached"
+    : isChinese.value
+      ? "赛季上下文"
+      : "Season context"
 );
 const scoutReportQuestion = computed(() => {
   const blue = props.draftState?.blue_team_name || (isChinese.value ? "蓝方" : "Blue");
@@ -284,17 +287,12 @@ function humanReadableAnswer(value) {
   return output.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
-function useSuggestion(value) {
-  submitQuestion(value);
-}
-
-function setCoachMode(mode) {
-  if (loading.value || mode === coachMode.value) return;
-  persistSessionHistory(messages.value, coachMode.value);
-  coachMode.value = mode;
-  messages.value = loadSessionHistory(mode);
-  question.value = "";
-  messageId = Math.max(0, ...messages.value.map((message) => Number(message.id) || 0));
+function useSuggestion(suggestion) {
+  if (suggestion.kind === "scout") {
+    submitScoutReport();
+    return;
+  }
+  submitQuestion(suggestion.text);
 }
 
 function handleComposerKeydown(event) {
@@ -312,7 +310,21 @@ function clearHistory() {
   if (loading.value) return;
   messages.value = [];
   question.value = "";
-  window.sessionStorage.removeItem(historyStorageKey(coachMode.value));
+  window.sessionStorage.removeItem(sessionHistoryKey);
+  for (const key of legacyHistoryKeys) {
+    window.sessionStorage.removeItem(key);
+  }
+}
+
+function loadingCopy(message) {
+  if (message.scoutReport) {
+    return isChinese.value
+      ? "正在整理双方证据并生成侦察报告…"
+      : "Collecting both teams’ evidence and writing the scout report…";
+  }
+  return isChinese.value
+    ? "Kimi 正在选择证据工具并准备回答…"
+    : "Kimi is choosing evidence tools and preparing an answer…";
 }
 
 function isContextStale(message) {
@@ -398,7 +410,7 @@ async function submitQuestion(suggestedQuestion = null) {
   } finally {
     activeEntry.loading = false;
     loading.value = false;
-    persistSessionHistory(messages.value, coachMode.value);
+    persistSessionHistory(messages.value);
     await scrollThreadToBottom();
   }
 }
@@ -426,7 +438,7 @@ async function submitScoutReport() {
       blue_team_name: state.blue_team_name,
       red_team_id: state.red_team_id,
       red_team_name: state.red_team_name,
-      language: language.value === "zh-CN" ? "zh-CN" : "en",
+      language: isChinese.value ? "zh-CN" : "en",
     });
   } catch (err) {
     activeEntry.error = err.retryAfter
@@ -439,13 +451,13 @@ async function submitScoutReport() {
   } finally {
     activeEntry.loading = false;
     loading.value = false;
-    persistSessionHistory(messages.value, coachMode.value);
+    persistSessionHistory(messages.value);
     await scrollThreadToBottom();
   }
 }
 
 watch([loading, messages], scrollThreadToBottom, { deep: true });
-watch(messages, (value) => persistSessionHistory(value, coachMode.value), { deep: true });
+watch(messages, (value) => persistSessionHistory(value), { deep: true });
 </script>
 
 <template>
@@ -454,42 +466,13 @@ watch(messages, (value) => persistSessionHistory(value, coachMode.value), { deep
       <div>
         <p class="coach-eyebrow"><i></i> AI · 证据支持</p>
         <h2 id="draft-coach-title">BP 教练</h2>
-        <div class="coach-modes" role="group" aria-label="教练模式">
-          <button
-            type="button"
-            :class="{ active: coachMode === 'draft' }"
-            :aria-pressed="coachMode === 'draft'"
-            :disabled="loading"
-            @click="setCoachMode('draft')"
-          >
-            {{ draftModeLabel }}
-          </button>
-          <button
-            type="button"
-            :class="{ active: coachMode === 'research' }"
-            :aria-pressed="coachMode === 'research'"
-            :disabled="loading"
-            @click="setCoachMode('research')"
-          >
-            {{ researchModeLabel }}
-          </button>
-        </div>
       </div>
       <div class="coach-context" :class="{ active: hasBoardContext }">
-        <span>{{ coachMode === "research" ? "官方来源" : hasBoardContext ? "已附加 BP 面板" : "赛季上下文" }}</span>
+        <span>{{ contextLabel }}</span>
         <small v-if="draftState" data-i18n-ignore>
           BP {{ draftState.bp_order }} · {{ draftState.model_type }}
         </small>
       </div>
-      <button
-        v-if="canPrepareScoutReport"
-        type="button"
-        class="scout-report-button"
-        :disabled="loading"
-        @click="submitScoutReport"
-      >
-        {{ scoutReportLabel }}
-      </button>
       <button
         v-if="messages.length"
         type="button"
@@ -509,13 +492,14 @@ watch(messages, (value) => persistSessionHistory(value, coachMode.value), { deep
         <div class="coach-suggestions" aria-label="推荐问题">
           <button
             v-for="suggestion in suggestions"
-            :key="suggestion"
+            :key="suggestion.text"
             type="button"
+            :class="{ 'scout-suggestion': suggestion.kind === 'scout' }"
             :disabled="loading"
             data-i18n-ignore
             @click="useSuggestion(suggestion)"
           >
-            {{ suggestion }}
+            {{ suggestion.text }}
           </button>
         </div>
       </div>
@@ -535,7 +519,7 @@ watch(messages, (value) => persistSessionHistory(value, coachMode.value), { deep
           class="coach-message assistant-message loading-message"
         >
           <span>BP 教练</span>
-          <p>Kimi 正在选择证据工具并准备回答…</p>
+          <p>{{ loadingCopy(message) }}</p>
           <i><b></b><b></b><b></b></i>
         </div>
 
@@ -553,7 +537,10 @@ watch(messages, (value) => persistSessionHistory(value, coachMode.value), { deep
               <span>BP 教练</span>
               <small data-i18n-ignore>{{ message.response.model }}</small>
             </div>
-            <span v-if="isContextStale(message)" class="stale-label">BP 面板已变化</span>
+            <div class="response-badges">
+              <span v-if="message.scoutReport" class="report-label">{{ scoutReportBadge }}</span>
+              <span v-if="isContextStale(message)" class="stale-label">BP 面板已变化</span>
+            </div>
           </header>
           <p class="coach-answer" data-i18n-ignore>
             {{ humanReadableAnswer(message.response.answer) }}
@@ -631,10 +618,21 @@ watch(messages, (value) => persistSessionHistory(value, coachMode.value), { deep
       <button type="submit" :disabled="loading || !question.trim() || !leagueId" aria-label="询问 BP 教练">
         <span>{{ loading ? "…" : "↑" }}</span>
       </button>
-      <small data-i18n-ignore>
-        {{ seasonName || leagueId }} · {{ isChinese ? "已附加上下文" : t("context attached") }}
-        <template v-if="answeredCount"> · {{ answeredCount }} {{ isChinese ? "已回答" : t("answered") }}</template>
-      </small>
+      <div class="composer-toolbar">
+        <small data-i18n-ignore>
+          {{ seasonName || leagueId }} · {{ isChinese ? "已附加上下文" : t("context attached") }}
+          <template v-if="answeredCount"> · {{ answeredCount }} {{ isChinese ? "已回答" : t("answered") }}</template>
+        </small>
+        <button
+          v-if="canPrepareScoutReport"
+          type="button"
+          class="composer-scout"
+          :disabled="loading"
+          @click="submitScoutReport"
+        >
+          {{ scoutReportLabel }}
+        </button>
+      </div>
     </form>
 
     <p class="coach-disclaimer">
@@ -648,23 +646,22 @@ watch(messages, (value) => persistSessionHistory(value, coachMode.value), { deep
 .coach-header { display:flex; align-items:center; gap:.65rem; padding:.9rem 1rem; border-bottom:1px solid rgba(255,255,255,.12); background:linear-gradient(135deg, #084f42, #102a2e); color:#f7fbf8; }.coach-header > div:first-child { margin-right:auto; }
 .coach-eyebrow { display:flex; align-items:center; gap:.35rem; margin:0 0 .25rem; color:#8fe0c8; font-size:.57rem; letter-spacing:.13em; text-transform:uppercase; }.coach-eyebrow i { width:.45rem; height:.45rem; border-radius:50%; background:#8fe0c8; box-shadow:0 0 0 3px rgba(143,224,200,.12); }
 .coach-header h2 { margin:0; font:700 1.3rem var(--display); letter-spacing:-.04em; }
-.coach-modes { display:flex; gap:.28rem; margin-top:.55rem; }.coach-modes button { padding:.24rem .38rem; border:1px solid rgba(255,255,255,.2); border-radius:999px; background:transparent; color:rgba(247,251,248,.68); font:600 .5rem var(--mono); letter-spacing:.04em; cursor:pointer; }.coach-modes button:hover:not(:disabled),.coach-modes button.active { border-color:#8fe0c8; background:rgba(143,224,200,.14); color:#fff; }.coach-modes button:disabled { cursor:default; opacity:.5; }
-.coach-context { display:grid; gap:.1rem; padding:.38rem .48rem; border:1px solid rgba(255,255,255,.16); background:rgba(255,255,255,.06); text-align:right; }.coach-context.active { border-color:rgba(143,224,200,.55); }.coach-context span, .coach-context small { color:rgba(247,251,248,.68); font-size:.54rem; letter-spacing:.08em; text-transform:uppercase; }.scout-report-button { padding:.38rem .48rem; border:1px solid #8fe0c8; border-radius:.32rem; background:#8fe0c8; color:#083b33; font:700 .53rem var(--mono); letter-spacing:.04em; cursor:pointer; }.scout-report-button:disabled { cursor:default; opacity:.5; }
+.coach-context { display:grid; gap:.1rem; padding:.38rem .48rem; border:1px solid rgba(255,255,255,.16); background:rgba(255,255,255,.06); text-align:right; }.coach-context.active { border-color:rgba(143,224,200,.55); }.coach-context span, .coach-context small { color:rgba(247,251,248,.68); font-size:.54rem; letter-spacing:.08em; text-transform:uppercase; }
 .clear-chat { padding:.38rem .48rem; border:1px solid rgba(255,255,255,.2); background:transparent; color:rgba(247,251,248,.72); font:600 .54rem var(--mono); letter-spacing:.06em; text-transform:uppercase; cursor:pointer; }.clear-chat:hover:not(:disabled) { border-color:#8fe0c8; color:#fff; }.clear-chat:disabled { cursor:default; opacity:.4; }
 .coach-thread { min-height:0; padding:1rem; overflow:auto; background:linear-gradient(180deg, #f7faf8, #eef3f0); }
 .conversation-turn + .conversation-turn { margin-top:1rem; padding-top:1rem; border-top:1px solid rgba(16,42,46,.08); }
-.coach-welcome { display:grid; justify-items:center; padding:1.25rem .5rem; text-align:center; }.coach-mark { display:grid; place-items:center; width:2.5rem; height:2.5rem; border-radius:50%; background:var(--ink); color:#8fe0c8; font:700 .65rem var(--mono); }.coach-welcome h3 { margin:.7rem 0 .3rem; font:700 1rem var(--display); }.coach-welcome > p { max-width:18rem; margin:0; color:var(--ink-soft); font-size:.68rem; line-height:1.55; }
-.coach-suggestions { display:grid; width:100%; gap:.35rem; margin-top:1rem; }.coach-suggestions button { padding:.55rem .65rem; border:1px solid var(--line); background:rgba(255,255,255,.82); color:var(--ink-soft); font:inherit; font-size:.63rem; line-height:1.4; text-align:left; cursor:pointer; }.coach-suggestions button:hover:not(:disabled) { border-color:var(--accent-deep); color:var(--ink); }.coach-suggestions button:disabled { cursor:default; opacity:.5; }
+.coach-welcome { display:grid; justify-items:center; padding:1.25rem .5rem; text-align:center; }.coach-mark { display:grid; place-items:center; width:2.5rem; height:2.5rem; border-radius:50%; background:var(--ink); color:#8fe0c8; font:700 .65rem var(--mono); }.coach-welcome h3 { margin:.7rem 0 .3rem; font:700 1rem var(--display); }.coach-welcome > p { max-width:22rem; margin:0; color:var(--ink-soft); font-size:.68rem; line-height:1.55; }
+.coach-suggestions { display:grid; width:100%; gap:.35rem; margin-top:1rem; }.coach-suggestions button { padding:.55rem .65rem; border:1px solid var(--line); background:rgba(255,255,255,.82); color:var(--ink-soft); font:inherit; font-size:.63rem; line-height:1.4; text-align:left; cursor:pointer; }.coach-suggestions button:hover:not(:disabled) { border-color:var(--accent-deep); color:var(--ink); }.coach-suggestions button:disabled { cursor:default; opacity:.5; }.coach-suggestions .scout-suggestion { border-color:rgba(8,79,66,.35); background:linear-gradient(135deg,#e7f4ee,#fff); color:var(--accent-deep); font-weight:700; }
 .coach-message { max-width:92%; margin-bottom:.75rem; }.coach-message > span, .assistant-message > header span { display:block; margin-bottom:.25rem; color:var(--ink-soft); font-size:.56rem; letter-spacing:.08em; text-transform:uppercase; }.coach-message > p { margin:0; font-size:.7rem; line-height:1.58; }.user-message { margin-left:auto; }.user-message > span { text-align:right; }.user-message > p { padding:.65rem .75rem; border-radius:12px 12px 2px 12px; background:var(--accent-deep); color:#fff; }
-.assistant-message { padding:.72rem .78rem; border:1px solid var(--line); border-radius:2px 12px 12px 12px; background:#fff; }.assistant-message > header { display:flex; align-items:start; justify-content:space-between; gap:.5rem; }.assistant-message > header > div { display:flex; align-items:baseline; gap:.45rem; }.assistant-message > header span { margin:0; color:var(--accent-deep); }.assistant-message > header small { color:var(--ink-soft); font-size:.54rem; }
+.assistant-message { padding:.72rem .78rem; border:1px solid var(--line); border-radius:2px 12px 12px 12px; background:#fff; }.assistant-message > header { display:flex; align-items:start; justify-content:space-between; gap:.5rem; }.assistant-message > header > div { display:flex; align-items:baseline; gap:.45rem; }.assistant-message > header span { margin:0; color:var(--accent-deep); }.assistant-message > header small { color:var(--ink-soft); font-size:.54rem; }.response-badges { display:flex; flex-wrap:wrap; justify-content:end; gap:.28rem; }
 .loading-message i { display:flex; gap:.2rem; margin-top:.5rem; }.loading-message b { width:.35rem; height:.35rem; border-radius:50%; background:var(--accent); animation:coach-pulse 1s infinite alternate; }.loading-message b:nth-child(2) { animation-delay:.2s; }.loading-message b:nth-child(3) { animation-delay:.4s; }@keyframes coach-pulse { to { opacity:.25; transform:translateY(-2px); } }
 .coach-alert { margin:0 0 .75rem; padding:.65rem .75rem; border-left:3px solid #e27b47; background:#fff0df; color:#8e4318; font-size:.67rem; }
-.coach-response.stale { border-color:#e7a36c; }.stale-label { padding:.17rem .28rem; border-radius:20px; background:#fff0df; color:#9a4d1c !important; font-size:.52rem !important; white-space:nowrap; }.coach-answer { margin:.55rem 0 0 !important; white-space:pre-wrap; }
+.coach-response.stale { border-color:#e7a36c; }.stale-label, .report-label { padding:.17rem .28rem; border-radius:20px; font-size:.52rem !important; white-space:nowrap; }.stale-label { background:#fff0df; color:#9a4d1c !important; }.report-label { background:#e7f4ee; color:var(--accent-deep) !important; }.coach-answer { margin:.55rem 0 0 !important; white-space:pre-wrap; }
 .coach-warnings { margin:.65rem 0 0; padding:.55rem .6rem .55rem 1.5rem; background:#fff0df; color:#8e4318; font-size:.61rem; }
 .patch-evidence { margin-top:.75rem; padding:.65rem; border:1px solid rgba(8,79,66,.22); background:linear-gradient(135deg,#f1f8f3,#fff); }.patch-evidence > header { display:flex; align-items:start; justify-content:space-between; gap:.5rem; }.patch-evidence > header span { display:block; margin:0; color:var(--accent-deep); font:700 .58rem var(--display); letter-spacing:.06em; text-transform:uppercase; }.patch-evidence > header small { color:var(--ink-soft); font-size:.5rem; line-height:1.35; }.patch-evidence-note { margin:.5rem 0 0; color:#8e4318; font-size:.58rem; line-height:1.45; }.patch-evidence-list { display:grid; gap:.45rem; margin-top:.55rem; }.patch-evidence-card { padding:.55rem; border:1px solid var(--line); background:rgba(255,255,255,.82); }.patch-evidence-meta { display:flex; flex-wrap:wrap; justify-content:space-between; gap:.2rem .5rem; color:var(--ink-soft); font-size:.51rem; line-height:1.4; }.patch-evidence-card strong { display:block; margin-top:.35rem; color:var(--ink); font:700 .66rem/1.35 var(--display); }.patch-evidence-card p { margin:.3rem 0 .42rem; color:var(--ink-soft); font-size:.61rem; line-height:1.48; }.patch-evidence-card a { color:var(--accent-deep); font:700 .56rem var(--mono); text-decoration-thickness:1px; text-underline-offset:2px; }
 .coach-response > footer { display:flex; justify-content:space-between; gap:.5rem; margin-top:.65rem; padding-top:.5rem; border-top:1px solid var(--line); color:var(--ink-soft); font-size:.52rem; }
-.coach-form { position:relative; display:grid; grid-template-columns:1fr auto; gap:.4rem; padding:.8rem .8rem .55rem; border-top:1px solid var(--line); background:#fff; }.coach-form textarea { width:100%; min-height:58px; max-height:120px; resize:none; padding:.62rem 2.5rem .62rem .7rem; border:1px solid var(--line); border-radius:8px; outline:none; background:#f8faf9; color:var(--ink); font:inherit; font-size:.7rem; line-height:1.45; }.coach-form textarea:focus { border-color:var(--accent-deep); box-shadow:0 0 0 2px rgba(8,79,66,.08); }.coach-form button { align-self:end; width:2.4rem; height:2.4rem; min-height:2.4rem; aspect-ratio:1; margin:0 0 .38rem -3.1rem; padding:0; border:0; border-radius:50%; background:var(--accent-deep); color:#fff; font:700 1rem var(--mono); cursor:pointer; }.coach-form button:disabled { cursor:default; opacity:.35; }.coach-form > small { grid-column:1 / -1; color:var(--ink-soft); font-size:.52rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.coach-form { position:relative; display:grid; grid-template-columns:1fr auto; gap:.4rem; padding:.8rem .8rem .55rem; border-top:1px solid var(--line); background:#fff; }.coach-form textarea { width:100%; min-height:58px; max-height:120px; resize:none; padding:.62rem 2.5rem .62rem .7rem; border:1px solid var(--line); border-radius:8px; outline:none; background:#f8faf9; color:var(--ink); font:inherit; font-size:.7rem; line-height:1.45; }.coach-form textarea:focus { border-color:var(--accent-deep); box-shadow:0 0 0 2px rgba(8,79,66,.08); }.coach-form button[type="submit"] { align-self:end; width:2.4rem; height:2.4rem; min-height:2.4rem; aspect-ratio:1; margin:0 0 .38rem -3.1rem; padding:0; border:0; border-radius:50%; background:var(--accent-deep); color:#fff; font:700 1rem var(--mono); cursor:pointer; }.coach-form button[type="submit"]:disabled { cursor:default; opacity:.35; }.composer-toolbar { grid-column:1 / -1; display:flex; align-items:center; justify-content:space-between; gap:.5rem; }.composer-toolbar small { min-width:0; color:var(--ink-soft); font-size:.52rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }.composer-scout { flex:0 0 auto; padding:.22rem .45rem; border:1px solid rgba(8,79,66,.28); border-radius:999px; background:#e7f4ee; color:var(--accent-deep); font:700 .5rem var(--mono); letter-spacing:.03em; cursor:pointer; }.composer-scout:hover:not(:disabled) { border-color:var(--accent-deep); }.composer-scout:disabled { cursor:default; opacity:.5; }
 .coach-disclaimer { margin:0; padding:0 .8rem .7rem; background:#fff; color:var(--ink-soft); font-size:.51rem; }.sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
 @media (max-width:1000px) { .coach-panel { height:auto; min-height:520px; max-height:700px; }.coach-thread { min-height:260px; } }
-@media (max-width:620px) { .coach-panel { min-height:500px; }.coach-header { align-items:flex-start; }.coach-context { max-width:9rem; }.coach-message { max-width:96%; }.coach-form textarea { font-size:16px; }.patch-evidence-meta { display:grid; } }
+@media (max-width:620px) { .coach-panel { min-height:500px; }.coach-header { align-items:flex-start; }.coach-context { max-width:9rem; }.coach-message { max-width:96%; }.coach-form textarea { font-size:16px; }.composer-toolbar { flex-wrap:wrap; }.patch-evidence-meta { display:grid; } }
 </style>

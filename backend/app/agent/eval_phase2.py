@@ -20,6 +20,8 @@ PHASE2_TOOLS = {
     "get_team_combo_performance",
     "get_player_hero_pool",
     "get_recent_team_trends",
+    "recommend_value_draft_action",
+    "score_current_lineup",
 }
 
 

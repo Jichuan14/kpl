@@ -19,6 +19,12 @@ from app.agent.tools.draft import (
     predict_next_draft_action,
     simulate_future_draft,
 )
+from app.agent.tools.lineup import (
+    RecommendValueDraftActionArguments,
+    ScoreCurrentLineupArguments,
+    recommend_value_draft_action,
+    score_current_lineup,
+)
 from app.agent.tools.meta import (
     GetHeroBpStatsArguments,
     GetMetaHeroesArguments,
@@ -159,6 +165,31 @@ TOOLS: dict[str, RegisteredTool] = {
         ),
         arguments_model=SimulateFutureDraftArguments,
         handler=simulate_future_draft,
+    ),
+    "recommend_value_draft_action": RegisteredTool(
+        name="recommend_value_draft_action",
+        description=(
+            "Rank realistic next picks or bans on the active board by relative "
+            "completed-lineup or opponent-denial value. Use when the user asks "
+            "which legal action looks better, stronger, or more valuable, not "
+            "which action is historically most likely. "
+            "Scores are relative lineup advantage, not battle-win probability "
+            "or a game-theoretic optimal action."
+        ),
+        arguments_model=RecommendValueDraftActionArguments,
+        handler=recommend_value_draft_action,
+    ),
+    "score_current_lineup": RegisteredTool(
+        name="score_current_lineup",
+        description=(
+            "Score the completed 5v5 currently on the active board for relative "
+            "Blue versus Red lineup advantage, including synergy, counter, "
+            "familiarity, and composition. Use when both sides already have "
+            "five picks and the user asks who is favored or how strong this "
+            "lineup is. The score is not literal win probability."
+        ),
+        arguments_model=ScoreCurrentLineupArguments,
+        handler=score_current_lineup,
     ),
     "get_hero_relationships": RegisteredTool(
         name="get_hero_relationships",
