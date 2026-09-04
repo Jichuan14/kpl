@@ -24,6 +24,22 @@ instances against the same database file or put the database on NFS/OSS.
    chmod 600 .env.production deploy/.htpasswd
    ```
 
+   On a small instance, create host swap before starting the containers. The
+   production Compose file limits the API container to 1 GiB of physical RAM
+   and 2.5 GiB total RAM plus swap so training cannot starve the host:
+
+   ```bash
+   sudo fallocate -l 2G /swapfile
+   sudo chmod 600 /swapfile
+   sudo mkswap /swapfile
+   sudo swapon /swapfile
+   echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+   swapon --show
+   ```
+
+   Run these commands only once. If `/swapfile` already appears in
+   `swapon --show`, do not recreate it or add another `fstab` entry.
+
    To enable the optional SwiftBar visitor widget, generate a separate token
    with `openssl rand -hex 32` and set it as `ANALYTICS_WIDGET_TOKEN` in
    `.env.production`. The corresponding Mac setup is documented in
@@ -43,7 +59,10 @@ instances against the same database file or put the database on NFS/OSS.
 The API image is Python-based and includes the CPU-only PyTorch package used by
 the private management pipeline. A full update retrains both draft models and
 exports the chronological model to a NumPy-compatible JSON artifact; public
-inference does not import PyTorch.
+inference does not import PyTorch. Only one pipeline can run at a time; another
+request receives HTTP 409. Pipeline commands run in isolated process groups so
+a timeout also terminates nested trainer processes instead of leaving them to
+consume resources in the background.
 
 Caddy accepts public traffic on ports 80 and 443, automatically obtains and
 renews HTTPS certificates for `kpllab.xyz` and `www.kpllab.xyz`, and proxies

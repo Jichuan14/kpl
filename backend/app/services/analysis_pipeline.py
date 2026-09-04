@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import os
+import signal
 import subprocess
 import sys
 import time
 from pathlib import Path
+from threading import Lock
 from typing import Any, Literal
 
 PipelineStep = Literal[
@@ -27,6 +30,56 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 ANALYSIS_DIR = REPO_ROOT / "analysis"
 EXPORT_ROOT = ANALYSIS_DIR / "exports"
 OUTPUT_ROOT = ANALYSIS_DIR / "outputs"
+_PIPELINE_RUN_LOCK = Lock()
+
+
+class PipelineBusyError(RuntimeError):
+    """Raised when another analysis or training run is already active."""
+
+
+def _terminate_process_tree(process: subprocess.Popen[str]) -> None:
+    """Stop the command and every descendant in its dedicated process group."""
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return
+
+    try:
+        process.communicate(timeout=5)
+        return
+    except subprocess.TimeoutExpired:
+        pass
+
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    process.communicate()
+
+
+def _run_command(
+    command: list[str], *, cwd: Path, timeout_seconds: int
+) -> subprocess.CompletedProcess[str]:
+    """Run one pipeline command in a killable, isolated process group."""
+    process = subprocess.Popen(
+        command,
+        cwd=cwd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=True,
+    )
+    try:
+        stdout, stderr = process.communicate(timeout=timeout_seconds)
+    except subprocess.TimeoutExpired:
+        _terminate_process_tree(process)
+        raise
+    return subprocess.CompletedProcess(
+        command,
+        process.returncode,
+        stdout,
+        stderr,
+    )
 
 
 class AnalysisPipeline:
@@ -45,6 +98,14 @@ class AnalysisPipeline:
         self.decisions_path = self.export_dir / "bp_decisions.jsonl"
 
     def run(self, step: PipelineStep) -> dict[str, Any]:
+        if not _PIPELINE_RUN_LOCK.acquire(blocking=False):
+            raise PipelineBusyError("Another analysis pipeline is already running")
+        try:
+            return self._run_locked(step)
+        finally:
+            _PIPELINE_RUN_LOCK.release()
+
+    def _run_locked(self, step: PipelineStep) -> dict[str, Any]:
         display_steps = [
             "export",
             "decisions",
@@ -98,13 +159,10 @@ class AnalysisPipeline:
                 else 300
             )
             try:
-                process = subprocess.run(
+                process = _run_command(
                     command,
                     cwd=REPO_ROOT,
-                    capture_output=True,
-                    text=True,
-                    timeout=timeout_seconds,
-                    check=False,
+                    timeout_seconds=timeout_seconds,
                 )
             except subprocess.TimeoutExpired as exc:
                 raise RuntimeError(

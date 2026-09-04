@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import League
 from app.schemas import AnalysisRunRequest, ApiResponse
-from app.services.analysis_pipeline import AnalysisPipeline
+from app.services.analysis_pipeline import AnalysisPipeline, PipelineBusyError
 from app.services.static_publisher import publish_league
 
 router = APIRouter(prefix="/api/pipeline", tags=["pipeline"])
@@ -23,6 +23,8 @@ def run_pipeline(
         raise HTTPException(status_code=404, detail="League not found")
     try:
         result = AnalysisPipeline(body.league_id).run(body.step)
+    except PipelineBusyError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except (ValueError, RuntimeError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return ApiResponse(message=f"{body.step} completed", data=result)

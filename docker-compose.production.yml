@@ -6,6 +6,15 @@ services:
     env_file:
       - .env.production
     restart: unless-stopped
+    # This host has about 1.6 GiB of usable RAM. Keep enough physical memory
+    # available for Linux, Docker, Caddy, and Nginx while allowing the private
+    # model-training pipeline to spill into a bounded amount of host swap.
+    # memswap_limit is the combined RAM + swap ceiling, not swap alone.
+    mem_limit: 1g
+    memswap_limit: 2500m
+    mem_swappiness: 60
+    cpus: 1.5
+    pids_limit: 256
     volumes:
       # ECS-local persistent state. Do not mount these from network storage.
       - ./backend/data:/app/backend/data

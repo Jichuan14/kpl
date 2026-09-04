@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import signal
 import subprocess
 import tempfile
 import unittest
@@ -68,8 +69,8 @@ class AnalysisPipelineTests(unittest.TestCase):
                 patch.object(analysis_pipeline, "EXPORT_ROOT", analysis_dir / "exports"),
                 patch.object(analysis_pipeline, "OUTPUT_ROOT", analysis_dir / "outputs"),
                 patch.object(
-                    analysis_pipeline.subprocess,
-                    "run",
+                    analysis_pipeline,
+                    "_run_command",
                     return_value=subprocess.CompletedProcess([], 0, "complete", ""),
                 ) as run,
             ):
@@ -95,7 +96,9 @@ class AnalysisPipelineTests(unittest.TestCase):
         self.assertEqual(training_command.count("--use-series-context"), 1)
         self.assertEqual(training_command.count("--train-on-all-data"), 1)
         self.assertNotIn("poc", str(training_command))
-        self.assertTrue(all(call.kwargs["timeout"] == 900 for call in run.call_args_list))
+        self.assertTrue(
+            all(call.kwargs["timeout_seconds"] == 900 for call in run.call_args_list)
+        )
 
     def test_sequence_step_is_accepted_by_request_schema(self) -> None:
         request = AnalysisRunRequest(
@@ -114,8 +117,8 @@ class AnalysisPipelineTests(unittest.TestCase):
                 patch.object(analysis_pipeline, "EXPORT_ROOT", analysis_dir / "exports"),
                 patch.object(analysis_pipeline, "OUTPUT_ROOT", analysis_dir / "outputs"),
                 patch.object(
-                    analysis_pipeline.subprocess,
-                    "run",
+                    analysis_pipeline,
+                    "_run_command",
                     return_value=subprocess.CompletedProcess([], 0, "complete", ""),
                 ) as run,
             ):
@@ -127,7 +130,7 @@ class AnalysisPipelineTests(unittest.TestCase):
         command = run.call_args.args[0]
         self.assertTrue(command[1].endswith("train_lineup_value_model.py"))
         self.assertEqual(command[-4:], ["--league-id", "20260003", "--output-dir", str(analysis_dir / "outputs" / "20260003")])
-        self.assertEqual(run.call_args.kwargs["timeout"], 900)
+        self.assertEqual(run.call_args.kwargs["timeout_seconds"], 900)
 
     def test_lineup_value_step_is_accepted_by_request_schema(self) -> None:
         request = AnalysisRunRequest(
@@ -167,8 +170,8 @@ class AnalysisPipelineTests(unittest.TestCase):
                 patch.object(analysis_pipeline, "EXPORT_ROOT", analysis_dir / "exports"),
                 patch.object(analysis_pipeline, "OUTPUT_ROOT", analysis_dir / "outputs"),
                 patch.object(
-                    analysis_pipeline.subprocess,
-                    "run",
+                    analysis_pipeline,
+                    "_run_command",
                     side_effect=subprocess.TimeoutExpired(["python"], 900),
                 ),
             ):
@@ -179,6 +182,30 @@ class AnalysisPipelineTests(unittest.TestCase):
                     analysis_pipeline.AnalysisPipeline("20260003").run(
                         "sequence_draft_model"
                     )
+
+    def test_concurrent_pipeline_run_is_rejected(self) -> None:
+        self.assertTrue(analysis_pipeline._PIPELINE_RUN_LOCK.acquire(blocking=False))
+        try:
+            with self.assertRaisesRegex(
+                analysis_pipeline.PipelineBusyError,
+                "already running",
+            ):
+                analysis_pipeline.AnalysisPipeline("20260003").run("display")
+        finally:
+            analysis_pipeline._PIPELINE_RUN_LOCK.release()
+
+    def test_timeout_terminates_the_entire_process_group(self) -> None:
+        process = unittest.mock.Mock()
+        process.pid = 1234
+        process.communicate.side_effect = [subprocess.TimeoutExpired(["python"], 5), ("", "")]
+
+        with patch.object(analysis_pipeline.os, "killpg") as killpg:
+            analysis_pipeline._terminate_process_tree(process)
+
+        self.assertEqual(
+            killpg.call_args_list,
+            [unittest.mock.call(1234, signal.SIGTERM), unittest.mock.call(1234, signal.SIGKILL)],
+        )
 
 
 if __name__ == "__main__":
