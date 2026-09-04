@@ -36,6 +36,23 @@ DRAFT_FEATURES_PATH = ANALYSIS_DIR / "hero_draft_feature_vectors.json"
 # analysis and deterministic unit tests, but do not expose that control at an
 # HTTP or model-tool boundary.
 FIXED_ROLLOUTS = 50
+HERO_POSITION_FALLBACKS = {
+    109: [2],  # 妲己 · 中路
+    114: [4],  # 刘禅 · 游走
+    115: [2],  # 高渐离 · 中路
+    129: [5],  # 典韦 · 打野
+    154: [6],  # 花木兰 · 对抗路
+    513: [2],  # 上官婉儿 · 中路
+    524: [7],  # 蒙犽 · 发育路
+    528: [5],  # 澜 · 打野
+}
+POSITION_LANES = {
+    2: "mid",
+    4: "roam",
+    5: "jungle",
+    6: "clash",
+    7: "farm",
+}
 
 
 def model_path(league_id: str) -> Path:
@@ -95,6 +112,9 @@ def load_model(league_id: str) -> dict[str, Any]:
         (row["action"], int(row["hero_id"])): row for row in model.get("action", [])
     }
     model["_relation_index"] = {row["key"]: row for row in model.get("relations", [])}
+    for hero_id, positions in HERO_POSITION_FALLBACKS.items():
+        if str(hero_id) in model.get("hero_names", {}) and not model.get("hero_positions", {}).get(str(hero_id)):
+            model.setdefault("hero_positions", {})[str(hero_id)] = list(positions)
     role_bits = {
         int(role_id): 1 << index
         for index, role_id in enumerate(model.get("role_ids", []))
@@ -316,11 +336,21 @@ def learned_feature_space(league_id: str) -> dict[str, Any]:
     rows = []
     for row in feature_space.get("rows", []):
         hero_id = int(row["hero_id"])
+        positions = [
+            int(position)
+            for position in model.get("hero_positions", {}).get(str(hero_id), [])
+            if int(position) in POSITION_LANES
+        ]
+        primary_lane = str(row.get("primary_lane") or "unknown")
+        if primary_lane == "unknown" and positions:
+            primary_lane = POSITION_LANES[positions[-1]]
         rows.append(
             {
                 **row,
                 "hero_name": model["hero_names"].get(str(hero_id), row.get("hero_name", str(hero_id))),
                 "hero_icon": model["hero_icons"].get(str(hero_id), ""),
+                "positions": positions,
+                "primary_lane": primary_lane,
             }
         )
     return {

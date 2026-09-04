@@ -98,6 +98,13 @@ function emptyBoard() {
   };
 }
 
+const isPeakDuel = computed(
+  () =>
+    globalMode.value === "match" &&
+    Number(bestOf.value) === 7 &&
+    Number(seriesGame.value) === 7
+);
+
 const currentStep = computed(() =>
   model.value?.draft_sequence?.find(
     (step) => Number(step.bp_order) === Number(bpOrder.value)
@@ -109,6 +116,7 @@ const lineupComplete = computed(
 );
 
 const currentLabel = computed(() => {
+  if (isPeakDuel.value) return "巅峰对决，不用BP";
   if (!currentStep.value) return bpT("Draft complete");
   const side = bpT(currentStep.value.side === "blue" ? "Blue" : "Red");
   const action = bpT(currentStep.value.action === "ban" ? "ban" : "pick");
@@ -154,7 +162,7 @@ const seriesWinner = computed(() =>
 );
 
 const canChangeCurrentSides = computed(
-  () => teamsReady.value && !history.value.length
+  () => teamsReady.value && !history.value.length && !isPeakDuel.value
 );
 
 const probabilityByHeroId = computed(
@@ -290,7 +298,7 @@ const boardGroups = computed(() => [
 ]);
 
 const coachDraftState = computed(() => {
-  if (!currentStep.value || !teamsReady.value) return null;
+  if (isPeakDuel.value || !currentStep.value || !teamsReady.value) return null;
   const blue = selectedTeam(teamsBySide.value.blue);
   const red = selectedTeam(teamsBySide.value.red);
   return {
@@ -970,6 +978,10 @@ async function forecast() {
   lineupScore.value = null;
   lineupScoreLoading.value = false;
   lineupScoreError.value = "";
+  if (isPeakDuel.value) {
+    result.value = null;
+    return;
+  }
   if (!teamsReady.value) {
     result.value = null;
     return;
@@ -1081,7 +1093,7 @@ async function recommendCurrentDraft() {
 }
 
 async function chooseHero(heroId) {
-  if (!teamsReady.value || liveHeroSelectionLocked.value) return;
+  if (!teamsReady.value || isPeakDuel.value || liveHeroSelectionLocked.value) return;
   if (pickerTarget.value !== "draft") {
     if (liveOfficialHeroContextLocked.value) return;
     const side = pickerTarget.value.replace("global-", "");
@@ -1131,6 +1143,7 @@ watch(commentaryEnabled, (enabled) => {
 });
 
 async function undo() {
+  if (isPeakDuel.value) return;
   const event = history.value.pop();
   if (!event) return;
   const index = board.value[event.field].lastIndexOf(event.heroId);
@@ -1140,6 +1153,7 @@ async function undo() {
 }
 
 async function reset() {
+  if (isPeakDuel.value) return;
   board.value = emptyBoard();
   history.value = [];
   bpOrder.value = 1;
@@ -1224,7 +1238,7 @@ async function removeGlobalHero(side, heroId) {
 }
 
 function removeHero(field, heroId) {
-  if (liveHeroSelectionLocked.value) return;
+  if (isPeakDuel.value || liveHeroSelectionLocked.value) return;
   const eventIndex = history.value.findLastIndex(
     (event) => event.field === field && event.heroId === heroId
   );
@@ -1535,7 +1549,7 @@ onBeforeUnmount(() => {
             <template v-if="seriesWinner">
               <strong data-i18n-ignore>{{ seriesWinnerLabel() }}</strong>
             </template>
-            <template v-else-if="currentStep">
+            <template v-else-if="currentStep && !isPeakDuel">
               <strong>完成当前 BP 后继续</strong>
             </template>
             <template v-else>
@@ -1629,15 +1643,20 @@ onBeforeUnmount(() => {
           </label>
         </div>
         <div class="simulator-actions">
-          <button type="button" :disabled="!history.length || simulating || liveHeroSelectionLocked" @click="undo">撤销</button>
-          <button type="button" :disabled="simulating || liveHeroSelectionLocked" @click="reset">重置</button>
+          <button type="button" :disabled="isPeakDuel || !history.length || simulating || liveHeroSelectionLocked" @click="undo">撤销</button>
+          <button type="button" :disabled="isPeakDuel || simulating || liveHeroSelectionLocked" @click="reset">重置</button>
         </div>
       </section>
 
       <div class="simulator-workspace">
         <div class="simulator-main-column">
           <section class="simulator-layout">
+            <section v-if="isPeakDuel" class="peak-duel-board" aria-disabled="true">
+              <p class="simulator-eyebrow">BO7 · 第 7 局</p>
+              <h2>巅峰对决，不用BP</h2>
+            </section>
             <div
+              v-else
               ref="draftBoardElement"
               class="draft-board"
               @wheel="resistMobileBoardWheel"
@@ -1669,7 +1688,7 @@ onBeforeUnmount(() => {
               </section>
             </div>
 
-            <aside class="forecast-panel">
+            <aside v-if="!isPeakDuel" class="forecast-panel">
               <div class="forecast-heading">
                 <div>
                   <p class="simulator-eyebrow">模型预测</p>
@@ -1743,7 +1762,7 @@ onBeforeUnmount(() => {
             </template>
           </section>
 
-          <section class="recommendation-panel">
+          <section v-if="!isPeakDuel" class="recommendation-panel">
             <header>
               <div>
                 <p class="simulator-eyebrow">BP 决策</p>
@@ -1817,13 +1836,13 @@ onBeforeUnmount(() => {
             </small>
           </section>
 
-          <section v-if="commentary || commentaryLoading" class="commentary-panel">
+          <section v-if="!isPeakDuel && (commentary || commentaryLoading)" class="commentary-panel">
             <p class="simulator-eyebrow">BP 解说</p>
             <p v-if="commentaryLoading" class="commentary-loading">正在生成解说…</p>
             <h2 v-else>{{ commentary.commentary }}</h2>
           </section>
 
-          <section class="hero-picker">
+          <section v-if="!isPeakDuel" class="hero-picker">
             <div class="picker-heading">
               <div>
                 <p class="simulator-eyebrow">{{ pickerTarget === 'draft' ? '添加下一步操作' : '全局 BP 设置' }}</p>
@@ -1944,6 +1963,8 @@ onBeforeUnmount(() => {
 .live-match-panel { grid-column:1 / -1; display:flex; align-items:center; justify-content:space-between; gap:1rem; margin:0; padding:.75rem; border:1px solid #d9b663; background:#fff8e7; }.live-match-panel.active { border-color:var(--accent-deep); background:#edf8f3; }.live-match-panel strong { display:block; margin:.1rem 0; font:700 .8rem var(--mono); }.live-match-panel small { display:block; max-width:48rem; color:var(--ink-soft); font-size:.62rem; line-height:1.45; }.live-match-panel .live-refresh-note { margin-top:.25rem; color:var(--accent-deep); }.live-match-panel > div:last-child { display:flex; flex-wrap:wrap; gap:.35rem; }.live-match-panel button { min-height:32px; padding:.4rem .55rem; border:1px solid var(--accent-deep); background:var(--accent-deep); color:#fff; font:700 .61rem var(--mono); cursor:pointer; white-space:nowrap; }.live-match-panel button.quiet { border-color:var(--line); background:#fff; color:var(--ink-soft); }.live-match-panel button:disabled { cursor:not-allowed; opacity:.55; }
 .live-winner-prediction { grid-column:1 / -1; display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:.75rem; border:1px solid #9ab9cd; background:#f3f9fd; }.live-winner-prediction strong { display:block; margin:.1rem 0; font:700 .8rem var(--mono); }.live-winner-prediction small { display:block; color:var(--ink-soft); font-size:.62rem; line-height:1.45; }.live-winner-choices { display:flex; flex-wrap:wrap; gap:.4rem; }.live-winner-choices button { display:grid; gap:.1rem; min-width:7.5rem; min-height:38px; padding:.4rem .6rem; border:1px solid #9ab9cd; background:#fff; color:var(--ink); font:700 .64rem var(--mono); cursor:pointer; }.live-winner-choices button.active { border-color:var(--accent-deep); background:var(--ink); color:#fff; }.live-winner-choices button.active small { color:#fff; }.live-winner-choices button:disabled { cursor:not-allowed; opacity:.6; }
 .simulator-workspace { display:grid; grid-template-columns:minmax(0, 1fr) minmax(340px, 390px); gap:.85rem; align-items:start; margin-top:.75rem; }.simulator-main-column { min-width:0; }.coach-rail { position:sticky; top:1rem; min-width:0; }.simulator-layout { align-items: stretch; margin-top:0; gap:.75rem; }.draft-board { display: grid; flex: 1; min-width:0; grid-template-columns: repeat(2, minmax(0,1fr)); gap: .75rem; }
+.peak-duel-board { display:grid; min-height:20rem; flex:1; place-content:center; padding:2rem; border:1px dashed var(--line); background:rgba(255,255,255,.6); color:var(--ink-soft); text-align:center; }
+.peak-duel-board h2 { margin:0; color:var(--ink); font:700 clamp(1.8rem, 4vw, 3rem) var(--display); letter-spacing:-.04em; }
 .mobile-group-title { display:none; }
 .mobile-coach-toggle,.mobile-coach-close,.coach-scrim{display:none}
 .draft-group, .forecast-panel, .hero-picker { border: 1px solid var(--line); background: rgba(255,255,255,.76); }.draft-group { min-height: 160px; padding: 1rem; }.draft-group > p { margin: 0 0 .8rem; font-size: .67rem; letter-spacing: .1em; text-transform: uppercase; }.draft-group.blue > p { color: #286999; }.draft-group.red > p { color: #a84b4b; }

@@ -169,11 +169,16 @@ onBeforeUnmount(() => {
 
 <template>
   <aside ref="widgetRoot" class="daily-matches-widget" :class="{ minimized }" aria-label="比赛日历">
-    <button type="button" class="widget-toggle" :aria-expanded="String(!minimized)" @click="toggleWidget">
-      <span aria-hidden="true">▣</span>
-      <span>比赛日历</span>
+    <button type="button" class="widget-toggle" :aria-expanded="String(!minimized)" :aria-label="minimized ? '打开比赛日历' : '收起比赛日历'" @click="toggleWidget">
+      <span class="widget-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" focusable="false">
+          <path d="M7 2v3M17 2v3M3.5 9h17M5.5 4h13a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z" />
+          <path d="M7 12h2v2H7zM11 12h2v2h-2zM15 12h2v2h-2zM7 16h2v2H7zM11 16h2v2h-2z" />
+        </svg>
+      </span>
+      <span class="widget-title">比赛日历</span>
       <small v-if="minimized">{{ matches.length || '' }}</small>
-      <span v-else aria-hidden="true">−</span>
+      <span v-else class="widget-collapse" aria-hidden="true">−</span>
     </button>
     <div v-if="!minimized" class="widget-content">
       <label>
@@ -208,4 +213,12 @@ onBeforeUnmount(() => {
 @media (min-width: 700px) { .daily-matches-widget { right:1.5rem; bottom:1.5rem; width:min(29rem, calc(100vw - 3rem)); }.widget-toggle { min-height:48px; padding:.7rem .85rem; font-size:.78rem; }.widget-content { padding:1rem; }.widget-content label { font-size:.72rem; }.widget-content input, .date-control button { min-height:36px; }.date-control button { width:36px; }.widget-note { font-size:.75rem; }.widget-match-list { gap:.65rem; margin-top:.85rem; }.widget-match-list li { gap:.22rem; padding:.85rem; }.widget-match-list small, .widget-match-list span { font-size:.68rem; }.widget-match-list strong { font-size:1.08rem; }.widget-match-list i { margin:0 .85rem; font-size:.78rem; } }
 @media (max-width: 640px) { .daily-matches-widget { position:absolute; z-index:62; top:.75rem; right:4.6rem; bottom:auto; width:auto; border:0; background:transparent; box-shadow:none; }.daily-matches-widget .widget-toggle { min-height:44px; justify-content:flex-start; gap:.35rem; padding:.45rem .55rem; border:1px solid var(--line); border-radius:.35rem; background:#102a2e; font-size:.55rem; white-space:nowrap; }.daily-matches-widget .widget-toggle > span:last-child, .daily-matches-widget .widget-toggle small { margin-left:0; }.daily-matches-widget .widget-content { position:absolute; top:calc(100% + .45rem); right:-4.6rem; width:min(20rem, calc(100vw - 1rem)); border:1px solid var(--line); border-radius:.35rem; background:rgba(253,251,245,.98); box-shadow:0 10px 28px rgba(16,42,46,.2); } }
 @media (max-width: 520px) { .widget-content label { align-items:flex-start; flex-direction:column; }.date-control { width:100%; }.widget-content input { min-width:0; flex:1; } }
+.daily-matches-widget.minimized { width:46px; border:0; background:transparent; box-shadow:none; }
+.daily-matches-widget.minimized .widget-toggle { width:46px; height:46px; min-height:46px; justify-content:center; gap:0; padding:0; border:1px solid var(--line); border-radius:.35rem; box-shadow:0 8px 22px rgba(16,42,46,.2); }
+.daily-matches-widget.minimized .widget-icon { font-size:1rem; }
+.widget-icon { display:grid; width:1.15rem; height:1.15rem; flex:0 0 auto; place-items:center; }
+.widget-icon svg { display:block; width:100%; height:100%; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+.widget-icon svg path:last-child { fill:currentColor; stroke:none; }
+.daily-matches-widget.minimized .widget-title,
+.daily-matches-widget.minimized .widget-toggle small { display:none; }
 </style>

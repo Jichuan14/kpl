@@ -7,7 +7,7 @@ export const supplementalHeroes = [
   { hero_id: 137, hero_name: "司马懿", primary_lane: "mid", search_aliases: "simayi smy" },
   { hero_id: 124, hero_name: "周瑜", primary_lane: "mid", search_aliases: "zhouyu zy" },
   { hero_id: 167, hero_name: "孙悟空", primary_lane: "jungle", search_aliases: "sunwukong swk" },
-  { hero_id: 177, hero_name: "成吉思汗", primary_lane: "farm", search_aliases: "chengjisihan cjsh" },
+  { hero_id: 177, hero_name: "苍", primary_lane: "farm", search_aliases: "cang chengjisihan cjsh 成吉思汗" },
   { hero_id: 505, hero_name: "瑶", primary_lane: "roam", search_aliases: "yao y" },
   { hero_id: 504, hero_name: "米莱狄", primary_lane: "mid", search_aliases: "milaidi mld" },
   { hero_id: 183, hero_name: "雅典娜", primary_lane: "jungle", search_aliases: "yadianna yadn" },

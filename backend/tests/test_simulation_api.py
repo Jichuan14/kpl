@@ -240,6 +240,50 @@ class SimulationApiTest(unittest.TestCase):
 
         self.assertEqual(response.status_code, 422)
 
+    def test_neutral_lineup_score_allows_mirrors_without_team_lookup(self) -> None:
+        limiter = CoachRateLimiter(
+            per_ip_per_minute=10,
+            per_ip_per_day=10,
+            server_per_minute=10,
+            server_per_day=100,
+            max_active_per_ip=1,
+            max_active_server=2,
+        )
+
+        class FakeLineupModel:
+            payload = {"version": "test-value-v1", "source": {}}
+
+            def score(self, blue_team, blue_heroes, red_team, red_heroes, **options):
+                self.options = options
+                return {
+                    "blue_advantage": 0.54,
+                    "red_advantage": 0.46,
+                    "team_neutral": True,
+                }
+
+        payload = {
+            "league_id": "20260003",
+            "blue_hero_ids": [101, 102, 103, 104, 105],
+            "red_hero_ids": [101, 202, 203, 204, 205],
+        }
+        model = FakeLineupModel()
+        with (
+            patch("app.api.simulation.simulation_rate_limiter", limiter),
+            patch("app.api.simulation.load_lineup_value_model", return_value=model),
+            patch("app.api.simulation.validate_season_team_pair") as validate_teams,
+        ):
+            response = self.client.post(
+                "/api/simulations/score-neutral-lineup", json=payload
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["data"]["blue_advantage"], 0.54)
+        self.assertEqual(
+            model.options,
+            {"team_neutral": True, "allow_mirror_heroes": True},
+        )
+        validate_teams.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()
