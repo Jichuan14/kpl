@@ -10,6 +10,8 @@ from app.schemas import (
     HeroMatchupRecommendationRequest,
     LineupRecommendationRequest,
     LineupScoreRequest,
+    NeutralLineupScoreRequest,
+    UltimateCounterLineupRequest,
 )
 from app.services.draft_commentary import build_selection_commentary
 from app.services.draft_simulator import (
@@ -24,6 +26,7 @@ from app.services.request_identity import client_key
 from app.services.hero_matchup import recommend_heroes
 from app.services.lineup_recommender import recommend_lineup
 from app.services.lineup_value import load_lineup_value_model
+from app.services.ultimate_lineup import optimize_counter_lineup, optimize_ultimate_lineups
 
 router = APIRouter(prefix="/api/simulations", tags=["simulations"])
 
@@ -89,6 +92,62 @@ def feature_space(league_id: str = Query(..., min_length=1, max_length=32)) -> A
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/ultimate-lineups")
+def ultimate_lineups(
+    request: Request,
+    league_id: str = Query(..., min_length=1, max_length=32),
+) -> ApiResponse:
+    """Compute team-neutral peak-duel lineup profiles from existing artifacts."""
+    key = _simulation_client_key(request)
+    decision = simulation_rate_limiter.acquire(key)
+    if not decision.allowed:
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "code": "simulation_rate_limited",
+                "message": "The ultimate-lineup optimizer is busy. Try again shortly.",
+            },
+            headers={"Retry-After": str(decision.retry_after_seconds)},
+        )
+    try:
+        return ApiResponse(data=optimize_ultimate_lineups(league_id))
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    finally:
+        simulation_rate_limiter.release(key)
+
+
+@router.post("/ultimate-lineups/counter")
+def ultimate_counter_lineup(
+    body: UltimateCounterLineupRequest,
+    request: Request,
+) -> ApiResponse:
+    """Build a legal team-neutral counter after the Blue lineup is complete."""
+    key = _simulation_client_key(request)
+    decision = simulation_rate_limiter.acquire(key)
+    if not decision.allowed:
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "code": "simulation_rate_limited",
+                "message": "The counter-lineup optimizer is busy. Try again shortly.",
+            },
+            headers={"Retry-After": str(decision.retry_after_seconds)},
+        )
+    try:
+        return ApiResponse(
+            data=optimize_counter_lineup(body.league_id, body.target_hero_ids)
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    finally:
+        simulation_rate_limiter.release(key)
 
 
 @router.post("/hero-matchup")
@@ -253,6 +312,54 @@ def lineup_score(
                     "team_name": str(teams["red"]["team_name"]),
                     "hero_ids": body.red_hero_ids,
                 },
+                **result,
+                "value_model": {
+                    "version": model.payload["version"],
+                    "generated_at": model.payload.get("generated_at"),
+                    "source": model.payload.get("source", {}),
+                },
+            }
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    finally:
+        simulation_rate_limiter.release(key)
+
+
+@router.post("/score-neutral-lineup")
+def neutral_lineup_score(
+    body: NeutralLineupScoreRequest,
+    request: Request,
+) -> ApiResponse:
+    """Score arbitrary 5v5 lineups with all team-specific effects neutralized."""
+    key = _simulation_client_key(request)
+    decision = simulation_rate_limiter.acquire(key)
+    if not decision.allowed:
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "code": "simulation_rate_limited",
+                "message": "The neutral lineup scorer is busy. Try again shortly.",
+            },
+            headers={"Retry-After": str(decision.retry_after_seconds)},
+        )
+    try:
+        model = load_lineup_value_model(body.league_id)
+        result = model.score(
+            "__neutral_blue__",
+            body.blue_hero_ids,
+            "__neutral_red__",
+            body.red_hero_ids,
+            team_neutral=True,
+            allow_mirror_heroes=True,
+        )
+        return ApiResponse(
+            data={
+                "league_id": body.league_id,
+                "blue_hero_ids": body.blue_hero_ids,
+                "red_hero_ids": body.red_hero_ids,
                 **result,
                 "value_model": {
                     "version": model.payload["version"],

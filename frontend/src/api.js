@@ -161,6 +161,10 @@ export function fetchHeroResponses(leagueId, options) {
   return staticData(`/assets/data/${encodeURIComponent(leagueId)}/hero-responses.json`, options);
 }
 
+export function fetchBattleLineups(leagueId, options) {
+  return staticData(`/assets/data/${encodeURIComponent(leagueId)}/battle-lineups.json`, options);
+}
+
 export function fetchTeamSynergies({ leagueId, minSelections = 2 }) {
   void minSelections;
   return staticData(`/assets/data/${encodeURIComponent(leagueId)}/team-synergies.json`);
@@ -187,6 +191,21 @@ export function fetchHeroMatchupRecommendations(payload) {
   });
 }
 
+export function fetchUltimateLineups(leagueId) {
+  const params = new URLSearchParams({ league_id: leagueId });
+  return request(`/api/simulations/ultimate-lineups?${params}`);
+}
+
+export function fetchUltimateCounterLineup({ leagueId, targetHeroIds }) {
+  return request("/api/simulations/ultimate-lineups/counter", {
+    method: "POST",
+    body: JSON.stringify({
+      league_id: leagueId,
+      target_hero_ids: targetHeroIds,
+    }),
+  });
+}
+
 export function simulateDraft(state) {
   return request("/api/simulations/draft", {
     method: "POST",
@@ -203,6 +222,13 @@ export function recommendLineup(state) {
 
 export function scoreLineup(payload) {
   return request("/api/simulations/score-lineup", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function scoreNeutralLineup(payload) {
+  return request("/api/simulations/score-neutral-lineup", {
     method: "POST",
     body: JSON.stringify(payload),
   });

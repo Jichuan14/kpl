@@ -63,6 +63,7 @@ The frontend requests them under `/assets/data/...`.
 | `analysis/published/data/{league_id}/overview.json` | Main visualization overview and meta heroes | Relationship statistics, meta heroes, and league metadata |
 | `analysis/published/data/{league_id}/patterns/{relation}/{context}.json` | Main relationship tables | The four relationship-stat JSONL files; `relation` is `ban_response`, `pick_synergy`, `counter_pick`, or `counter_ban`, and `context` is normally `overall` or `slot_context` |
 | `analysis/published/data/{league_id}/hero-responses.json` | Feature Space hero-response details | Selected rows from the published relationship data |
+| `analysis/published/data/{league_id}/battle-lineups.json` | Feature Space historical-lineup selector | Completed 5v5 battle lineups from `matches.jsonl` |
 | `analysis/published/data/{league_id}/team-synergies.json` | Teams page | `team_synergy_stats.jsonl` plus league/team metadata |
 | `analysis/published/data/{league_id}/rankings.json` | Rankings page | `power_rankings.json` plus league metadata |
 | `analysis/published/data/{league_id}/draft-model.json` | Browser-ready draft-model metadata | `draft_model.json` |

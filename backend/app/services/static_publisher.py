@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
@@ -10,11 +11,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import League
-from app.services.analysis_pipeline import ANALYSIS_DIR, OUTPUT_ROOT
+from app.services.analysis_pipeline import ANALYSIS_DIR, EXPORT_ROOT, OUTPUT_ROOT
 from app.services.draft_simulator import metadata
 
 PUBLISHED_ROOT = ANALYSIS_DIR / "published"
 DATA_ROOT = PUBLISHED_ROOT / "data"
+ROLE_ORDER = {6: 0, 2: 1, 5: 2, 7: 3, 4: 4}
 
 
 def _write_json(path: Path, value: object) -> None:
@@ -116,6 +118,101 @@ def _hero_response_rows(rows: list[dict[str, object]]) -> list[dict[str, object]
     return selected
 
 
+def _battle_lineup(
+    players: list[dict[str, object]],
+    actions: list[dict[str, object]],
+    camp: int,
+) -> list[dict[str, object]]:
+    """Prefer final player roles, with BP picks as a historical fallback."""
+    player_rows = [
+        {
+            "hero_id": int(row.get("hero_id") or 0),
+            "hero_name": str(row.get("hero_name") or ""),
+            "position": int(row.get("position") or 0),
+        }
+        for row in players
+        if int(row.get("camp") or 0) == camp
+        and int(row.get("hero_id") or 0) > 0
+    ]
+    if len(player_rows) == 5 and len({row["hero_id"] for row in player_rows}) == 5:
+        return sorted(
+            player_rows,
+            key=lambda row: ROLE_ORDER.get(int(row["position"]), 99),
+        )
+
+    picks = [
+        {
+            "hero_id": int(row.get("hero_id") or 0),
+            "hero_name": str(row.get("hero_name") or ""),
+            "position": int(row.get("position") or 0),
+        }
+        for row in actions
+        if row.get("action") == "pick"
+        and int(row.get("camp") or 0) == camp
+        and int(row.get("hero_id") or 0) > 0
+    ]
+    return (
+        picks
+        if len(picks) == 5 and len({row["hero_id"] for row in picks}) == 5
+        else []
+    )
+
+
+def _historical_battle_lineups(matches_path: Path) -> dict[str, object]:
+    battles: list[dict[str, object]] = []
+    if not matches_path.is_file():
+        return {"battles": battles}
+    with matches_path.open(encoding="utf-8") as source:
+        for line in source:
+            if not line.strip():
+                continue
+            match = json.loads(line)
+            for battle in match.get("battles") or []:
+                players = battle.get("players") or []
+                actions = battle.get("bp_actions") or []
+                blue = _battle_lineup(players, actions, 1)
+                red = _battle_lineup(players, actions, 2)
+                if len(blue) != 5 or len(red) != 5:
+                    continue
+                camp_teams = battle.get("camp_teams") or {}
+                blue_team = camp_teams.get("1") or camp_teams.get(1) or {}
+                red_team = camp_teams.get("2") or camp_teams.get(2) or {}
+                battles.append(
+                    {
+                        "key": (
+                            f'{battle.get("battle_id") or match.get("match_id")}-'
+                            f'{int(battle.get("battle_seq") or 0)}'
+                        ),
+                        "match_id": str(match.get("match_id") or ""),
+                        "battle_id": str(battle.get("battle_id") or ""),
+                        "battle_seq": int(battle.get("battle_seq") or 0),
+                        "start_time": str(match.get("start_time") or ""),
+                        "match_stage": str(match.get("match_stage") or ""),
+                        "blue_team_id": str(blue_team.get("team_id") or ""),
+                        "blue_team_name": str(blue_team.get("team_name") or "Blue"),
+                        "red_team_id": str(red_team.get("team_id") or ""),
+                        "red_team_name": str(red_team.get("team_name") or "Red"),
+                        "winner_camp": int(battle.get("win_camp") or 0),
+                        "blue": blue,
+                        "red": red,
+                    }
+                )
+    battles.sort(
+        key=lambda row: (
+            str(row["start_time"]),
+            str(row["match_id"]),
+            int(row["battle_seq"]),
+        ),
+        reverse=True,
+    )
+    return {
+        "generated_at": datetime.fromtimestamp(
+            matches_path.stat().st_mtime
+        ).astimezone().isoformat(),
+        "battles": battles,
+    }
+
+
 def publish_league(db: Session, league_id: str) -> dict[str, object]:
     """Create all currently available static public files for one season."""
     # Import here to keep API modules independent during application startup.
@@ -127,6 +224,13 @@ def publish_league(db: Session, league_id: str) -> dict[str, object]:
 
     published: list[str] = []
     directory = DATA_ROOT / league_id
+
+    matches_path = EXPORT_ROOT / league_id / "matches.jsonl"
+    if matches_path.is_file():
+        historical_lineups = _historical_battle_lineups(matches_path)
+        historical_lineups["league_id"] = league_id
+        _write_json(directory / "battle-lineups.json", historical_lineups)
+        published.append("battle-lineups.json")
 
     if statistics_ready(league_id):
         patterns = visualization_patterns(league_id=league_id, min_selections=2, db=db).data

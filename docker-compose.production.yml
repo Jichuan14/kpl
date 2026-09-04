@@ -12,7 +12,6 @@ services:
     # memswap_limit is the combined RAM + swap ceiling, not swap alone.
     mem_limit: 1g
     memswap_limit: 2500m
-    mem_swappiness: 60
     cpus: 1.5
     pids_limit: 256
     volumes:

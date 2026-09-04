@@ -17,11 +17,19 @@ DB_PATH = REPO_ROOT / "backend" / "data" / "kpl_bp.db"
 # the locally downloaded matches. Keep the role model complete while marking
 # them with zero observed picks.
 POSITION_OVERRIDES = (
+    (109, 2, "中路"),  # 妲己
+    (114, 4, "游走"),  # 刘禅
+    (115, 2, "中路"),  # 高渐离
     (116, 5, "打野"),  # 阿轲
     (117, 5, "打野"),  # 钟无艳
+    (129, 5, "打野"),  # 典韦
     (153, 5, "打野"),  # 兰陵王
+    (154, 6, "对抗路"),  # 花木兰
     (170, 5, "打野"),  # 刘备
     (195, 5, "打野"),  # 百里玄策
+    (513, 2, "中路"),  # 上官婉儿
+    (524, 7, "发育路"),  # 蒙犽
+    (528, 5, "打野"),  # 澜
     (529, 5, "打野"),  # 盘古
 )
 

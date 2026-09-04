@@ -421,6 +421,11 @@ def data_status(
     frontend_assets = [
         artifact(published_dir / "overview.json", "patterns", "Draft patterns"),
         artifact(
+            published_dir / "battle-lineups.json",
+            "battle_lineups",
+            "Historical battle lineups",
+        ),
+        artifact(
             published_dir / "team-synergies.json",
             "team_synergies",
             "Team synergies",
@@ -431,6 +436,7 @@ def data_status(
     frontend_sources = [
         [league_output_dir / filename for _, filename in STAT_ARTIFACTS]
         + [meta_path],
+        [match_export_path],
         [team_synergy_path],
         [draft_model_path],
         [power_rankings_path],
@@ -442,6 +448,7 @@ def data_status(
         )
         public_path = published_dir / {
             "patterns": "overview.json",
+            "battle_lineups": "battle-lineups.json",
             "team_synergies": "team-synergies.json",
             "draft_model": "draft-model.json",
             "power_rankings": "rankings.json",

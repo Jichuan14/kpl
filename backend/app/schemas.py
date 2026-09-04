@@ -10,6 +10,23 @@ class ApiResponse(BaseModel):
     data: object | None = None
 
 
+class UltimateCounterLineupRequest(BaseModel):
+    """A completed target lineup for a team-neutral counter search."""
+
+    model_config = {"extra": "forbid"}
+
+    league_id: str = Field(min_length=1, max_length=32)
+    target_hero_ids: list[int] = Field(min_length=5, max_length=5)
+
+    @model_validator(mode="after")
+    def validate_target(self) -> "UltimateCounterLineupRequest":
+        if any(hero_id <= 0 for hero_id in self.target_hero_ids):
+            raise ValueError("Target hero ids must be positive")
+        if len(set(self.target_hero_ids)) != 5:
+            raise ValueError("Counter search requires five distinct target heroes")
+        return self
+
+
 class CoachLimitsUpdate(BaseModel):
     """Runtime limits for the process-local Draft Coach limiter."""
 
@@ -204,6 +221,26 @@ class LineupScoreRequest(BaseModel):
             raise ValueError("Red lineup must contain five distinct heroes")
         if set(self.blue_hero_ids).intersection(self.red_hero_ids):
             raise ValueError("A hero cannot appear on both sides")
+        return self
+
+
+class NeutralLineupScoreRequest(BaseModel):
+    """Two user-selected lineups scored without any team-specific inputs."""
+
+    model_config = {"extra": "forbid"}
+
+    league_id: str = Field(min_length=1, max_length=32)
+    blue_hero_ids: list[int] = Field(min_length=5, max_length=5)
+    red_hero_ids: list[int] = Field(min_length=5, max_length=5)
+
+    @model_validator(mode="after")
+    def validate_complete_lineups(self) -> "NeutralLineupScoreRequest":
+        if any(hero_id <= 0 for hero_id in self.blue_hero_ids + self.red_hero_ids):
+            raise ValueError("Hero IDs must be positive")
+        if len(set(self.blue_hero_ids)) != 5:
+            raise ValueError("Blue lineup must contain five distinct heroes")
+        if len(set(self.red_hero_ids)) != 5:
+            raise ValueError("Red lineup must contain five distinct heroes")
         return self
 
 

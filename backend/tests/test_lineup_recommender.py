@@ -60,6 +60,25 @@ class LineupValueIntegrationTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "five distinct heroes"):
             model.score(team_ids[0], hero_ids[:4], team_ids[1], hero_ids[4:9])
 
+    def test_team_neutral_score_allows_opposing_mirrors_and_zeros_team_effects(self) -> None:
+        model = load_lineup_value_model()
+        hero_ids = list(model.hero_names)[:9]
+
+        result = model.score(
+            "__neutral_blue__",
+            hero_ids[:5],
+            "__neutral_red__",
+            [hero_ids[0], *hero_ids[5:9]],
+            team_neutral=True,
+            allow_mirror_heroes=True,
+        )
+
+        self.assertTrue(result["team_neutral"])
+        self.assertTrue(result["allows_mirror_heroes"])
+        self.assertEqual(result["contributions"]["team_strength"], 0.0)
+        self.assertEqual(result["contributions"]["hero_familiarity"], 0.0)
+        self.assertEqual(result["contributions"]["team_pair_synergy"], 0.0)
+
 
 class FakeValueModel:
     payload = {"version": "fake-v1", "warning": "ranking only"}

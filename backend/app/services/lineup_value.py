@@ -266,6 +266,9 @@ class LineupValueModel:
         blue_heroes: Sequence[int],
         red_team_id: str,
         red_heroes: Sequence[int],
+        *,
+        team_neutral: bool = False,
+        allow_mirror_heroes: bool = False,
     ) -> dict[str, Any]:
         blue = tuple(int(hero) for hero in blue_heroes)
         red = tuple(int(hero) for hero in red_heroes)
@@ -273,7 +276,7 @@ class LineupValueModel:
             raise ValueError("Blue lineup must contain five distinct heroes")
         if len(red) != 5 or len(set(red)) != 5:
             raise ValueError("Red lineup must contain five distinct heroes")
-        if set(blue) & set(red):
+        if not allow_mirror_heroes and set(blue) & set(red):
             raise ValueError("A hero cannot appear on both sides")
 
         strength = (
@@ -329,7 +332,7 @@ class LineupValueModel:
             for blue_hero in blue
             for red_hero in red
         )
-        features = (
+        features = [
             strength,
             familiarity_blue - familiarity_red,
             ally_blue - ally_red,
@@ -337,7 +340,19 @@ class LineupValueModel:
             league_pair_blue - league_pair_red,
             team_pair_blue - team_pair_red,
             historical_counter,
-        )
+        ]
+        neutral_feature_names = {
+            "team_strength",
+            "hero_familiarity",
+            "team_pair_synergy",
+        }
+        if team_neutral:
+            features = [
+                float(mean) if name in neutral_feature_names else value
+                for name, value, mean in zip(
+                    FEATURE_NAMES, features, self.model["means"], strict=True
+                )
+            ]
         contributions = {
             name: ((value - float(mean)) / float(scale)) * float(coefficient)
             for name, value, mean, scale, coefficient in zip(
@@ -366,9 +381,9 @@ class LineupValueModel:
             + contributions["historical_counter_advantage"],
         }
         evidence = {
-            "blue_team_games": self.team_games.get(str(blue_team_id), 0.0),
-            "red_team_games": self.team_games.get(str(red_team_id), 0.0),
-            "hero_familiarity": _average(
+            "blue_team_games": 0.0 if team_neutral else self.team_games.get(str(blue_team_id), 0.0),
+            "red_team_games": 0.0 if team_neutral else self.team_games.get(str(red_team_id), 0.0),
+            "hero_familiarity": 0.0 if team_neutral else _average(
                 [
                     self._stat(self.team_hero, (str(blue_team_id), hero)).evidence(
                         familiarity_prior
@@ -392,7 +407,7 @@ class LineupValueModel:
                     for pair in combinations(red, 2)
                 ]
             ),
-            "team_pair_synergy": _average(
+            "team_pair_synergy": 0.0 if team_neutral else _average(
                 [
                     self._stat(
                         self.team_pair, (str(blue_team_id), *tuple(sorted(pair)))
@@ -428,6 +443,8 @@ class LineupValueModel:
             "red_composition": self.composition_profile(red),
             "interpretation": "relative lineup advantage, not literal win probability",
             "warning": self.payload.get("warning", ""),
+            "team_neutral": team_neutral,
+            "allows_mirror_heroes": allow_mirror_heroes,
         }
 
 
