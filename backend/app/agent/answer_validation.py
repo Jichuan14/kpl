@@ -50,6 +50,10 @@ ROUNDING_TOLERANCE = 0.015
 IMPOSSIBLE_PERCENT = 100.0001
 METRIC_HINTS: tuple[tuple[re.Pattern[str], frozenset[str]], ...] = (
     (
+        re.compile(r"confidence interval|置信区间|区间", re.IGNORECASE),
+        frozenset({"probability_ci95_low", "probability_ci95_high"}),
+    ),
+    (
         re.compile(
             r"descriptive\s+(?:battle\s+)?win rate|历史胜率|描述性胜率",
             re.IGNORECASE,

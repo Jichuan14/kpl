@@ -12,7 +12,7 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.agent.conversation import ConversationStore, filter_raw_history
+from app.agent.conversation import ConversationStore, filter_raw_history, resolve_follow_up
 from app.agent.errors import CoachClassificationError, CoachUserInputError
 from app.agent.prompts import COACH_SYSTEM_PROMPT
 from app.agent.runtime import RequestBudget, retry_wait_seconds, run_with_optional_clock_sleep
@@ -28,12 +28,14 @@ from app.agent.scope import (
     denial_answer,
     denied_decision,
     direct_deny_reason,
+    direct_hypothetical_draft_intent,
     missing_live_board,
     normalize_gate_message,
     reconcile_scope,
     scope_gate_user_payload,
 )
 from app.agent.tool_registry import available_tool_definitions, invoke_tool
+from app.agent.tools.draft import hero_names_in_message
 from app.config import Settings, get_settings
 from app.knowledge.patch_retrieval import PatchIndexUnavailableError
 
@@ -42,7 +44,15 @@ logger = logging.getLogger(__name__)
 DRAFT_TOOL_OPTIONS: dict[str, frozenset[str]] = {
     "predict_next_draft_action": frozenset({"limit"}),
     "simulate_future_draft": frozenset(
-        {"horizon", "choices_per_action", "seed"}
+        {
+            "horizon",
+            "choices_per_action",
+            "seed",
+            "unavailable_hero_names",
+            "start_at_next_pick",
+            "target_side",
+            "combination_size",
+        }
     ),
     "recommend_value_draft_action": frozenset({"top_k", "risk_mode", "seed"}),
     "score_current_lineup": frozenset(),
@@ -637,6 +647,28 @@ class KimiCoachService:
                 extra={"request_id": request_id},
             )
             raise CoachClassificationError(classification_failure_answer(message)) from None
+        follow_up = resolve_follow_up(message, reference)
+        if (
+            decision.decision == "deny"
+            and follow_up.get("refers_to_prior")
+            and reference
+            and not reference.get("stale_season")
+        ):
+            prior_intents = [
+                intent
+                for intent in (
+                    list(reference.get("intents") or [])
+                    or [reference.get("previous_intent")]
+                )
+                if intent in INTENT_TOOL_ALLOWLIST
+            ][:3]
+            if prior_intents:
+                decision = ScopeDecision(
+                    decision="allow",
+                    intents=prior_intents,
+                    query_scope="league_wide",
+                    reason_code="contextual_follow_up",
+                )
         intents = decision.resolved_intents()
         if decision.decision == "allow" and (
             not intents or any(intent not in INTENT_TOOL_ALLOWLIST for intent in intents)
@@ -645,6 +677,16 @@ class KimiCoachService:
                 response, "usage", None
             )
         if decision.decision == "allow":
+            if direct_hypothetical_draft_intent(message):
+                intents = [
+                    intent for intent in decision.resolved_intents()
+                    if intent != "draft_prediction"
+                ]
+                if "draft_simulation" not in intents:
+                    intents.insert(0, "draft_simulation")
+                decision = decision.model_copy(
+                    update={"intents": intents[:3], "intent": intents[0]}
+                )
             decision = reconcile_scope(decision)
         return decision, getattr(response, "usage", None)
 
@@ -789,6 +831,28 @@ class KimiCoachService:
         }
         arguments["league_id"] = request.league_id
         arguments.update(request.draft_state.model_dump(mode="json"))
+        if name == "simulate_future_draft" and direct_hypothetical_draft_intent(
+            request.message
+        ):
+            hero_names = hero_names_in_message(request.league_id, request.message)
+            if hero_names:
+                arguments["unavailable_hero_names"] = hero_names
+                arguments["start_at_next_pick"] = True
+                arguments["combination_size"] = max(
+                    2,
+                    int(arguments.get("combination_size") or 3),
+                )
+                normalized_message = normalize_gate_message(request.message).casefold()
+                for side in ("blue", "red"):
+                    team_name = getattr(request.draft_state, f"{side}_team_name")
+                    normalized_team = "".join(team_name.casefold().split())
+                    aliases = {
+                        normalized_team,
+                        *re.findall(r"[a-z0-9]{2,}", normalized_team),
+                    }
+                    if any(alias in normalized_message for alias in aliases):
+                        arguments["target_side"] = side
+                        break
         return arguments
 
     @staticmethod

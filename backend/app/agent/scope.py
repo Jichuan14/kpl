@@ -174,6 +174,11 @@ DIRECT_CURRENT_DRAFT_PATTERN = re.compile(
     r"(?:ban|pick)",
     re.IGNORECASE,
 )
+DIRECT_HYPOTHETICAL_DRAFT_PATTERN = re.compile(
+    r"(?:如果|假如|假设|若).{0,48}(?:被)?(?:ban|禁用|禁|不可用)|"
+    r"(?:if|assuming|suppose).{0,64}(?:banned|unavailable)",
+    re.IGNORECASE,
+)
 
 MISSING_LIVE_BOARD_NOTE = (
     "No active draft board is available. Answer historical or team parts from "
@@ -204,6 +209,9 @@ valuable on this board” as lineup_recommendation, not draft_prediction.
 Treat “这套阵容谁更有优势 / who is favored in this completed 5v5” as
 lineup_score. A question that asks for literal battle-win probability or a
 game-theoretic optimal action stays unsupported; do not map it to lineup tools.
+Treat a hypothetical such as “如果 A 和 B 被 ban，会拿什么组合?” as
+draft_simulation. A short follow-up such as “解释差异” or “比较备选” is in
+scope when conversation_reference contains a supported previous intent.
 
 If the message mixes an in-scope Honor of Kings / KPL ask with unrelated trivia,
 translation, or ordinary off-topic chat, allow only the in-scope intents and set
@@ -391,6 +399,11 @@ def direct_current_draft_intent(message: str) -> bool:
     return bool(DIRECT_CURRENT_DRAFT_PATTERN.search(message))
 
 
+def direct_hypothetical_draft_intent(message: str) -> bool:
+    """Detect an explicit unavailable-hero draft hypothesis."""
+    return bool(DIRECT_HYPOTHETICAL_DRAFT_PATTERN.search(message))
+
+
 def classification_hints(message: str) -> list[str]:
     """Regex hints for the LLM gate; never used as a hard allow shortcut."""
     hints: list[str] = []
@@ -398,6 +411,8 @@ def classification_hints(message: str) -> list[str]:
         hints.append("patch_notes")
     if direct_current_draft_intent(message):
         hints.append("current_draft")
+    if direct_hypothetical_draft_intent(message):
+        hints.append("draft_simulation")
     return hints
 
 

@@ -209,6 +209,69 @@ class AgentToolRegistryTest(unittest.TestCase):
         with self.assertRaises(ValidationError):
             SimulateFutureDraftArguments(**arguments)
 
+    def test_hypothetical_draft_excludes_named_heroes_and_returns_combinations(self) -> None:
+        model = {
+            "hero_names": {"509": "盾山", "525": "鲁班大师", "519": "敖隐"},
+            "draft_sequence": [
+                {"bp_order": 1, "side": "blue", "action": "ban", "team_action_type_number": 1},
+                {"bp_order": 5, "side": "blue", "action": "pick", "team_action_type_number": 1},
+                {"bp_order": 6, "side": "red", "action": "pick", "team_action_type_number": 1},
+                {"bp_order": 8, "side": "blue", "action": "pick", "team_action_type_number": 2},
+            ],
+        }
+        simulation_result = {
+            "model_generated_at": "2026-09-05T00:00:00Z",
+            "model_type": "stats",
+            "model_label": "Historical draft frequencies",
+            "next_step": model["draft_sequence"][1],
+            "next_action_probabilities": [
+                {"hero_id": 519, "hero_name": "敖隐", "probability": 0.4}
+            ],
+            "simulation": {
+                "rollouts": FIXED_ROLLOUTS,
+                "actions_simulated": 4,
+                "next_actions": {"5": []},
+                "banned_by_end": [],
+                "pick_combinations": [
+                    {
+                        "hero_ids": [519, 101],
+                        "hero_names": ["敖隐", "Hero B"],
+                        "count": 7,
+                        "probability": 0.07,
+                    }
+                ],
+            },
+        }
+        arguments = SimulateFutureDraftArguments(
+            league_id="20260003",
+            model_type="sequence",
+            blue_team_id="10020",
+            blue_team_name="北京JDG",
+            red_team_id="10017",
+            red_team_name="广州TTG",
+            bp_order=1,
+            unavailable_hero_names=["盾山", "鲁班大师"],
+            start_at_next_pick=True,
+            target_side="blue",
+            combination_size=2,
+            horizon=3,
+        )
+
+        with (
+            patch("app.agent.tools.draft.load_model", return_value=model),
+            patch("app.agent.tools.draft.simulate", return_value=simulation_result) as simulation,
+        ):
+            result = simulate_future_draft(arguments)
+
+        state = simulation.call_args.args[1]
+        self.assertEqual(state["bp_order"], 5)
+        self.assertNotIn(509, state["legal_hero_ids"])
+        self.assertNotIn(525, state["legal_hero_ids"])
+        self.assertEqual(result["pick_combinations"][0]["hero_names"], ["敖隐", "Hero B"])
+        self.assertIn("ban ownership", result["hypothetical_assumption"])
+        self.assertIn("omits earlier ban ownership", result["model_adjustment"])
+        self.assertEqual(simulation.call_args.kwargs["model_type"], "stats")
+
     def test_dispatch_rejects_invalid_arguments(self) -> None:
         arguments = self.arguments()
         arguments["bp_order"] = 0

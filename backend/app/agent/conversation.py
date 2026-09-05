@@ -24,7 +24,12 @@ SESSION_COOKIE = "kpl_coach_session"
 SESSION_TTL_SECONDS = 7 * 24 * 60 * 60
 CONVERSATION_TTL_SECONDS = 12 * 60 * 60
 MAX_TURNS = 8
-WHY_THAT_ONE = re.compile(r"why (?:that|this) one|为什么(?:是)?(?:这|那)|为啥(?:选|禁)?", re.IGNORECASE)
+WHY_THAT_ONE = re.compile(
+    r"why (?:that|this) one|explain (?:the )?(?:difference|result)|"
+    r"compare (?:the )?alternatives|为什么(?:是)?(?:这|那)|为啥(?:选|禁)?|"
+    r"解释(?:差异|结果|原因)?|比较(?:备选|差异|候选)",
+    re.IGNORECASE,
+)
 ON_RED = re.compile(r"\bon red\b|红方|and on red", re.IGNORECASE)
 ON_BLUE = re.compile(r"\bon blue\b|蓝方|and on blue", re.IGNORECASE)
 OTHER_TEAM = re.compile(r"the other team|另一[支个边]?队|对面|对方", re.IGNORECASE)

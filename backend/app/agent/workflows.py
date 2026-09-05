@@ -125,24 +125,83 @@ def follow_up_actions(
     entities = (conversation_ref or {}).get("entities") or {}
     team = entities.get("team_name") or entities.get("blue_team_name")
     hero = entities.get("hero_name")
-    if any(record.get("family") == "draft_recommendation" for record in evidence_records):
+    recommendation_records = [
+        record
+        for record in evidence_records
+        if record.get("family") == "draft_recommendation"
+    ]
+    candidate_names: list[str] = []
+    for record in recommendation_records:
+        for item in (record.get("card") or {}).get("items") or []:
+            label = str(item.get("label") or "").strip()
+            if label and label not in candidate_names:
+                candidate_names.append(label)
+    compared = candidate_names[:3]
+    compared_text = "、".join(compared) if chinese else ", ".join(compared)
+    if recommendation_records:
         actions.append(
             {
                 "id": "explain_difference",
-                "label": "解释差异" if chinese else "Explain the difference",
+                "label": (
+                    f"解释{compared_text}为什么不同"
+                    if chinese and compared_text
+                    else "解释这些候选为什么不同"
+                    if chinese
+                    else f"Explain why {compared_text} differ"
+                    if compared_text
+                    else "Explain why these candidates differ"
+                ),
+                "description": (
+                    "比较选择概率、组合含义和数据限制"
+                    if chinese
+                    else "Compare likelihood, composition meaning, and data limits"
+                ),
+                "prompt": (
+                    f"请基于上一轮已核实的结果，解释{compared_text or '这些候选'}为什么不同，比较选择概率、组合含义和数据限制。"
+                    if chinese
+                    else f"Using the previous verified result, explain why {compared_text or 'these candidates'} differ, including selection likelihood, composition meaning, and data limitations."
+                ),
             }
         )
         actions.append(
             {
                 "id": "compare_alternatives",
-                "label": "比较备选" if chinese else "Compare alternatives",
+                "label": (
+                    f"详细比较{compared_text}"
+                    if chinese and compared_text
+                    else "详细比较前三个备选"
+                    if chinese
+                    else f"Compare {compared_text} in detail"
+                    if compared_text
+                    else "Compare the top three alternatives"
+                ),
+                "description": (
+                    "说明每个备选适合什么情况，以及证据强弱"
+                    if chinese
+                    else "Show when each option fits and how strong its evidence is"
+                ),
+                "prompt": (
+                    f"请基于上一轮已核实的结果，详细比较{compared_text or '前三个备选'}，说明每个备选适合什么情况，以及证据强弱。"
+                    if chinese
+                    else f"Using the previous verified result, compare {compared_text or 'the top three alternatives'} in detail, including when each fits and the strength of its evidence."
+                ),
             }
         )
-    if any(record.get("sample_size") for record in evidence_records):
+    if any((record.get("card") or {}).get("sample_size") for record in evidence_records):
         actions.append(
             {
                 "id": "show_sample",
-                "label": "查看样本" if chinese else "Show the sample",
+                "label": "解释样本量和可信度" if chinese else "Explain sample size and confidence",
+                "description": (
+                    "区分选择次数、合法机会、历史决策数和模型模拟次数"
+                    if chinese
+                    else "Distinguish selections, legal opportunities, decisions, and rollouts"
+                ),
+                "prompt": (
+                    "请解释上一轮结论的样本量和可信度，区分选择次数、合法机会、历史决策数和模型模拟次数。"
+                    if chinese
+                    else "Explain the previous result's sample size and confidence, distinguishing selections, legal opportunities, historical decisions, and model rollouts."
+                ),
             }
         )
     if team and "team_draft_tendencies" not in intents:
@@ -150,6 +209,12 @@ def follow_up_actions(
             {
                 "id": "team_tendency",
                 "label": f"{team} 的倾向" if chinese else f"{team} tendencies",
+                "description": "查看本赛季分边与手次倾向" if chinese else "Review this season by side and slot",
+                "prompt": (
+                    f"请说明{team}本赛季按分边和手次划分的主要 BP 倾向。"
+                    if chinese
+                    else f"Explain {team}'s main BP tendencies this season by side and action slot."
+                ),
             }
         )
     if hero and "hero_bp_stats" not in intents:
@@ -157,6 +222,12 @@ def follow_up_actions(
             {
                 "id": "hero_sample",
                 "label": f"{hero} 的样本" if chinese else f"{hero} sample",
+                "description": "查看选用、禁用和在场数据" if chinese else "Review pick, ban, and presence evidence",
+                "prompt": (
+                    f"请查看{hero}本赛季的选用、禁用、在场和样本数据。"
+                    if chinese
+                    else f"Show {hero}'s pick, ban, presence, and sample evidence this season."
+                ),
             }
         )
     return actions[:3]

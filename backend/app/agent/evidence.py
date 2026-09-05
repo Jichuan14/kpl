@@ -179,8 +179,8 @@ def _sample_size(payload: dict[str, Any], items: list[dict[str, Any]]) -> int | 
         "battle_count",
         "selection_count",
         "eligible_battle_count",
-        "candidate_count",
         "recorded_battle_count",
+        "rollouts",
     ):
         number = _optional_number(payload.get(key))
         if number is not None:
@@ -244,6 +244,23 @@ def _items_from_rows(rows: list[Any], *, name_keys: tuple[str, ...], value_keys:
 
 def _card_items(tool: str, payload: dict[str, Any]) -> tuple[list[dict[str, Any]], str | None]:
     if tool in {"predict_next_draft_action", "simulate_future_draft"}:
+        combinations = _as_list(payload.get("pick_combinations"))
+        if combinations:
+            items = []
+            for row in combinations[:5]:
+                if not isinstance(row, dict):
+                    continue
+                names = " + ".join(_as_list(row.get("hero_names")))
+                items.append(
+                    {
+                        "label": names or "Combination",
+                        "value": _percent(row.get("probability")),
+                        "detail": f"n={row.get('count')}" if row.get("count") is not None else None,
+                        "metric": "probability",
+                        "subject": names or None,
+                    }
+                )
+            return items, "policy_probability"
         rows = _as_list(payload.get("next_action_probabilities"))
         items = []
         for row in rows[:5]:
@@ -430,6 +447,8 @@ def extract_numeric_values(payload: Any, *, subject: str | None = None) -> list[
         "red_advantage",
         "descriptive_battle_win_rate",
         "association_rate",
+        "probability_ci95_low",
+        "probability_ci95_high",
     )
     for key in metric_keys:
         number = _optional_number(payload.get(key))
@@ -447,6 +466,7 @@ def extract_numeric_values(payload: Any, *, subject: str | None = None) -> list[
         "rows",
         "recommendations",
         "next_action_probabilities",
+        "pick_combinations",
         "results",
     ):
         for row in _as_list(payload.get(collection_key)):
@@ -454,6 +474,7 @@ def extract_numeric_values(payload: Any, *, subject: str | None = None) -> list[
                 continue
             row_subject = (
                 _text(row.get("hero_name"))
+                or " + ".join(_as_list(row.get("hero_names")))
                 or _text(row.get("player_name"))
                 or _text(row.get("target_hero_name"))
                 or _text(row.get("response_hero_name"))

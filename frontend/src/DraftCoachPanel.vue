@@ -223,20 +223,6 @@ const composerPlaceholder = computed(() =>
     ? "询问 BP、战队、英雄或官方版本调整…"
     : "Ask about the draft, a team, a hero, or an official patch…"
 );
-const officialSourcesLabel = computed(() =>
-  isChinese.value ? "官方版本来源" : "Official patch sources"
-);
-const sourceBoundaryLabel = computed(() =>
-  isChinese.value
-    ? "游戏改动证据 · 非 KPL 赛事表现数据"
-    : "Game-change evidence · not KPL performance data"
-);
-const sourceLinkLabel = computed(() =>
-  isChinese.value ? "打开腾讯官方公告" : "Open Tencent announcement"
-);
-const citationLabel = computed(() =>
-  isChinese.value ? "条引用" : "citation"
-);
 const coachDisclaimer = computed(() =>
   isChinese.value
     ? "KPL BP 证据来自历史数据；官方版本来源描述游戏改动，不保证比赛结果。"
@@ -307,33 +293,20 @@ function humanReadableAnswer(value) {
   return output.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
+function answerRows(value) {
+  const answer = humanReadableAnswer(value);
+  const wrappedLines = answer
+    .split(/\r?\n/)
+    .reduce((total, line) => total + Math.max(1, Math.ceil(line.length / 42)), 0);
+  return Math.min(18, Math.max(5, wrappedLines));
+}
+
 function useSuggestion(suggestion) {
   if (suggestion.kind === "scout") {
     submitScoutReport();
     return;
   }
   submitQuestion(suggestion.text);
-}
-
-function statisticalEvidence(message) {
-  const cards = Array.isArray(message.response?.evidence_cards)
-    ? message.response.evidence_cards
-    : [];
-  return cards.filter((card) => card && card.family !== "patch_notes");
-}
-
-function evidenceFilters(card) {
-  return Object.entries(card?.filters || {}).map(([key, value]) => `${key}: ${value}`);
-}
-
-function evidenceStatus(card) {
-  const labels = {
-    ok: isChinese.value ? "已核实" : "Verified",
-    sparse: isChinese.value ? "样本有限" : "Limited sample",
-    empty: isChinese.value ? "没有结果" : "No results",
-    failed: isChinese.value ? "不可用" : "Unavailable",
-  };
-  return labels[card?.status] || card?.status || "";
 }
 
 function newClientRequestId() {
@@ -356,7 +329,7 @@ function editQuestion(message) {
 }
 
 function useFollowUp(action, message) {
-  const text = action?.label || "";
+  const text = action?.prompt || action?.label || "";
   if (!text) return;
   submitQuestion(text);
 }
@@ -401,71 +374,6 @@ function loadingCopy(message) {
 
 function isContextStale(message) {
   return Boolean(message.response && message.context !== contextKey.value);
-}
-
-function patchEvidence(message) {
-  const evidence = Array.isArray(message.response?.evidence)
-    ? message.response.evidence
-    : [];
-  return evidence.flatMap((item) => {
-    if (item?.tool !== "search_patch_notes" || !Array.isArray(item.data?.results)) {
-      return [];
-    }
-    return item.data.results.filter(
-      (card) =>
-        card &&
-        typeof card.title === "string" &&
-        typeof card.excerpt === "string" &&
-        typeof card.source_url === "string" &&
-        card.source_url.startsWith("https://")
-    );
-  });
-}
-
-function patchEvidenceWarnings(message) {
-  const evidence = Array.isArray(message.response?.evidence)
-    ? message.response.evidence
-    : [];
-  return evidence.flatMap((item) =>
-    item?.tool === "search_patch_notes" && Array.isArray(item.data?.warnings)
-      ? item.data.warnings.filter((warning) => typeof warning === "string")
-      : []
-  );
-}
-
-function patchSubjectNames(card) {
-  const equipment = Array.isArray(card.equipment_names) ? card.equipment_names : [];
-  const heroes = Array.isArray(card.hero_names) ? card.hero_names : [];
-  if (equipment.length) return equipment.join(" · ");
-  if (heroes.length) return heroes.join(" · ");
-  return isChinese.value ? "系统调整" : "System change";
-}
-
-function evidenceSource(card) {
-  const source = card?.source;
-  if (!source || typeof source !== "object") return "";
-  const parts = [];
-  if (source.name) parts.push(String(source.name));
-  if (source.version) parts.push(`v${source.version}`);
-  if (source.index_version) parts.push(`index ${source.index_version}`);
-  if (source.model_type) parts.push(String(source.model_type));
-  if (source.model_generated_at) parts.push(`generated ${source.model_generated_at}`);
-  if (source.updated_at) parts.push(`updated ${source.updated_at}`);
-  if (source.latest_indexed_date) {
-    parts.push(`latest indexed ${source.latest_indexed_date}`);
-  }
-  const period = source.analytical_period;
-  if (period && typeof period === "object") {
-    if (period.period_start || period.period_end) {
-      parts.push(`${period.period_start || "?"}–${period.period_end || "?"}`);
-    } else if (period.season_start || period.season_end) {
-      parts.push(`${period.season_start || "?"}–${period.season_end || "?"}`);
-    }
-    if (period.recent_match_window) {
-      parts.push(`${period.recent_match_window} match window`);
-    }
-  }
-  return parts.join(" · ");
 }
 
 async function submitQuestion(suggestedQuestion = null) {
@@ -680,94 +588,20 @@ watch(messages, (value) => persistSessionHistory(value), { deep: true });
           :class="{ stale: isContextStale(message) }"
         >
           <header>
-            <div>
-              <span>BP 教练</span>
-              <small data-i18n-ignore>{{ message.response.model }}</small>
-            </div>
+            <div><span>BP 教练</span></div>
             <div class="response-badges">
               <span v-if="message.scoutReport" class="report-label">{{ scoutReportBadge }}</span>
-              <span v-if="message.response.status && message.response.status !== 'complete'" class="status-label">
-                {{ message.response.status.replaceAll('_', ' ') }}
-              </span>
               <span v-if="isContextStale(message)" class="stale-label">BP 面板已变化</span>
             </div>
           </header>
-          <p class="coach-answer" data-i18n-ignore>
-            {{ humanReadableAnswer(message.response.answer) }}
-          </p>
-
-          <ul v-if="message.response.warnings?.length" class="coach-warnings">
-            <li
-              v-for="warning in message.response.warnings"
-              :key="warning"
-              data-i18n-ignore
-            >
-              {{ warning }}
-            </li>
-          </ul>
-
-          <section v-if="statisticalEvidence(message).length" class="stat-evidence">
-            <details
-              v-for="card in statisticalEvidence(message)"
-              :key="card.id || `${card.tool}-${card.title}`"
-              class="stat-evidence-card"
-            >
-              <summary>
-                <strong>{{ card.title }}</strong>
-                <span>{{ evidenceStatus(card) }}</span>
-              </summary>
-              <ul v-if="card.items?.length" class="stat-evidence-items">
-                <li v-for="(item, index) in card.items" :key="`${item.label}-${index}`">
-                  <span>{{ item.label }}</span>
-                  <strong v-if="item.value !== null && item.value !== undefined">{{ item.value }}</strong>
-                  <small v-if="item.detail">{{ item.detail }}</small>
-                </li>
-              </ul>
-              <p v-if="card.metric?.definition">{{ card.metric.definition }}</p>
-              <p v-if="card.sample_size !== null && card.sample_size !== undefined">
-                {{ isChinese ? "样本" : "Sample" }}: {{ card.sample_size }}
-              </p>
-              <p v-if="evidenceFilters(card).length">{{ evidenceFilters(card).join(" · ") }}</p>
-              <p v-if="evidenceSource(card)">{{ evidenceSource(card) }}</p>
-              <p v-if="card.warning" class="stat-evidence-warning">{{ card.warning }}</p>
-            </details>
-          </section>
-
-          <section
-            v-if="patchEvidence(message).length || patchEvidenceWarnings(message).length"
-            class="patch-evidence"
-            :aria-label="officialSourcesLabel"
-          >
-            <header>
-              <div>
-                <span>{{ officialSourcesLabel }}</span>
-                <small>{{ sourceBoundaryLabel }}</small>
-              </div>
-              <small v-if="patchEvidence(message).length">
-                {{ patchEvidence(message).length }} {{ citationLabel }}<template v-if="!isChinese && patchEvidence(message).length !== 1">s</template>
-              </small>
-            </header>
-            <p v-if="patchEvidenceWarnings(message).length" class="patch-evidence-note">
-              {{ patchEvidenceWarnings(message).join(" ") }}
-            </p>
-            <div v-if="patchEvidence(message).length" class="patch-evidence-list">
-              <article
-                v-for="card in patchEvidence(message)"
-                :key="`${card.announcement_id}-${(card.heading_path || []).join('-')}`"
-                class="patch-evidence-card"
-              >
-                <div class="patch-evidence-meta">
-                  <span>{{ card.published_at }} · {{ patchSubjectNames(card) }}</span>
-                  <span>{{ (card.heading_path || []).join(" › ") }}</span>
-                </div>
-                <strong>{{ card.title }}</strong>
-                <p>{{ card.excerpt }}</p>
-                <a :href="card.source_url" target="_blank" rel="noreferrer">
-                  {{ sourceLinkLabel }} <span aria-hidden="true">↗</span>
-                </a>
-              </article>
-            </div>
-          </section>
+          <textarea
+            class="coach-answer-box"
+            :value="humanReadableAnswer(message.response.answer)"
+            :rows="answerRows(message.response.answer)"
+            :aria-label="isChinese ? 'BP 教练回答' : 'Draft Coach answer'"
+            readonly
+            data-i18n-ignore
+          ></textarea>
 
           <div v-if="message.response.follow_up_actions?.length" class="follow-up-actions">
             <button
@@ -777,18 +611,10 @@ watch(messages, (value) => persistSessionHistory(value), { deep: true });
               :disabled="loading"
               @click="useFollowUp(action, message)"
             >
-              {{ action.label }}
+              <strong>{{ action.label }}</strong>
+              <small v-if="action.description">{{ action.description }}</small>
             </button>
           </div>
-
-          <footer>
-            <span data-i18n-ignore>
-              {{ Number(message.response.usage?.total_tokens || 0).toLocaleString("zh-CN") }} 个令牌
-            </span>
-            <span data-i18n-ignore>
-              {{ message.response.request_id.slice(0, 8) }}
-            </span>
-          </footer>
         </article>
       </div>
     </div>
@@ -852,14 +678,12 @@ watch(messages, (value) => persistSessionHistory(value), { deep: true });
 .coach-message { max-width:92%; margin-bottom:.75rem; }.coach-message > span, .assistant-message > header span { display:block; margin-bottom:.25rem; color:var(--ink-soft); font-size:.56rem; letter-spacing:.08em; text-transform:uppercase; }.coach-message > p { margin:0; font-size:.7rem; line-height:1.58; }.user-message { margin-left:auto; }.user-message > span { text-align:right; }.user-message > p { padding:.65rem .75rem; border-radius:12px 12px 2px 12px; background:var(--accent-deep); color:#fff; }
 .assistant-message { padding:.72rem .78rem; border:1px solid var(--line); border-radius:2px 12px 12px 12px; background:#fff; }.assistant-message > header { display:flex; align-items:start; justify-content:space-between; gap:.5rem; }.assistant-message > header > div { display:flex; align-items:baseline; gap:.45rem; }.assistant-message > header span { margin:0; color:var(--accent-deep); }.assistant-message > header small { color:var(--ink-soft); font-size:.54rem; }.response-badges { display:flex; flex-wrap:wrap; justify-content:end; gap:.28rem; }
 .loading-message i { display:flex; gap:.2rem; margin-top:.5rem; }.loading-message b { width:.35rem; height:.35rem; border-radius:50%; background:var(--accent); animation:coach-pulse 1s infinite alternate; }.loading-message b:nth-child(2) { animation-delay:.2s; }.loading-message b:nth-child(3) { animation-delay:.4s; }@keyframes coach-pulse { to { opacity:.25; transform:translateY(-2px); } }
-.coach-alert { margin:0 0 .75rem; padding:.65rem .75rem; border-left:3px solid #e27b47; background:#fff0df; color:#8e4318; font-size:.67rem; }.coach-alert p { margin:0; }.turn-actions,.follow-up-actions { display:flex; flex-wrap:wrap; gap:.35rem; margin-top:.5rem; }.turn-actions button,.turn-action,.follow-up-actions button { padding:.3rem .48rem; border:1px solid currentColor; border-radius:999px; background:transparent; color:inherit; font:700 .54rem var(--mono); cursor:pointer; }.turn-action { margin-top:.5rem; color:var(--accent-deep); }.turn-actions button:disabled,.follow-up-actions button:disabled { opacity:.45; cursor:default; }
+.coach-alert { margin:0 0 .75rem; padding:.65rem .75rem; border-left:3px solid #e27b47; background:#fff0df; color:#8e4318; font-size:.67rem; }.coach-alert p { margin:0; }.turn-actions { display:flex; flex-wrap:wrap; gap:.35rem; margin-top:.5rem; }.turn-actions button,.turn-action { padding:.3rem .48rem; border:1px solid currentColor; border-radius:999px; background:transparent; color:inherit; font:700 .54rem var(--mono); cursor:pointer; }.turn-action { margin-top:.5rem; color:var(--accent-deep); }.turn-actions button:disabled,.follow-up-actions button:disabled { opacity:.45; cursor:default; }
 .coach-response.stale { border-color:#e7a36c; }.stale-label, .report-label, .status-label { padding:.17rem .28rem; border-radius:20px; font-size:.52rem !important; white-space:nowrap; }.stale-label { background:#fff0df; color:#9a4d1c !important; }.report-label { background:#e7f4ee; color:var(--accent-deep) !important; }.status-label { background:#eef1ef; color:var(--ink-soft) !important; text-transform:capitalize; }.coach-answer { margin:.55rem 0 0 !important; white-space:pre-wrap; }
-.coach-warnings { margin:.65rem 0 0; padding:.55rem .6rem .55rem 1.5rem; background:#fff0df; color:#8e4318; font-size:.61rem; }
-.stat-evidence { display:grid; gap:.4rem; margin-top:.7rem; }.stat-evidence-card { border:1px solid var(--line); background:#f8faf9; }.stat-evidence-card summary { display:flex; justify-content:space-between; gap:.5rem; padding:.5rem .6rem; cursor:pointer; font-size:.59rem; }.stat-evidence-card summary span { color:var(--ink-soft); }.stat-evidence-card > p { margin:.35rem .6rem .55rem; color:var(--ink-soft); font-size:.55rem; line-height:1.45; }.stat-evidence-items { display:grid; gap:.28rem; margin:0; padding:.1rem .6rem .25rem; list-style:none; }.stat-evidence-items li { display:grid; grid-template-columns:1fr auto; gap:.15rem .5rem; font-size:.58rem; }.stat-evidence-items small { grid-column:1 / -1; color:var(--ink-soft); }.stat-evidence-warning { color:#8e4318 !important; }.follow-up-actions button { color:var(--accent-deep); }
-.patch-evidence { margin-top:.75rem; padding:.65rem; border:1px solid rgba(8,79,66,.22); background:linear-gradient(135deg,#f1f8f3,#fff); }.patch-evidence > header { display:flex; align-items:start; justify-content:space-between; gap:.5rem; }.patch-evidence > header span { display:block; margin:0; color:var(--accent-deep); font:700 .58rem var(--display); letter-spacing:.06em; text-transform:uppercase; }.patch-evidence > header small { color:var(--ink-soft); font-size:.5rem; line-height:1.35; }.patch-evidence-note { margin:.5rem 0 0; color:#8e4318; font-size:.58rem; line-height:1.45; }.patch-evidence-list { display:grid; gap:.45rem; margin-top:.55rem; }.patch-evidence-card { padding:.55rem; border:1px solid var(--line); background:rgba(255,255,255,.82); }.patch-evidence-meta { display:flex; flex-wrap:wrap; justify-content:space-between; gap:.2rem .5rem; color:var(--ink-soft); font-size:.51rem; line-height:1.4; }.patch-evidence-card strong { display:block; margin-top:.35rem; color:var(--ink); font:700 .66rem/1.35 var(--display); }.patch-evidence-card p { margin:.3rem 0 .42rem; color:var(--ink-soft); font-size:.61rem; line-height:1.48; }.patch-evidence-card a { color:var(--accent-deep); font:700 .56rem var(--mono); text-decoration-thickness:1px; text-underline-offset:2px; }
-.coach-response > footer { display:flex; justify-content:space-between; gap:.5rem; margin-top:.65rem; padding-top:.5rem; border-top:1px solid var(--line); color:var(--ink-soft); font-size:.52rem; }
+.coach-answer-box { display:block; width:100%; min-height:8rem; max-height:28rem; margin-top:.55rem; padding:.7rem .75rem; resize:vertical; overflow:auto; border:1px solid var(--line); border-radius:8px; outline:none; background:#f8faf9; color:var(--ink); font:inherit; font-size:.69rem; line-height:1.62; white-space:pre-wrap; }.coach-answer-box:focus { border-color:var(--accent-deep); box-shadow:0 0 0 2px rgba(8,79,66,.08); }
+.follow-up-actions { display:grid; gap:.4rem; margin-top:.65rem; }.follow-up-actions button { display:grid; gap:.18rem; width:100%; padding:.48rem .58rem; border:1px solid rgba(8,79,66,.28); border-radius:8px; background:#f1f8f3; color:var(--accent-deep); text-align:left; cursor:pointer; }.follow-up-actions button strong { font:700 .58rem var(--display); }.follow-up-actions button small { color:var(--ink-soft); font-size:.52rem; line-height:1.35; }
 .coach-form { position:relative; display:grid; grid-template-columns:1fr auto; gap:.4rem; padding:.8rem .8rem .55rem; border-top:1px solid var(--line); background:#fff; }.coach-form textarea { width:100%; min-height:58px; max-height:120px; resize:none; padding:.62rem 2.5rem .62rem .7rem; border:1px solid var(--line); border-radius:8px; outline:none; background:#f8faf9; color:var(--ink); font:inherit; font-size:.7rem; line-height:1.45; }.coach-form textarea:focus { border-color:var(--accent-deep); box-shadow:0 0 0 2px rgba(8,79,66,.08); }.coach-form button[type="submit"] { align-self:end; width:2.4rem; height:2.4rem; min-height:2.4rem; aspect-ratio:1; margin:0 0 .38rem -3.1rem; padding:0; border:0; border-radius:50%; background:var(--accent-deep); color:#fff; font:700 1rem var(--mono); cursor:pointer; }.coach-form button[type="submit"]:disabled { cursor:default; opacity:.35; }.composer-toolbar { grid-column:1 / -1; display:flex; align-items:center; justify-content:space-between; gap:.5rem; }.composer-toolbar small { min-width:0; flex:1 1 9rem; color:var(--ink-soft); font-size:.52rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }.response-mode { display:flex; padding:.12rem; border:1px solid var(--line); border-radius:999px; }.response-mode button { padding:.2rem .4rem; border:0; border-radius:999px; background:transparent; color:var(--ink-soft); font:700 .49rem var(--mono); cursor:pointer; }.response-mode button.active { background:var(--accent-deep); color:#fff; }.composer-scout { flex:0 0 auto; padding:.22rem .45rem; border:1px solid rgba(8,79,66,.28); border-radius:999px; background:#e7f4ee; color:var(--accent-deep); font:700 .5rem var(--mono); letter-spacing:.03em; cursor:pointer; }.composer-scout:hover:not(:disabled) { border-color:var(--accent-deep); }.composer-scout:disabled { cursor:default; opacity:.5; }
 .coach-disclaimer { margin:0; padding:0 .8rem .7rem; background:#fff; color:var(--ink-soft); font-size:.51rem; }.sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
 @media (max-width:1000px) { .coach-panel { height:auto; min-height:520px; max-height:700px; }.coach-thread { min-height:260px; } }
-@media (max-width:620px) { .coach-panel { min-height:500px; }.coach-header { align-items:flex-start; }.coach-context { max-width:9rem; }.coach-message { max-width:96%; }.coach-form textarea { font-size:16px; }.composer-toolbar { flex-wrap:wrap; }.patch-evidence-meta { display:grid; } }
+@media (max-width:620px) { .coach-panel { min-height:500px; }.coach-header { align-items:flex-start; }.coach-context { max-width:9rem; }.coach-message { max-width:96%; }.coach-form textarea,.coach-answer-box { font-size:16px; }.composer-toolbar { flex-wrap:wrap; } }
 </style>

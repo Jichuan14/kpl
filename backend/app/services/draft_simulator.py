@@ -1242,6 +1242,8 @@ def simulate(
     *,
     model_type: str = "stats",
     max_actions: int | None = None,
+    combination_side: str | None = None,
+    combination_size: int = 0,
 ) -> dict[str, Any]:
     if max_actions is not None and max_actions < 1:
         raise ValueError("max_actions must be at least 1")
@@ -1258,11 +1260,13 @@ def simulate(
     randomizer = random.Random(seed)
     event_counts: dict[int, dict[int, int]] = {}
     ban_counts: dict[int, int] = {}
+    combination_counts: dict[tuple[int, ...], int] = {}
     remaining_sequence = sequence[start_index:]
     if max_actions is not None:
         remaining_sequence = remaining_sequence[:max_actions]
     for _ in range(rollouts):
         current = json.loads(json.dumps(state))
+        combination: list[int] = []
         for index, step in enumerate(remaining_sequence):
             probabilities = (
                 next_probabilities
@@ -1280,7 +1284,16 @@ def simulate(
             order_counts[selected] = order_counts.get(selected, 0) + 1
             if step["action"] == "ban":
                 ban_counts[selected] = ban_counts.get(selected, 0) + 1
+            elif (
+                combination_side
+                and step["side"] == combination_side
+                and len(combination) < combination_size
+            ):
+                combination.append(selected)
             _apply(current, step, selected)
+        if combination_size and len(combination) == combination_size:
+            key = tuple(combination)
+            combination_counts[key] = combination_counts.get(key, 0) + 1
 
     def rows(counts: dict[int, int], limit: int) -> list[dict[str, Any]]:
         return [
@@ -1294,6 +1307,21 @@ def simulate(
 
     team_context = _prediction_context(state, next_step, next_probabilities)
     active_model = sequence_model or learnable_model or model
+    pick_combinations = [
+        {
+            "hero_ids": list(hero_ids),
+            "hero_names": [
+                model["hero_names"].get(str(hero_id), str(hero_id))
+                for hero_id in hero_ids
+            ],
+            "count": count,
+            "probability": count / rollouts,
+        }
+        for hero_ids, count in sorted(
+            combination_counts.items(),
+            key=lambda item: (-item[1], item[0]),
+        )[:8]
+    ]
     return {
         "model_generated_at": active_model.get("generated_at", model["generated_at"]),
         "model_type": model_type,
@@ -1306,5 +1334,6 @@ def simulate(
             "actions_simulated": len(remaining_sequence),
             "next_actions": {str(order): rows(counts, 8) for order, counts in event_counts.items()},
             "banned_by_end": rows(ban_counts, 20),
+            "pick_combinations": pick_combinations,
         },
     }

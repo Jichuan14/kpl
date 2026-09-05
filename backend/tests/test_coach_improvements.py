@@ -17,9 +17,14 @@ from app.agent.errors import CoachClassificationError, CoachConversationError, C
 from app.agent.evidence import build_evidence_cards
 from app.agent.eval_phase3 import assess_result, load_cases, validate_catalog
 from app.agent.runtime import FakeClock, create_budget, retry_wait_seconds
-from app.agent.scope import MAX_GATE_MESSAGE_LENGTH, direct_deny_reason, normalize_gate_message
+from app.agent.scope import (
+    MAX_GATE_MESSAGE_LENGTH,
+    direct_deny_reason,
+    direct_hypothetical_draft_intent,
+    normalize_gate_message,
+)
 from app.agent.service import CoachInput, KimiCoachService
-from app.agent.workflows import detect_uncovered_asks, plan_evidence
+from app.agent.workflows import detect_uncovered_asks, follow_up_actions, plan_evidence
 from app.api.coach import reset_coach_rate_limiter, reset_coach_service
 from app.main import app
 from tests.test_coach_api import _mock_service
@@ -310,6 +315,111 @@ class AnswerValidationTest(unittest.TestCase):
         )
         self.assertFalse(decision["valid"])
         self.assertIn("percent_metric_mismatch", decision["issues"])
+
+    def test_probability_confidence_interval_is_supported(self) -> None:
+        decision = validate_answer(
+            "大司命的置信区间为4.5%-32.1%。",
+            intents=["team_draft_tendencies"],
+            evidence_records=[
+                {
+                    "id": "ev_1",
+                    "success": True,
+                    "status": "ok",
+                    "numeric_values": [
+                        {"subject": "大司命", "metric": "probability_ci95_low", "value": 0.045377},
+                        {"subject": "大司命", "metric": "probability_ci95_high", "value": 0.321275},
+                    ],
+                    "payload": {},
+                }
+            ],
+        )
+        self.assertTrue(decision["valid"], decision["issues"])
+
+
+class HypotheticalDraftTest(unittest.TestCase):
+    def test_hypothetical_bans_are_detected(self) -> None:
+        self.assertTrue(
+            direct_hypothetical_draft_intent(
+                "第一局如果盾山和鲁班大师被ban，JDG会拿什么组合"
+            )
+        )
+
+    def test_application_context_makes_named_bans_authoritative(self) -> None:
+        request = CoachInput(
+            message="第一局如果盾山和鲁班大师被ban，JDG会拿什么组合",
+            league_id="20260003",
+            draft_state={
+                "model_type": "sequence",
+                "blue_team_id": "10020",
+                "blue_team_name": "北京JDG",
+                "red_team_id": "10017",
+                "red_team_name": "广州TTG",
+                "bp_order": 1,
+            },
+        )
+        with patch(
+            "app.agent.service.hero_names_in_message",
+            return_value=["鲁班大师", "盾山"],
+        ):
+            arguments = KimiCoachService._apply_application_context(
+                "simulate_future_draft",
+                {"horizon": 3},
+                request,
+                allow_draft_context=True,
+            )
+        self.assertEqual(arguments["unavailable_hero_names"], ["鲁班大师", "盾山"])
+        self.assertTrue(arguments["start_at_next_pick"])
+        self.assertEqual(arguments["target_side"], "blue")
+        self.assertEqual(arguments["combination_size"], 3)
+
+    def test_contextual_explain_follow_up_recovers_prior_intent(self) -> None:
+        client = FakeClient(
+            [],
+            scope_responses=[
+                response(
+                    FakeMessage(
+                        content=(
+                            '{"decision":"deny","intents":["unsupported"],'
+                            '"query_scope":"league_wide",'
+                            '"reason_code":"ambiguous_no_context"}'
+                        )
+                    )
+                )
+            ],
+        )
+        service = KimiCoachService(client=client, settings=settings())
+        decision, _ = service._classify_scope(
+            "解释差异",
+            request_id="follow-up",
+            reference={
+                "previous_intent": "draft_simulation",
+                "intents": ["draft_simulation"],
+                "stale_season": False,
+            },
+        )
+        self.assertTrue(decision.is_allowed())
+        self.assertEqual(decision.resolved_intents(), ["draft_simulation"])
+
+    def test_follow_up_buttons_explain_their_action_and_send_an_explicit_prompt(self) -> None:
+        actions = follow_up_actions(
+            intents=["draft_simulation"],
+            evidence_records=[
+                {
+                    "family": "draft_recommendation",
+                    "card": {
+                        "items": [
+                            {"label": "敖隐 + 海月 + 张飞"},
+                            {"label": "敖隐 + 大司命 + 张飞"},
+                        ]
+                    },
+                }
+            ],
+            conversation_ref={"entities": {"team_name": "北京JDG"}},
+            chinese=True,
+        )
+        self.assertIn("敖隐", actions[0]["label"])
+        self.assertIn("数据限制", actions[0]["description"])
+        self.assertIn("上一轮", actions[0]["prompt"])
 
 
 class GraphGroundingTest(unittest.TestCase):
