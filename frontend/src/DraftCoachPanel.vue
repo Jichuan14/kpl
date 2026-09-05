@@ -1,7 +1,8 @@
 <script setup>
 import { computed, nextTick, ref, watch } from "vue";
 
-import { askDraftCoach, prepareScoutReport } from "./api";
+import { askDraftCoach, askDraftCoachStream, clearCoachConversation, prepareScoutReport } from "./api";
+import { coachErrorCopy } from "./coachStream";
 import { language, t } from "./i18n";
 
 const props = defineProps({
@@ -53,17 +54,36 @@ function persistSessionHistory(value) {
             model: message.response.model,
             answer: message.response.answer,
             evidence: message.response.evidence || [],
+            evidence_cards: message.response.evidence_cards || [],
             warnings: message.response.warnings || [],
             usage: message.response.usage || {},
+            status: message.response.status,
+            response_mode: message.response.response_mode,
+            sections: message.response.sections || [],
+            follow_up_actions: message.response.follow_up_actions || [],
+            conversation_id: message.response.conversation_id,
           }
         : null,
     }));
-  window.sessionStorage.setItem(sessionHistoryKey, JSON.stringify(completed));
+  try {
+    window.sessionStorage.setItem(sessionHistoryKey, JSON.stringify(completed));
+  } catch {
+    // Session storage can be full or unavailable; keep the in-memory thread.
+  }
 }
 
 const question = ref("");
 const loading = ref(false);
-const messages = ref(loadSessionHistory());
+const stopping = ref(false);
+const responseMode = ref("quick");
+const streamProgress = ref("");
+const restoredMessages = loadSessionHistory();
+const conversationId = ref(
+  [...restoredMessages].reverse().find((message) => message.response?.conversation_id)
+    ?.response?.conversation_id || ""
+);
+const messages = ref(restoredMessages);
+let activeController = null;
 const thread = ref(null);
 let messageId = Math.max(0, ...messages.value.map((message) => Number(message.id) || 0));
 const isChinese = computed(() => props.forceChinese || language.value === "zh-CN");
@@ -295,6 +315,52 @@ function useSuggestion(suggestion) {
   submitQuestion(suggestion.text);
 }
 
+function statisticalEvidence(message) {
+  const cards = Array.isArray(message.response?.evidence_cards)
+    ? message.response.evidence_cards
+    : [];
+  return cards.filter((card) => card && card.family !== "patch_notes");
+}
+
+function evidenceFilters(card) {
+  return Object.entries(card?.filters || {}).map(([key, value]) => `${key}: ${value}`);
+}
+
+function evidenceStatus(card) {
+  const labels = {
+    ok: isChinese.value ? "已核实" : "Verified",
+    sparse: isChinese.value ? "样本有限" : "Limited sample",
+    empty: isChinese.value ? "没有结果" : "No results",
+    failed: isChinese.value ? "不可用" : "Unavailable",
+  };
+  return labels[card?.status] || card?.status || "";
+}
+
+function newClientRequestId() {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  return `req-${Date.now().toString(16)}`;
+}
+
+function stopWaiting() {
+  stopping.value = true;
+  activeController?.abort();
+}
+
+function retryQuestion(message) {
+  question.value = message.question;
+  submitQuestion(message.question);
+}
+
+function editQuestion(message) {
+  question.value = message.question;
+}
+
+function useFollowUp(action, message) {
+  const text = action?.label || "";
+  if (!text) return;
+  submitQuestion(text);
+}
+
 function handleComposerKeydown(event) {
   if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
   event.preventDefault();
@@ -310,10 +376,16 @@ function clearHistory() {
   if (loading.value) return;
   messages.value = [];
   question.value = "";
-  window.sessionStorage.removeItem(sessionHistoryKey);
-  for (const key of legacyHistoryKeys) {
-    window.sessionStorage.removeItem(key);
+  conversationId.value = "";
+  try {
+    window.sessionStorage.removeItem(sessionHistoryKey);
+    for (const key of legacyHistoryKeys) {
+      window.sessionStorage.removeItem(key);
+    }
+  } catch {
+    // Storage may be unavailable; server-side clearing still proceeds.
   }
+  clearCoachConversation().catch(() => {});
 }
 
 function loadingCopy(message) {
@@ -369,10 +441,39 @@ function patchSubjectNames(card) {
   return isChinese.value ? "系统调整" : "System change";
 }
 
+function evidenceSource(card) {
+  const source = card?.source;
+  if (!source || typeof source !== "object") return "";
+  const parts = [];
+  if (source.name) parts.push(String(source.name));
+  if (source.version) parts.push(`v${source.version}`);
+  if (source.index_version) parts.push(`index ${source.index_version}`);
+  if (source.model_type) parts.push(String(source.model_type));
+  if (source.model_generated_at) parts.push(`generated ${source.model_generated_at}`);
+  if (source.updated_at) parts.push(`updated ${source.updated_at}`);
+  if (source.latest_indexed_date) {
+    parts.push(`latest indexed ${source.latest_indexed_date}`);
+  }
+  const period = source.analytical_period;
+  if (period && typeof period === "object") {
+    if (period.period_start || period.period_end) {
+      parts.push(`${period.period_start || "?"}–${period.period_end || "?"}`);
+    } else if (period.season_start || period.season_end) {
+      parts.push(`${period.season_start || "?"}–${period.season_end || "?"}`);
+    }
+    if (period.recent_match_window) {
+      parts.push(`${period.recent_match_window} match window`);
+    }
+  }
+  return parts.join(" · ");
+}
+
 async function submitQuestion(suggestedQuestion = null) {
   const message = String(suggestedQuestion ?? question.value).trim();
   if (!message || loading.value || !props.leagueId) return;
   loading.value = true;
+  stopping.value = false;
+  streamProgress.value = "";
   question.value = "";
   const history = messages.value
     .filter((item) => item.response?.answer)
@@ -392,24 +493,59 @@ async function submitQuestion(suggestedQuestion = null) {
   messages.value.push(entry);
   const activeEntry = messages.value[messages.value.length - 1];
   await scrollThreadToBottom();
+  const payload = {
+    message,
+    league_id: props.leagueId,
+    draft_state: props.draftState,
+    history,
+    response_mode: responseMode.value,
+    client_request_id: newClientRequestId(),
+  };
+  if (conversationId.value) payload.conversation_id = conversationId.value;
+  activeController = new AbortController();
   try {
-    activeEntry.response = await askDraftCoach({
-      message,
-      league_id: props.leagueId,
-      draft_state: props.draftState,
-      history,
+    const streamed = await askDraftCoachStream(payload, {
+      signal: activeController.signal,
+      onEvent(event) {
+        if (event.type === "progress" && event.message) {
+          streamProgress.value = event.message;
+        }
+        if (event.type === "result" && event.data?.conversation_id) {
+          conversationId.value = event.data.conversation_id;
+        }
+      },
     });
+    if (!streamed) {
+      const error = new Error("The Draft Coach stream ended before a result was available.");
+      error.code = "coach_incomplete";
+      throw error;
+    }
+    activeEntry.response = streamed;
+    if (streamed.conversation_id) conversationId.value = streamed.conversation_id;
   } catch (err) {
-    activeEntry.error = err.retryAfter
-      ? isChinese.value
+    if (err.code === "streaming_disabled") {
+      activeEntry.response = await askDraftCoach(payload);
+      if (activeEntry.response?.conversation_id) conversationId.value = activeEntry.response.conversation_id;
+      return;
+    }
+    if (err.name === "AbortError") {
+      activeEntry.error = isChinese.value ? "已停止等待。" : "Stopped waiting.";
+    } else if (err.retryAfter) {
+      activeEntry.error = isChinese.value
         ? `BP 教练正忙，请在 ${err.retryAfter} 秒后重试。`
-        : `The Draft Coach is busy. Try again in ${err.retryAfter} second${err.retryAfter === 1 ? "" : "s"}.`
-      : isChinese.value
-        ? "BP 教练暂时无法回答该问题。"
-        : err.message || "The Draft Coach could not answer this question.";
+        : `The Draft Coach is busy. Try again in ${err.retryAfter} second${err.retryAfter === 1 ? "" : "s"}.`;
+    } else {
+      activeEntry.error = coachErrorCopy(
+        { code: err.code, message: err.message },
+        isChinese.value
+      );
+    }
   } finally {
     activeEntry.loading = false;
     loading.value = false;
+    stopping.value = false;
+    streamProgress.value = "";
+    activeController = null;
     persistSessionHistory(messages.value);
     await scrollThreadToBottom();
   }
@@ -519,13 +655,24 @@ watch(messages, (value) => persistSessionHistory(value), { deep: true });
           class="coach-message assistant-message loading-message"
         >
           <span>BP 教练</span>
-          <p>{{ loadingCopy(message) }}</p>
+          <p>{{ streamProgress || loadingCopy(message) }}</p>
           <i><b></b><b></b><b></b></i>
+          <button type="button" class="turn-action" @click="stopWaiting">
+            {{ isChinese ? "停止" : "Stop" }}
+          </button>
         </div>
 
-        <p v-if="message.error" class="coach-alert error" role="alert">
-          {{ message.error }}
-        </p>
+        <div v-if="message.error" class="coach-alert error" role="alert">
+          <p>{{ message.error }}</p>
+          <div class="turn-actions">
+            <button type="button" :disabled="loading" @click="retryQuestion(message)">
+              {{ isChinese ? "重试" : "Retry" }}
+            </button>
+            <button type="button" :disabled="loading" @click="editQuestion(message)">
+              {{ isChinese ? "编辑" : "Edit" }}
+            </button>
+          </div>
+        </div>
 
         <article
           v-if="message.response"
@@ -539,6 +686,9 @@ watch(messages, (value) => persistSessionHistory(value), { deep: true });
             </div>
             <div class="response-badges">
               <span v-if="message.scoutReport" class="report-label">{{ scoutReportBadge }}</span>
+              <span v-if="message.response.status && message.response.status !== 'complete'" class="status-label">
+                {{ message.response.status.replaceAll('_', ' ') }}
+              </span>
               <span v-if="isContextStale(message)" class="stale-label">BP 面板已变化</span>
             </div>
           </header>
@@ -555,6 +705,33 @@ watch(messages, (value) => persistSessionHistory(value), { deep: true });
               {{ warning }}
             </li>
           </ul>
+
+          <section v-if="statisticalEvidence(message).length" class="stat-evidence">
+            <details
+              v-for="card in statisticalEvidence(message)"
+              :key="card.id || `${card.tool}-${card.title}`"
+              class="stat-evidence-card"
+            >
+              <summary>
+                <strong>{{ card.title }}</strong>
+                <span>{{ evidenceStatus(card) }}</span>
+              </summary>
+              <ul v-if="card.items?.length" class="stat-evidence-items">
+                <li v-for="(item, index) in card.items" :key="`${item.label}-${index}`">
+                  <span>{{ item.label }}</span>
+                  <strong v-if="item.value !== null && item.value !== undefined">{{ item.value }}</strong>
+                  <small v-if="item.detail">{{ item.detail }}</small>
+                </li>
+              </ul>
+              <p v-if="card.metric?.definition">{{ card.metric.definition }}</p>
+              <p v-if="card.sample_size !== null && card.sample_size !== undefined">
+                {{ isChinese ? "样本" : "Sample" }}: {{ card.sample_size }}
+              </p>
+              <p v-if="evidenceFilters(card).length">{{ evidenceFilters(card).join(" · ") }}</p>
+              <p v-if="evidenceSource(card)">{{ evidenceSource(card) }}</p>
+              <p v-if="card.warning" class="stat-evidence-warning">{{ card.warning }}</p>
+            </details>
+          </section>
 
           <section
             v-if="patchEvidence(message).length || patchEvidenceWarnings(message).length"
@@ -592,6 +769,18 @@ watch(messages, (value) => persistSessionHistory(value), { deep: true });
             </div>
           </section>
 
+          <div v-if="message.response.follow_up_actions?.length" class="follow-up-actions">
+            <button
+              v-for="action in message.response.follow_up_actions"
+              :key="action.id"
+              type="button"
+              :disabled="loading"
+              @click="useFollowUp(action, message)"
+            >
+              {{ action.label }}
+            </button>
+          </div>
+
           <footer>
             <span data-i18n-ignore>
               {{ Number(message.response.usage?.total_tokens || 0).toLocaleString("zh-CN") }} 个令牌
@@ -623,6 +812,14 @@ watch(messages, (value) => persistSessionHistory(value), { deep: true });
           {{ seasonName || leagueId }} · {{ isChinese ? "已附加上下文" : t("context attached") }}
           <template v-if="answeredCount"> · {{ answeredCount }} {{ isChinese ? "已回答" : t("answered") }}</template>
         </small>
+        <div class="response-mode" role="group" :aria-label="isChinese ? '回答模式' : 'Response mode'">
+          <button type="button" :class="{ active: responseMode === 'quick' }" :disabled="loading" @click="responseMode = 'quick'">
+            {{ isChinese ? "简洁" : "Quick" }}
+          </button>
+          <button type="button" :class="{ active: responseMode === 'analysis' }" :disabled="loading" @click="responseMode = 'analysis'">
+            {{ isChinese ? "分析" : "Analysis" }}
+          </button>
+        </div>
         <button
           v-if="canPrepareScoutReport"
           type="button"
@@ -655,12 +852,13 @@ watch(messages, (value) => persistSessionHistory(value), { deep: true });
 .coach-message { max-width:92%; margin-bottom:.75rem; }.coach-message > span, .assistant-message > header span { display:block; margin-bottom:.25rem; color:var(--ink-soft); font-size:.56rem; letter-spacing:.08em; text-transform:uppercase; }.coach-message > p { margin:0; font-size:.7rem; line-height:1.58; }.user-message { margin-left:auto; }.user-message > span { text-align:right; }.user-message > p { padding:.65rem .75rem; border-radius:12px 12px 2px 12px; background:var(--accent-deep); color:#fff; }
 .assistant-message { padding:.72rem .78rem; border:1px solid var(--line); border-radius:2px 12px 12px 12px; background:#fff; }.assistant-message > header { display:flex; align-items:start; justify-content:space-between; gap:.5rem; }.assistant-message > header > div { display:flex; align-items:baseline; gap:.45rem; }.assistant-message > header span { margin:0; color:var(--accent-deep); }.assistant-message > header small { color:var(--ink-soft); font-size:.54rem; }.response-badges { display:flex; flex-wrap:wrap; justify-content:end; gap:.28rem; }
 .loading-message i { display:flex; gap:.2rem; margin-top:.5rem; }.loading-message b { width:.35rem; height:.35rem; border-radius:50%; background:var(--accent); animation:coach-pulse 1s infinite alternate; }.loading-message b:nth-child(2) { animation-delay:.2s; }.loading-message b:nth-child(3) { animation-delay:.4s; }@keyframes coach-pulse { to { opacity:.25; transform:translateY(-2px); } }
-.coach-alert { margin:0 0 .75rem; padding:.65rem .75rem; border-left:3px solid #e27b47; background:#fff0df; color:#8e4318; font-size:.67rem; }
-.coach-response.stale { border-color:#e7a36c; }.stale-label, .report-label { padding:.17rem .28rem; border-radius:20px; font-size:.52rem !important; white-space:nowrap; }.stale-label { background:#fff0df; color:#9a4d1c !important; }.report-label { background:#e7f4ee; color:var(--accent-deep) !important; }.coach-answer { margin:.55rem 0 0 !important; white-space:pre-wrap; }
+.coach-alert { margin:0 0 .75rem; padding:.65rem .75rem; border-left:3px solid #e27b47; background:#fff0df; color:#8e4318; font-size:.67rem; }.coach-alert p { margin:0; }.turn-actions,.follow-up-actions { display:flex; flex-wrap:wrap; gap:.35rem; margin-top:.5rem; }.turn-actions button,.turn-action,.follow-up-actions button { padding:.3rem .48rem; border:1px solid currentColor; border-radius:999px; background:transparent; color:inherit; font:700 .54rem var(--mono); cursor:pointer; }.turn-action { margin-top:.5rem; color:var(--accent-deep); }.turn-actions button:disabled,.follow-up-actions button:disabled { opacity:.45; cursor:default; }
+.coach-response.stale { border-color:#e7a36c; }.stale-label, .report-label, .status-label { padding:.17rem .28rem; border-radius:20px; font-size:.52rem !important; white-space:nowrap; }.stale-label { background:#fff0df; color:#9a4d1c !important; }.report-label { background:#e7f4ee; color:var(--accent-deep) !important; }.status-label { background:#eef1ef; color:var(--ink-soft) !important; text-transform:capitalize; }.coach-answer { margin:.55rem 0 0 !important; white-space:pre-wrap; }
 .coach-warnings { margin:.65rem 0 0; padding:.55rem .6rem .55rem 1.5rem; background:#fff0df; color:#8e4318; font-size:.61rem; }
+.stat-evidence { display:grid; gap:.4rem; margin-top:.7rem; }.stat-evidence-card { border:1px solid var(--line); background:#f8faf9; }.stat-evidence-card summary { display:flex; justify-content:space-between; gap:.5rem; padding:.5rem .6rem; cursor:pointer; font-size:.59rem; }.stat-evidence-card summary span { color:var(--ink-soft); }.stat-evidence-card > p { margin:.35rem .6rem .55rem; color:var(--ink-soft); font-size:.55rem; line-height:1.45; }.stat-evidence-items { display:grid; gap:.28rem; margin:0; padding:.1rem .6rem .25rem; list-style:none; }.stat-evidence-items li { display:grid; grid-template-columns:1fr auto; gap:.15rem .5rem; font-size:.58rem; }.stat-evidence-items small { grid-column:1 / -1; color:var(--ink-soft); }.stat-evidence-warning { color:#8e4318 !important; }.follow-up-actions button { color:var(--accent-deep); }
 .patch-evidence { margin-top:.75rem; padding:.65rem; border:1px solid rgba(8,79,66,.22); background:linear-gradient(135deg,#f1f8f3,#fff); }.patch-evidence > header { display:flex; align-items:start; justify-content:space-between; gap:.5rem; }.patch-evidence > header span { display:block; margin:0; color:var(--accent-deep); font:700 .58rem var(--display); letter-spacing:.06em; text-transform:uppercase; }.patch-evidence > header small { color:var(--ink-soft); font-size:.5rem; line-height:1.35; }.patch-evidence-note { margin:.5rem 0 0; color:#8e4318; font-size:.58rem; line-height:1.45; }.patch-evidence-list { display:grid; gap:.45rem; margin-top:.55rem; }.patch-evidence-card { padding:.55rem; border:1px solid var(--line); background:rgba(255,255,255,.82); }.patch-evidence-meta { display:flex; flex-wrap:wrap; justify-content:space-between; gap:.2rem .5rem; color:var(--ink-soft); font-size:.51rem; line-height:1.4; }.patch-evidence-card strong { display:block; margin-top:.35rem; color:var(--ink); font:700 .66rem/1.35 var(--display); }.patch-evidence-card p { margin:.3rem 0 .42rem; color:var(--ink-soft); font-size:.61rem; line-height:1.48; }.patch-evidence-card a { color:var(--accent-deep); font:700 .56rem var(--mono); text-decoration-thickness:1px; text-underline-offset:2px; }
 .coach-response > footer { display:flex; justify-content:space-between; gap:.5rem; margin-top:.65rem; padding-top:.5rem; border-top:1px solid var(--line); color:var(--ink-soft); font-size:.52rem; }
-.coach-form { position:relative; display:grid; grid-template-columns:1fr auto; gap:.4rem; padding:.8rem .8rem .55rem; border-top:1px solid var(--line); background:#fff; }.coach-form textarea { width:100%; min-height:58px; max-height:120px; resize:none; padding:.62rem 2.5rem .62rem .7rem; border:1px solid var(--line); border-radius:8px; outline:none; background:#f8faf9; color:var(--ink); font:inherit; font-size:.7rem; line-height:1.45; }.coach-form textarea:focus { border-color:var(--accent-deep); box-shadow:0 0 0 2px rgba(8,79,66,.08); }.coach-form button[type="submit"] { align-self:end; width:2.4rem; height:2.4rem; min-height:2.4rem; aspect-ratio:1; margin:0 0 .38rem -3.1rem; padding:0; border:0; border-radius:50%; background:var(--accent-deep); color:#fff; font:700 1rem var(--mono); cursor:pointer; }.coach-form button[type="submit"]:disabled { cursor:default; opacity:.35; }.composer-toolbar { grid-column:1 / -1; display:flex; align-items:center; justify-content:space-between; gap:.5rem; }.composer-toolbar small { min-width:0; color:var(--ink-soft); font-size:.52rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }.composer-scout { flex:0 0 auto; padding:.22rem .45rem; border:1px solid rgba(8,79,66,.28); border-radius:999px; background:#e7f4ee; color:var(--accent-deep); font:700 .5rem var(--mono); letter-spacing:.03em; cursor:pointer; }.composer-scout:hover:not(:disabled) { border-color:var(--accent-deep); }.composer-scout:disabled { cursor:default; opacity:.5; }
+.coach-form { position:relative; display:grid; grid-template-columns:1fr auto; gap:.4rem; padding:.8rem .8rem .55rem; border-top:1px solid var(--line); background:#fff; }.coach-form textarea { width:100%; min-height:58px; max-height:120px; resize:none; padding:.62rem 2.5rem .62rem .7rem; border:1px solid var(--line); border-radius:8px; outline:none; background:#f8faf9; color:var(--ink); font:inherit; font-size:.7rem; line-height:1.45; }.coach-form textarea:focus { border-color:var(--accent-deep); box-shadow:0 0 0 2px rgba(8,79,66,.08); }.coach-form button[type="submit"] { align-self:end; width:2.4rem; height:2.4rem; min-height:2.4rem; aspect-ratio:1; margin:0 0 .38rem -3.1rem; padding:0; border:0; border-radius:50%; background:var(--accent-deep); color:#fff; font:700 1rem var(--mono); cursor:pointer; }.coach-form button[type="submit"]:disabled { cursor:default; opacity:.35; }.composer-toolbar { grid-column:1 / -1; display:flex; align-items:center; justify-content:space-between; gap:.5rem; }.composer-toolbar small { min-width:0; flex:1 1 9rem; color:var(--ink-soft); font-size:.52rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }.response-mode { display:flex; padding:.12rem; border:1px solid var(--line); border-radius:999px; }.response-mode button { padding:.2rem .4rem; border:0; border-radius:999px; background:transparent; color:var(--ink-soft); font:700 .49rem var(--mono); cursor:pointer; }.response-mode button.active { background:var(--accent-deep); color:#fff; }.composer-scout { flex:0 0 auto; padding:.22rem .45rem; border:1px solid rgba(8,79,66,.28); border-radius:999px; background:#e7f4ee; color:var(--accent-deep); font:700 .5rem var(--mono); letter-spacing:.03em; cursor:pointer; }.composer-scout:hover:not(:disabled) { border-color:var(--accent-deep); }.composer-scout:disabled { cursor:default; opacity:.5; }
 .coach-disclaimer { margin:0; padding:0 .8rem .7rem; background:#fff; color:var(--ink-soft); font-size:.51rem; }.sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
 @media (max-width:1000px) { .coach-panel { height:auto; min-height:520px; max-height:700px; }.coach-thread { min-height:260px; } }
 @media (max-width:620px) { .coach-panel { min-height:500px; }.coach-header { align-items:flex-start; }.coach-context { max-width:9rem; }.coach-message { max-width:96%; }.coach-form textarea { font-size:16px; }.composer-toolbar { flex-wrap:wrap; }.patch-evidence-meta { display:grid; } }

@@ -2,6 +2,7 @@ async function request(path, options = {}) {
   let res;
   try {
     res = await fetch(path, {
+      credentials: "include",
       headers: { "Content-Type": "application/json", ...(options.headers || {}) },
       ...options,
     });
@@ -13,10 +14,12 @@ async function request(path, options = {}) {
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     let message = text;
+    let errorCode = "";
     try {
       const detail = JSON.parse(text)?.detail;
       if (detail && typeof detail === "object") {
         message = detail.message || `HTTP ${res.status}`;
+        errorCode = detail.code || "";
         if (detail.request_id) message += ` · ${detail.request_id}`;
       } else {
         message = detail || text;
@@ -26,6 +29,7 @@ async function request(path, options = {}) {
     }
     const error = new Error(message || `HTTP ${res.status}`);
     error.status = res.status;
+    error.code = errorCode;
     const retryAfter = Number(res.headers.get("Retry-After"));
     if (Number.isFinite(retryAfter) && retryAfter > 0) {
       error.retryAfter = retryAfter;
@@ -246,6 +250,76 @@ export function askDraftCoach(payload) {
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+export async function askDraftCoachStream(payload, { signal, onEvent } = {}) {
+  const { parseCoachStreamChunk } = await import("./coachStream.js");
+  let res;
+  try {
+    res = await fetch("/api/coach/stream", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal,
+    });
+  } catch (err) {
+    if (err.name === "AbortError") throw err;
+    throw new Error(
+      `Cannot reach API (${err.message}). Is the backend running on :8000?`
+    );
+  }
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    let detail = {};
+    try {
+      detail = JSON.parse(text)?.detail || {};
+    } catch {
+      detail = { message: text };
+    }
+    const error = new Error(detail.message || `HTTP ${res.status}`);
+    error.status = res.status;
+    error.code = detail.code;
+    const retryAfter = Number(res.headers.get("Retry-After"));
+    if (Number.isFinite(retryAfter) && retryAfter > 0) error.retryAfter = retryAfter;
+    throw error;
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let result = null;
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    const parsed = parseCoachStreamChunk(buffer, decoder.decode(value, { stream: true }));
+    buffer = parsed.buffer;
+    for (const event of parsed.events) {
+      onEvent?.(event);
+      if (event.type === "result") result = event.data;
+      if (event.type === "error") {
+        const error = new Error(event.message || "stream error");
+        error.code = event.code;
+        throw error;
+      }
+    }
+  }
+  if (buffer.trim()) {
+    const parsed = parseCoachStreamChunk(buffer, "\n");
+    for (const event of parsed.events) {
+      onEvent?.(event);
+      if (event.type === "result") result = event.data;
+      if (event.type === "error") {
+        const error = new Error(event.message || "stream error");
+        error.code = event.code;
+        throw error;
+      }
+    }
+  }
+  return result;
+}
+
+export function clearCoachConversation() {
+  return request("/api/coach/conversation/clear", { method: "POST" });
 }
 
 export function prepareScoutReport(payload) {

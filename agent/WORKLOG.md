@@ -1,5 +1,88 @@
 # Agent Work Log
 
+## 2026-09-04 — LangGraph coach reliability, Phase 7
+
+Changed:
+
+- Added a twelve-case English/Chinese behavioral catalog with explicit fixture
+  context, evidence requirements, prohibited claims, completion status, budget
+  class, and independent routing, grounding, context, coverage, and usefulness
+  scores. The evaluator is offline-only and cannot instantiate the provider.
+- Bound percentage validation to both its subject and named metric, treated
+  successful empty results as no affirmative evidence, and forced compound
+  paths with missing evidence to report `partial`.
+- Added regression paths for partial tool failure, a second invalid repair,
+  stale season/board references, overlapping turns, cancelled-before-work,
+  disabled Analysis/streaming, public stream errors, and server-side clearing.
+- Added structured per-node duration and request completion logs without raw
+  questions, prompts, history, or tool payloads. Evidence cards now carry and
+  display analytical periods, artifact/index versions, and the latest returned
+  patch-index date without claiming it is the latest official update.
+- Documented the active LangGraph paths and the defined emergency behavior.
+  LangGraph remains the normal path; no new planner, memory, repair, or stream
+  behavior was copied into the legacy loop.
+
+Verification:
+
+- Full backend suite: 258 tests passed, with 45 passing subtests.
+- Phase 1, Phase 2, and Phase 3 offline catalogs passed (13, 16, and 12 cases).
+- Frontend stream parser: 2 tests passed; production build completed.
+- Git whitespace validation passed.
+- No live provider calls, paid evaluations, model changes, commits, deployment,
+  or production-data rebuilds were performed.
+
+Remaining release gate:
+
+- Offline implementation is verified. The bounded live Quick/Analysis,
+  initial/follow-up, and degraded-path review remains pending separate
+  authorization and a recorded cost/token ceiling. Consequently no live 90%
+  quality result or provider p50/p95 latency is claimed.
+- Deterministic checks cannot prove entailment for every qualitative sentence,
+  and an already-started provider HTTP call cannot be retroactively unbilled.
+  Broader hero/item/mechanics retrieval beyond the patch index remains separate
+  source-ingestion work.
+
+## 2026-09-04 — LangGraph coach reliability, phases 0–6
+
+Changed:
+
+- Reproduced the partial implementation baseline with Python 3.11.1,
+  LangGraph 1.2.11, langgraph-checkpoint 4.2.0, OpenAI 2.52.0, FastAPI
+  0.115.6, and Pydantic 2.10.4. The first focused run had 76 passing and
+  29 failing tests (plus 41 passing subtests).
+- Kept LangGraph as the primary orchestration path and added explicit nodes for
+  preparation, scope, evidence planning, tool limits, evidence registration,
+  sanitization, validation, bounded repair, partial finalization, and recording.
+- Added normalized evidence cards, warning normalization, correct zero/missing
+  handling, sample/metric/source metadata, and expandable frontend rendering.
+- Added Quick/Analysis contracts, 4,000-character input handling, safe localized
+  classification/context errors, and deterministic handling for unsupported or
+  contradictory factual claims.
+- Added session-bound conversation metadata plus a supported SQLite LangGraph
+  checkpointer, server thread IDs, duplicate-request reuse, overlapping-turn
+  rejection, bounded history, and server-side clear behavior.
+- Added one request-wide deadline/retry budget and safe partial finalization when
+  verified evidence exists but synthesis time does not.
+- Added versioned NDJSON progress/evidence/result events, POST streaming, Nginx
+  no-buffering configuration, UTF-8 chunk parsing, Stop/Retry/Edit controls, and
+  protection against silent paid resubmission after an interrupted stream.
+
+Verification:
+
+- Focused coach regression suite: 111 tests passed, with 42 passing subtests.
+- Full backend suite: 244 tests passed, with 45 passing subtests.
+- Phase 1 and Phase 2 offline catalogs passed (13 and 16 cases respectively).
+- Frontend stream parser: 2 tests passed; production build completed.
+- No live provider calls, paid evaluations, model changes, commits, deployment,
+  or production-data rebuilds were performed.
+
+Next:
+
+- Phase 7 remains planned. Expand the behavioral evaluation catalog and request
+  separate authorization before any bounded live Quick/Analysis and follow-up
+  evaluation. Qualitative narrative entailment and non-cancellable in-flight
+  provider work remain explicit limitations.
+
 ## 2026-08-02 — Draft Coach session conversation UI
 
 - Changed suggestion buttons to submit immediately instead of copying text into

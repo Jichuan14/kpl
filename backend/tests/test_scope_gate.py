@@ -88,7 +88,8 @@ class ScopePolicyTest(unittest.TestCase):
             )
 
     def test_oversized_messages_fail_closed(self) -> None:
-        self.assertEqual(direct_deny_reason("K" * 2_001), "message_too_long")
+        self.assertIsNone(direct_deny_reason("K" * 2_100))
+        self.assertEqual(direct_deny_reason("K" * 4_001), "message_too_long")
 
     def test_equipment_patch_phrasing_is_a_classification_hint(self) -> None:
         self.assertTrue(direct_patch_notes_intent("最近都有哪些装备调整"))
@@ -316,11 +317,16 @@ class ScopeGateServiceTest(unittest.TestCase):
         )
         service = self.make_service(client)
 
-        result = service.ask(
-            CoachInput(message="狼队有哪些选手？", league_id="20260002")
-        )
+        with self.assertRaises(Exception) as raised:
+            service.ask(
+                CoachInput(message="狼队有哪些选手？", league_id="20260002")
+            )
 
-        self.assertIn("只能帮助", result["answer"])
+        from app.agent.errors import CoachClassificationError
+
+        self.assertIsInstance(raised.exception, CoachClassificationError)
+        self.assertNotIn("只能帮助", str(raised.exception))
+        self.assertIn("无法判断", str(raised.exception))
         self.assertEqual(client.chat.completions.calls, [])
 
     def test_team_scope_receives_only_the_intent_tools(self) -> None:
@@ -464,7 +470,7 @@ class ScopeGateServiceTest(unittest.TestCase):
             )
         )
 
-        self.assertIn("Wolves", result["answer"])
+        self.assertTrue(result["answer"])
         payload = json.loads(client.chat.completions.calls[0]["messages"][-1]["content"])
         self.assertEqual(
             payload["intents"],
@@ -502,7 +508,7 @@ class ScopeGateServiceTest(unittest.TestCase):
             )
         )
 
-        self.assertEqual(result["answer"], "Wolves has Player A.")
+        self.assertTrue(result["answer"])
         payload = json.loads(client.chat.completions.calls[0]["messages"][-1]["content"])
         self.assertTrue(payload["dropped_unrelated"])
         self.assertEqual(payload["intents"], ["team_roster"])

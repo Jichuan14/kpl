@@ -32,6 +32,14 @@ class Settings(BaseSettings):
     kimi_max_tool_rounds: int = 3
     kimi_max_tool_calls: int = 8
     kimi_max_output_tokens: int = 600
+    kimi_analysis_max_output_tokens: int = 1800
+    coach_request_deadline_seconds: float = 90.0
+    coach_finalize_reserve_seconds: float = 10.0
+    coach_enable_analysis: bool = True
+    coach_enable_conversations: bool = True
+    coach_enable_streaming: bool = True
+    coach_checkpoint_path: str = str(BACKEND_ROOT / "data" / "coach_checkpoints.sqlite")
+    coach_conversation_path: str = str(BACKEND_ROOT / "data" / "coach_conversations.sqlite")
     # Production orchestrator is LangGraph. `legacy` remains an explicit
     # rollback to the original for-loop. Security policy and tool dispatch
     # are shared.
@@ -97,6 +105,7 @@ class Settings(BaseSettings):
         "kimi_max_tool_rounds",
         "kimi_max_tool_calls",
         "kimi_max_output_tokens",
+        "kimi_analysis_max_output_tokens",
         "scout_report_max_output_tokens",
         "coach_ip_requests_per_minute",
         "coach_ip_requests_per_day",
