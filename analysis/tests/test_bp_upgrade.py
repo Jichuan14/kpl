@@ -11,6 +11,7 @@ import pytest
 ANALYSIS=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ANALYSIS));sys.path.insert(0,str(ANALYSIS/"sequence_training"))
 
 from calibration import PredictionRecords, fit_global_temperature, masked_softmax
+from player_context.dataset import candidate_familiarity_features, compact_familiarity_context
 from player_context.history import HistoricalGame, PlayerAppearance, TemporalContextBuilder, normalize_player_name
 from player_context.roles import open_role_probabilities
 from sequence_training.splits import validate_split_manifest
@@ -40,6 +41,15 @@ def test_temporal_context_ignores_same_day_future_and_outcomes():
     second=TemporalContextBuilder([past,same,future],[1,2]).build("t","o",date(2026,1,2))
     assert first==second;assert first["maximum_source_event_date"]=="2026-01-01"
     assert first["rosters"][0][0][-1]["player_key"]=="<unknown>"
+
+
+def test_compact_familiarity_context_preserves_candidate_features():
+    past=HistoricalGame(date(2026,1,1),"m1","b1",1,(appearance("t","Alice",1,2),appearance("o","Bob",2,4)))
+    context=TemporalContextBuilder([past],[1,2]).build("t","o",date(2026,1,2))
+    arguments={"own_picks":[],"opponent_picks":[],"own_previous":[1],"opponent_previous":[2],"hero_ids":[1,2]}
+    full=candidate_familiarity_features(context,**arguments)
+    compact=candidate_familiarity_features(compact_familiarity_context(context),**arguments)
+    assert np.allclose(full,compact,atol=1e-7)
 
 
 def test_soft_roles_are_normalized_and_never_zero():

@@ -25,6 +25,8 @@ FAMILIARITY_FEATURE_NAMES = (
 
 
 def _coverage(context: dict[str, Any], team_index: int) -> float:
+    if "coverage" in context:
+        return float(context["coverage"][team_index])
     values = []
     for role in range(5):
         value = sum(
@@ -33,6 +35,15 @@ def _coverage(context: dict[str, Any], team_index: int) -> float:
         )
         values.append(value)
     return float(np.clip(np.mean(values), 0.0, 1.0))
+
+
+def compact_familiarity_context(context: dict[str, Any]) -> dict[str, Any]:
+    """Keep only the arrays needed by the 20-parameter production residual."""
+    return {
+        "familiarity": np.asarray(context["familiarity"], dtype=np.float32),
+        "hero_role_prior": np.asarray(context["hero_role_prior"], dtype=np.float32),
+        "coverage": [_coverage(context, 0), _coverage(context, 1)],
+    }
 
 
 def candidate_familiarity_features(

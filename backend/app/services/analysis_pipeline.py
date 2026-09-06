@@ -64,6 +64,7 @@ def _run_command(
     process = subprocess.Popen(
         command,
         cwd=cwd,
+        env={**os.environ, "MALLOC_ARENA_MAX": "2"},
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,

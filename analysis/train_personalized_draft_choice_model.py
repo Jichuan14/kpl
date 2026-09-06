@@ -20,7 +20,7 @@ sys.path.insert(0, str(ANALYSIS / "sequence_training"))
 from calibration import PredictionRecords, score_metrics  # noqa: E402
 from models import ACTION_INDEX, load_checkpoint, prepare_data, seed_everything  # noqa: E402
 from personalized_models import FamiliarityResidual  # noqa: E402
-from player_context.dataset import candidate_familiarity_features  # noqa: E402
+from player_context.dataset import candidate_familiarity_features, compact_familiarity_context  # noqa: E402
 from player_context.history import TemporalContextBuilder, load_historical_games  # noqa: E402
 from sequence_training.splits import validate_split_manifest  # noqa: E402
 
@@ -29,7 +29,7 @@ def phase(position: int) -> str:
     return "opening_bans_and_first_pick" if position <= 5 else "first_pick_phase" if position <= 10 else "second_ban_phase" if position <= 16 else "closing_picks"
 
 
-def source_rows(seasons: list[str]) -> tuple[dict[tuple[str,str,int],dict[str,Any]], dict[str,date]]:
+def source_rows(seasons: list[str]) -> dict[tuple[str,str,int],dict[str,Any]]:
     dates = {}
     for season in seasons:
         with (ANALYSIS/"exports"/season/"matches.jsonl").open(encoding="utf-8") as source:
@@ -41,32 +41,37 @@ def source_rows(seasons: list[str]) -> tuple[dict[tuple[str,str,int],dict[str,An
         with (ANALYSIS/"exports"/season/"bp_decisions.jsonl").open(encoding="utf-8") as source:
             for line in source:
                 if line.strip():
-                    row=json.loads(line); row["event_date"]=dates[str(row["match_id"])].isoformat()
-                    rows[(str(row["match_id"]),str(row["battle_id"]),int(row["bp_order"]))]=row
-    return rows,dates
+                    row=json.loads(line)
+                    key=(str(row["match_id"]),str(row["battle_id"]),int(row["bp_order"]))
+                    rows[key]={name:row.get(name,[]) for name in (
+                        "current_team_picks","current_opponent_picks","team_used_in_previous_battles","opponent_used_in_previous_battles"
+                    )}
+                    rows[key].update(event_date=dates[key[0]].isoformat(),acting_team_id=str(row["acting_team_id"]),opponent_team_id=str(row["opponent_team_id"]))
+    return rows
 
 
 class Extended:
     def __init__(self, base: Any, extras: dict[str, Any]): self.base,self.extras=base,extras
     def __len__(self): return len(self.base)
     def batch(self, indices: Any, device: Any) -> dict[str, Any]:
+        import torch
         result=self.base.batch(indices,device)
-        result.update({name:value.index_select(0,indices).to(device) for name,value in self.extras.items()})
+        result.update({name:value.index_select(0,indices).to(device=device,dtype=torch.float32) for name,value in self.extras.items()})
         return result
 
 
-def extend(base: Any, rows: dict[tuple[str,str,int],dict[str,Any]], builder: TemporalContextBuilder, player_vocab: dict[str,int]) -> Extended:
+def extend(base: Any, rows: dict[tuple[str,str,int],dict[str,Any]], builder: TemporalContextBuilder) -> Extended:
     import torch
-    extras={"candidate_features":[]}
+    features=np.empty((len(base),len(builder.hero_ids),9),dtype=np.float16)
     cache={}
-    for match,battle,position in zip(base.match_ids,base.battle_ids,base.next_positions.tolist(),strict=True):
+    for index,(match,battle,position) in enumerate(zip(base.match_ids,base.battle_ids,base.next_positions.tolist(),strict=True)):
         row=rows[(match,battle,int(position))]; cutoff=date.fromisoformat(row["event_date"])
         key=(str(row["acting_team_id"]),str(row["opponent_team_id"]),cutoff)
         context=cache.get(key)
         if context is None:
-            context=builder.build(key[0],key[1],cutoff);cache[key]=context
-        extras["candidate_features"].append(candidate_familiarity_features(context,own_picks=[int(v) for v in row.get("current_team_picks",[])],opponent_picks=[int(v) for v in row.get("current_opponent_picks",[])],own_previous=row.get("team_used_in_previous_battles",[]),opponent_previous=row.get("opponent_used_in_previous_battles",[]),hero_ids=list(builder.hero_ids)))
-    return Extended(base,{"candidate_features":torch.as_tensor(np.asarray(extras["candidate_features"]),dtype=torch.float32)})
+            context=compact_familiarity_context(builder.build(key[0],key[1],cutoff));cache[key]=context
+        features[index]=candidate_familiarity_features(context,own_picks=[int(v) for v in row.get("current_team_picks",[])],opponent_picks=[int(v) for v in row.get("current_opponent_picks",[])],own_previous=row.get("team_used_in_previous_battles",[]),opponent_previous=row.get("opponent_used_in_previous_battles",[]),hero_ids=list(builder.hero_ids))
+    return Extended(base,{"candidate_features":torch.from_numpy(features)})
 
 
 def logits_for(base_model: Any, branch: Any, dataset: Extended, batch_size: int, device: Any) -> np.ndarray:
@@ -96,10 +101,8 @@ def main() -> None:
     data=prepare_data(ROOT,target_season=str(manifest["target_season"]),previous_seasons=len(seasons)-1,validation_matches=len(manifest["splits"]["validation"]),holdout_matches=len(manifest["splits"]["calibration"])+len(manifest["splits"]["holdout"]),holdout_offset_matches=int(manifest.get("holdout_offset_series",0)),recency_decay=.65,winning_pick_weight=1.5)
     base=load_checkpoint(args.checkpoint,device); payload=torch.load(args.checkpoint,map_location="cpu",weights_only=False)
     if payload["hero_ids"]!=data.hero_ids or payload["team_ids"]!=data.team_ids: raise ValueError("Checkpoint and manifest vocabularies differ")
-    raw,dates=source_rows(seasons);games=load_historical_games([ANALYSIS/"exports"/season/"matches.jsonl" for season in seasons]);builder=TemporalContextBuilder(games,data.hero_ids)
-    v_boundary=min(date.fromisoformat(row["start_time"][:10]) for row in manifest["splits"]["validation"])
-    player_keys=sorted({a.player_key for game in games if game.event_date<v_boundary for a in game.appearances});player_vocab={key:i+1 for i,key in enumerate(player_keys)}
-    train,validation,holdout=extend(data.train,raw,builder,player_vocab),extend(data.validation,raw,builder,player_vocab),extend(data.holdout,raw,builder,player_vocab)
+    raw=source_rows(seasons);games=load_historical_games([ANALYSIS/"exports"/season/"matches.jsonl" for season in seasons]);builder=TemporalContextBuilder(games,data.hero_ids)
+    train,validation,holdout=extend(data.train,raw,builder),extend(data.validation,raw,builder),extend(data.holdout,raw,builder)
     branch=FamiliarityResidual()
     branch.to(device);optimizer=torch.optim.AdamW(branch.parameters(),lr=args.learning_rate,weight_decay=args.weight_decay);generator=torch.Generator().manual_seed(args.seed)
     best=None;best_nll=math.inf;history=[];stale=0
@@ -119,7 +122,7 @@ def main() -> None:
         if stale>=5: break
     if best is None: raise AssertionError("No selected checkpoint")
     branch.load_state_dict(best); output=args.output_dir.resolve();output.mkdir(parents=True,exist_ok=True)
-    torch.save({"schema_version":1,"model_type":branch.model_name,"config":{"feature_width":9},"state_dict":branch.state_dict(),"base_checkpoint":str(args.checkpoint.resolve()),"hero_ids":data.hero_ids,"team_ids":data.team_ids,"player_vocab":player_vocab,"split_manifest_sha256":manifest["manifest_sha256"],"seed":args.seed},output/f"familiarity_seed{args.seed}.pt")
+    torch.save({"schema_version":1,"model_type":branch.model_name,"config":{"feature_width":9},"state_dict":branch.state_dict(),"base_checkpoint":str(args.checkpoint.resolve()),"hero_ids":data.hero_ids,"team_ids":data.team_ids,"player_vocab":{},"split_manifest_sha256":manifest["manifest_sha256"],"seed":args.seed},output/f"familiarity_seed{args.seed}.pt")
     c_ids={str(r["match_id"]) for r in manifest["splits"]["calibration"]};h_ids={str(r["match_id"]) for r in manifest["splits"]["holdout"]}
     all_logits=logits_for(base,branch,holdout,args.batch_size,device);all_records=records(holdout,all_logits)
     results={"model":"familiarity","seed":args.seed,"parameters":sum(p.numel() for p in branch.parameters()),"best_epoch":min(history,key=lambda r:r["validation"]["negative_log_likelihood"])["epoch"],"history":history,"splits":{}}

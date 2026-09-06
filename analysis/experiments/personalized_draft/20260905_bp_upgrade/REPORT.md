@@ -80,7 +80,7 @@ Replay and fit the baseline calibrator:
 Train the selected familiarity model:
 
 ```bash
-/opt/homebrew/bin/python3 analysis/train_personalized_draft_choice_model.py --checkpoint analysis/experiments/personalized_draft/20260905_bp_upgrade/baseline_uniform_seed7/hybrid_bag_gru.pt --split-manifest analysis/experiments/personalized_draft/20260905_bp_upgrade/split_manifest.json --seed 7 --epochs 30 --batch-size 128 --threads 4 --output-dir analysis/experiments/personalized_draft/20260905_bp_upgrade/simple_seed7
+/opt/homebrew/bin/python3 analysis/train_familiarity_draft_choice_model.py --checkpoint analysis/experiments/personalized_draft/20260905_bp_upgrade/baseline_uniform_seed7/hybrid_bag_gru.pt --split-manifest analysis/experiments/personalized_draft/20260905_bp_upgrade/split_manifest.json --seed 7 --epochs 30 --batch-size 128 --threads 4 --output-dir analysis/experiments/personalized_draft/20260905_bp_upgrade/simple_seed7
 ```
 
 Aggregate confirmatory runs and benchmark the selected runtime:

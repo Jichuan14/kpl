@@ -68,7 +68,7 @@ def main() -> None:
     parser.add_argument("--holdout-series", type=int, default=10)
     parser.add_argument("--epochs", type=int, default=30)
     parser.add_argument("--seed", type=int, default=7)
-    parser.add_argument("--threads", type=int, default=4)
+    parser.add_argument("--threads", type=int, default=1)
     args = parser.parse_args()
     if not args.league_id or not all(c.isalnum() or c in "-_" for c in args.league_id):
         raise ValueError("Invalid league id")
@@ -100,7 +100,7 @@ def main() -> None:
     run([python, str(ANALYSIS / "evaluate_draft_policy.py"), "--checkpoint", str(work / "hybrid_bag_gru.pt"),
          "--artifact", str(base_artifact), "--split-manifest", str(manifest), "--candidate-policy",
          "game_availability_v1", "--output-dir", str(base_eval)])
-    run([python, str(ANALYSIS / "train_personalized_draft_choice_model.py"), "--checkpoint",
+    run([python, str(ANALYSIS / "train_familiarity_draft_choice_model.py"), "--checkpoint",
          str(work / "hybrid_bag_gru.pt"), "--split-manifest", str(manifest), "--seed", str(args.seed),
          "--epochs", str(args.epochs), "--threads", str(args.threads), "--output-dir", str(work)])
     run([python, str(ANALYSIS / "export_personalized_draft_choice_model.py"), "--checkpoint",
