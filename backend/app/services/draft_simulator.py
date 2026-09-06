@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import os
 import random
 from pathlib import Path
 from typing import Any
@@ -12,16 +13,29 @@ from typing import Any
 import numpy as np
 
 from app.services.analysis_pipeline import ANALYSIS_DIR, OUTPUT_ROOT
+from app.services.draft_calibration import (
+    CALIBRATION_FILENAME,
+    CalibrationResolution,
+    GAME_AVAILABILITY_POLICY_ID,
+    LEGACY_POLICY_ID,
+    candidate_policy_fingerprint,
+    masked_softmax,
+    resolve_calibration,
+    semantic_model_fingerprint,
+)
 from app.services.sequence_model_runtime import (
     ACTION_INDEX,
     SIDE_INDEX,
     prepare_sequence_parameters,
     sequence_logits,
 )
+from app.services.personalized_model_runtime import personalized_logits, prepare_personalized_parameters
+from app.services.player_draft_context import candidate_features as personalized_candidate_features, load_context_snapshot
 
 _CACHE: dict[Path, tuple[int, dict[str, Any]]] = {}
 _LEARNABLE_CACHE: dict[Path, tuple[int, dict[str, Any]]] = {}
-_SEQUENCE_CACHE: dict[Path, tuple[int, dict[str, Any]]] = {}
+_SEQUENCE_CACHE: dict[Path, tuple[tuple[int, int, int, str], dict[str, Any]]] = {}
+_PERSONALIZED_CACHE: dict[Path, tuple[tuple[int, int, int], dict[str, Any]]] = {}
 _TEAM_TENDENCY_CACHE: dict[
     Path,
     tuple[
@@ -71,6 +85,46 @@ def sequence_model_path(league_id: str) -> Path:
     if not league_id or not all(character.isalnum() or character in "-_" for character in league_id):
         raise ValueError("Invalid league id")
     return OUTPUT_ROOT / league_id / "sequence_draft_choice_model.json"
+
+
+def sequence_calibration_path(league_id: str) -> Path:
+    return sequence_model_path(league_id).with_name(CALIBRATION_FILENAME)
+
+
+def personalized_model_path(league_id: str) -> Path:
+    if not league_id or not all(character.isalnum() or character in "-_" for character in league_id):
+        raise ValueError("Invalid league id")
+    return OUTPUT_ROOT / league_id / "personalized_draft_choice_model.json"
+
+
+def personalized_context_path(league_id: str) -> Path:
+    return OUTPUT_ROOT / league_id / "player_draft_context.json"
+
+
+def personalized_calibration_path(league_id: str) -> Path:
+    return OUTPUT_ROOT / league_id / "personalized_draft_probability_calibration.json"
+
+
+def load_personalized_model(league_id: str) -> dict[str, Any]:
+    """Load the production sequence + familiarity policy."""
+    path=personalized_model_path(league_id)
+    if not path.is_file(): raise FileNotFoundError(f"No personalized draft model has been generated for {league_id}")
+    context_path=personalized_context_path(league_id)
+    calibration_path=personalized_calibration_path(league_id)
+    signature=(path.stat().st_mtime_ns,context_path.stat().st_mtime_ns if context_path.is_file() else -1,calibration_path.stat().st_mtime_ns if calibration_path.is_file() else -1);cached=_PERSONALIZED_CACHE.get(path)
+    if cached and cached[0]==signature: return cached[1]
+    model=json.loads(path.read_text(encoding="utf-8"))
+    if str(model.get("base_artifact",{}).get("target_season"))!=league_id: raise ValueError("Personalized base target season mismatch")
+    feature_matrix=np.asarray(model.get("hero_feature_matrix",[]),dtype=np.float32);base=dict(model["base_artifact"])
+    hero_ids=[int(v) for v in base.get("hero_ids",[])];team_ids=[str(v) for v in base.get("team_ids",[])]
+    if feature_matrix.shape!=(len(hero_ids),len(base.get("feature_names",[]))): raise ValueError("Personalized feature matrix is malformed")
+    model["_hero_ids"]=hero_ids;model["_hero_to_index"]={v:i for i,v in enumerate(hero_ids)};model["_team_to_index"]={v:i+1 for i,v in enumerate(team_ids)}
+    model["_prepared"]=prepare_sequence_parameters(base,feature_matrix);model["_personalized_prepared"]=prepare_personalized_parameters(model);model["_feature_matrix"]=feature_matrix
+    model["team_training_decisions"]=base.get("team_training_decisions",{});model["generated_at"]=model.get("generated_at");model["_personalization_reason"]="runtime_context_snapshot_unavailable"
+    model["_calibration_path"]=calibration_path
+    if context_path.is_file():
+        model["_context_snapshot"]=load_context_snapshot(context_path,hero_ids);model["_personalization_reason"]="context_available"
+    _PERSONALIZED_CACHE[path]=(signature,model);return model
 
 
 def feature_space_path(league_id: str) -> Path:
@@ -260,10 +314,6 @@ def load_sequence_model(league_id: str) -> dict[str, Any]:
     path = sequence_model_path(league_id)
     if not path.is_file():
         raise FileNotFoundError(f"No sequence draft model has been generated for {league_id}")
-    modified = path.stat().st_mtime_ns
-    cached = _SEQUENCE_CACHE.get(path)
-    if cached and cached[0] == modified:
-        return cached[1]
     with path.open(encoding="utf-8") as source:
         model = json.load(source)
     if (
@@ -287,6 +337,17 @@ def load_sequence_model(league_id: str) -> dict[str, Any]:
     features_path = feature_artifact_path(model)
     if not features_path.is_file():
         raise FileNotFoundError(f"Sequence feature vectors are missing: {features_path}")
+    calibration_path = sequence_calibration_path(league_id)
+    calibration_mode = os.getenv("DRAFT_SEQUENCE_CALIBRATION", "off").strip().lower()
+    signature = (
+        path.stat().st_mtime_ns,
+        features_path.stat().st_mtime_ns,
+        calibration_path.stat().st_mtime_ns if calibration_path.is_file() else -1,
+        calibration_mode,
+    )
+    cached = _SEQUENCE_CACHE.get(path)
+    if cached and cached[0] == signature:
+        return cached[1]
     with features_path.open(encoding="utf-8") as source:
         feature_artifact = json.load(source)
     expected_feature_names = [*feature_artifact.get("feature_names", []), "feature_known"]
@@ -315,7 +376,10 @@ def load_sequence_model(league_id: str) -> dict[str, Any]:
     model["_hero_to_index"] = hero_to_index
     model["_team_to_index"] = team_to_index
     model["_prepared"] = prepare_sequence_parameters(model, feature_matrix)
-    _SEQUENCE_CACHE[path] = (modified, model)
+    model["_model_fingerprint"] = semantic_model_fingerprint(model, feature_matrix)
+    model["_calibration_mode"] = calibration_mode
+    model["_calibration_path"] = calibration_path
+    _SEQUENCE_CACHE[path] = (signature, model)
     return model
 
 
@@ -372,6 +436,7 @@ def metadata(league_id: str) -> dict[str, Any]:
         sequence_model_path(league_id).is_file()
         and DRAFT_FEATURES_PATH.is_file()
     )
+    personalized_ready = personalized_model_path(league_id).is_file()
     return {
         "league_id": league_id,
         "generated_at": model["generated_at"],
@@ -387,9 +452,7 @@ def metadata(league_id: str) -> dict[str, Any]:
             for hero_id in model["hero_ids"]
         ],
         "draft_sequence": model["draft_sequence"],
-        "default_model_type": (
-            "sequence" if sequence_ready else "learnable" if learnable_ready else "stats"
-        ),
+        "default_model_type": ("personalized" if personalized_ready else "sequence" if sequence_ready else "learnable" if learnable_ready else "stats"),
         "available_models": [
             {
                 "id": "stats",
@@ -412,6 +475,12 @@ def metadata(league_id: str) -> dict[str, Any]:
                 "description": (
                     "A frozen bag model plus a chronological GRU correction."
                 ),
+            },
+            {
+                "id": "personalized",
+                "label": "Sequence + player familiarity",
+                "available": personalized_ready,
+                "description": "Production draft policy with a bounded player-familiarity correction and exact sequence fallback.",
             },
         ],
     }
@@ -496,6 +565,25 @@ def _legal_heroes(
     candidates = [hero_id for hero_id in candidates if hero_id not in previous_match_used]
     team_picks = [int(hero_id) for hero_id in state.get(f"{side}_picks", [])]
     return _heroes_that_fit_open_roles(model, team_picks, candidates)
+
+
+def _game_available_heroes(
+    model: dict[str, Any], state: dict[str, Any], step: dict[str, Any]
+) -> list[int]:
+    """Candidate contract used to evaluate and calibrate the promoted policy."""
+    used = _used_heroes(state)
+    source = state.get("legal_hero_ids")
+    candidates = (
+        sorted({int(hero_id) for hero_id in source if int(hero_id) > 0})
+        if source is not None
+        else list(model["hero_ids"])
+    )
+    candidates = [hero_id for hero_id in candidates if hero_id not in used]
+    if step["action"] == "pick":
+        side = str(step["side"])
+        unavailable = {int(hero_id) for hero_id in state.get(f"{side}_used_previous_battles", [])}
+        candidates = [hero_id for hero_id in candidates if hero_id not in unavailable]
+    return candidates
 
 
 def _visible_sources(state: dict[str, Any], side: str) -> list[tuple[str, int]]:
@@ -785,11 +873,8 @@ def _predict_sequence(
     ) = _sequence_history(base_model, sequence_model, state, step)
     hero_ids = sequence_model["_hero_ids"]
     hero_to_index = sequence_model["_hero_to_index"]
-    legal_hero_ids = [
-        hero_id
-        for hero_id in _legal_heroes(base_model, state, step)
-        if hero_id in hero_to_index
-    ]
+    candidate_source = _game_available_heroes if sequence_model.get("candidate_kind") == "familiarity_residual" else _legal_heroes
+    legal_hero_ids = [hero_id for hero_id in candidate_source(base_model, state, step) if hero_id in hero_to_index]
     if not legal_hero_ids:
         return []
     legal_indices = np.asarray(
@@ -837,9 +922,29 @@ def _predict_sequence(
         own_previous_hero_mask=own_previous_mask,
         opponent_previous_hero_mask=opponent_previous_mask,
     )
-    candidate_logits = logits[legal_indices]
-    weights = np.exp(candidate_logits - candidate_logits.max())
-    probabilities = weights / weights.sum()
+    personalization_used = False
+    personalization_reason = sequence_model.get("_personalization_reason", "safe_context_unavailable")
+    if "_personalized_prepared" in sequence_model and "_context_snapshot" in sequence_model:
+        feature_values, personalization_reason = personalized_candidate_features(
+            sequence_model["_context_snapshot"], acting_team_id, opponent_team_id, state, side
+        )
+        if feature_values is not None:
+            prepared_personalized = sequence_model["_personalized_prepared"]
+            if prepared_personalized["kind"] == "familiarity_residual":
+                logits = personalized_logits(
+                    prepared_personalized,
+                    {
+                        "legal_mask": legal_mask[None, :],
+                        "candidate_features": feature_values[None, :, :],
+                        "next_actions": np.asarray([ACTION_INDEX[str(step["action"])]], dtype=np.int64),
+                    },
+                    logits[None, :],
+                )[0]
+                personalization_used = True
+    calibration = sequence_model.get("_calibration")
+    temperature = float(calibration.temperature if calibration is not None else 1.0)
+    full_probabilities = masked_softmax(logits, legal_mask, temperature)
+    probabilities = full_probabilities[legal_indices]
     team_metadata = {
         "team_context_level": "sequence_embeddings",
         "team_context_decisions": int(
@@ -849,6 +954,20 @@ def _predict_sequence(
         ),
         "acting_team_known": acting_team > 0,
         "opponent_team_known": opponent_team > 0,
+        "calibration_temperature": temperature,
+        "calibration_status": (
+            calibration.status if calibration is not None else "uncalibrated"
+        ),
+        "custom_candidate_subset": state.get("legal_hero_ids") is not None,
+        **(
+            {
+                "personalization_used": personalization_used,
+                "personalization_reason": personalization_reason,
+                "context_id": sequence_model.get("_context_snapshot", {}).get("context_id"),
+            }
+            if "_personalized_prepared" in sequence_model
+            else {}
+        ),
     }
     rows = [
         {
@@ -1027,6 +1146,7 @@ def _model_label(model_type: str, team_context: dict[str, Any] | None) -> str:
         "stats": "Statistical model",
         "learnable": "Team-aware learnable hybrid",
         "sequence": "Chronological bag + GRU",
+        "personalized": "Sequence + player familiarity",
     }
     label = labels[model_type]
     return label + (
@@ -1058,14 +1178,59 @@ def _prepare_prediction(
 ]:
     """Validate one draft state and calculate its next-action distribution."""
     model = load_model(league_id)
-    if model_type not in {"stats", "learnable", "sequence"}:
+    if model_type not in {"stats", "learnable", "sequence", "personalized"}:
         raise ValueError(f"Unsupported draft model type: {model_type}")
     learnable_model = (
         load_learnable_model(league_id) if model_type == "learnable" else None
     )
     sequence_model = (
-        load_sequence_model(league_id) if model_type == "sequence" else None
+        load_sequence_model(league_id)
+        if model_type == "sequence"
+        else load_personalized_model(league_id)
+        if model_type == "personalized"
+        else None
     )
+    if sequence_model is not None and model_type == "sequence":
+        policy_fingerprint = candidate_policy_fingerprint(
+            LEGACY_POLICY_ID,
+            role_map={str(key): int(value) for key, value in model["_hero_role_masks"].items()},
+            availability_config={
+                "role_ids": model.get("role_ids", []),
+                "global_bp_previous_game_pick_exclusion": True,
+                "ban_uses_opponent_open_roles": True,
+            },
+        )
+        sequence_model["_candidate_policy_id"] = LEGACY_POLICY_ID
+        sequence_model["_candidate_policy_fingerprint"] = policy_fingerprint
+        sequence_model["_calibration"] = resolve_calibration(
+            sequence_model["_calibration_path"],
+            enabled_mode=sequence_model["_calibration_mode"],
+            policy_model_type="sequence",
+            model_fingerprint=sequence_model["_model_fingerprint"],
+            candidate_policy_id=LEGACY_POLICY_ID,
+            candidate_policy_fingerprint_value=policy_fingerprint,
+        )
+    elif sequence_model is not None:
+        availability_config = {
+            "role_ids": model.get("role_ids", []),
+            "global_bp_previous_game_pick_exclusion": True,
+            "ban_uses_opponent_open_roles": False,
+        }
+        policy_fingerprint = candidate_policy_fingerprint(
+            GAME_AVAILABILITY_POLICY_ID,
+            role_map={},
+            availability_config=availability_config,
+        )
+        sequence_model["_candidate_policy_id"] = GAME_AVAILABILITY_POLICY_ID
+        sequence_model["_candidate_policy_fingerprint"] = policy_fingerprint
+        sequence_model["_calibration"] = resolve_calibration(
+            sequence_model["_calibration_path"],
+            enabled_mode="eligible",
+            policy_model_type="personalized",
+            model_fingerprint=str(sequence_model.get("model_fingerprint") or ""),
+            candidate_policy_id=GAME_AVAILABILITY_POLICY_ID,
+            candidate_policy_fingerprint_value=policy_fingerprint,
+        )
     for side in ("blue", "red"):
         picks = [int(hero_id) for hero_id in state.get(f"{side}_picks", [])]
         if not _roles_are_feasible(model, picks):
@@ -1146,6 +1311,11 @@ def predict_next_action(
         "next_step": next_step,
         "candidate_count": len(probabilities),
         "next_action_probabilities": probabilities[:limit],
+        **(
+            {"calibration": sequence_model["_calibration"].metadata()}
+            if sequence_model is not None
+            else {}
+        ),
     }
 
 
@@ -1230,6 +1400,11 @@ def sample_forced_draft_completions(
         "next_step": next_step,
         "forced_hero_id": forced,
         "forced_policy_probability": probability_by_hero[forced],
+        **(
+            {"calibration": sequence_model["_calibration"].metadata()}
+            if sequence_model is not None
+            else {}
+        ),
         "completions": completions,
     }
 
@@ -1329,6 +1504,11 @@ def simulate(
         "team_context": team_context,
         "next_step": next_step,
         "next_action_probabilities": next_probabilities,
+        **(
+            {"calibration": sequence_model["_calibration"].metadata()}
+            if sequence_model is not None
+            else {}
+        ),
         "simulation": {
             "rollouts": rollouts,
             "actions_simulated": len(remaining_sequence),

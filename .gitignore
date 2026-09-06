@@ -19,6 +19,7 @@ backend/data/*.sqlite*
 analysis/outputs/*/draft_model.json
 *.json
 *.pt
+*.npz
 !analysis/hero_ability_mechanics.json
 !analysis/hero_draft_feature_vectors.json
 !analysis/hero_tactical_roles.json

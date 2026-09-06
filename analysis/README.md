@@ -228,42 +228,35 @@ The backend uses these learned team embeddings directly for the `learnable`
 model. It does not apply `team_action_tendencies.jsonl` afterward; that artifact
 continues to calibrate only the statistical model.
 
-### Train the chronological bag + GRU web model
+### Train the production sequence + familiarity web model
 
-The sequence model is trained with PyTorch and exported as a schema-v3 JSON
-artifact. The live backend uses its existing NumPy dependency for inference;
-PyTorch is installed in the deployed API image only so the private management
-pipeline can retrain the artifact.
+The production policy trains the chronological bag + GRU baseline, freezes it,
+then fits the selected 20-parameter player-familiarity residual. Training,
+checkpoint selection, calibration, and holdout series remain separate. The
+live backend uses NumPy inference; PyTorch is needed only by management.
 
 From a Python environment containing PyTorch, run:
 
 ```bash
-python analysis/train_sequence_draft_choice_model.py --league-id 20260003
+python analysis/train_production_draft_policy.py --league-id 20260003
 ```
 
-This command trains the frozen bag baseline and GRU residual with chronological
-validation and holdout windows, then atomically writes:
+The command applies holdout promotion gates and then atomically writes:
 
 ```text
-analysis/outputs/20260003/sequence_draft_choice_model.json
+analysis/outputs/20260003/personalized_draft_choice_model.json
+analysis/outputs/20260003/personalized_draft_probability_calibration.json
+analysis/outputs/20260003/player_draft_context.json
 ```
 
-To export an already trained checkpoint without retraining:
-
-```bash
-python analysis/export_sequence_draft_choice_model.py \
-  --league-id 20260003 \
-  --checkpoint /path/to/hybrid_bag_gru.pt \
-  --experiment-results /path/to/results.json
-```
-
-The web simulator exposes this artifact as the `sequence` model. The current
-`learnable` model remains the default until the sequence artifact has passed a
-future holdout and production rollout benchmark.
+The web simulator exposes this policy as `personalized` and selects it by
+default. If player context is unavailable, its familiarity correction is zero
+and the packaged sequence baseline is used exactly.
 
 The management pipeline exposes training as the `sequence_draft_model` step.
 The `all`/full-update flow runs it after the existing learnable model, so
-refreshed BP decisions automatically produce a fresh sequence artifact.
+refreshed BP decisions automatically produce a fresh composite artifact,
+context snapshot, and independently fitted calibration sidecar.
 
 ### Train the completed-lineup value model
 

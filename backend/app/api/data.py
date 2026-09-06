@@ -322,23 +322,26 @@ def data_status(
             learnable_draft_model["records"] = 0
 
     sequence_draft_model = artifact(
-        league_output_dir / "sequence_draft_choice_model.json",
+        league_output_dir / "personalized_draft_choice_model.json",
         "sequence_draft_model",
-        "Chronological bag + GRU draft model",
+        "Sequence + player familiarity draft model",
     )
-    sequence_draft_model_path = (
-        league_output_dir / "sequence_draft_choice_model.json"
-    )
+    sequence_draft_model_path = league_output_dir / "personalized_draft_choice_model.json"
+    sequence_support_paths = [
+        league_output_dir / "personalized_draft_probability_calibration.json",
+        league_output_dir / "player_draft_context.json",
+    ]
     sequence_draft_model["ready"] = bool(
         decision_mtime is not None
         and sequence_draft_model_path.is_file()
         and sequence_draft_model_path.stat().st_mtime >= decision_mtime
+        and all(path.is_file() and path.stat().st_mtime >= decision_mtime for path in sequence_support_paths)
     )
     if sequence_draft_model["exists"]:
         try:
             with sequence_draft_model_path.open(encoding="utf-8") as source:
                 sequence_draft_model["records"] = int(
-                    json.load(source).get("training", {}).get(
+                    json.load(source).get("base_artifact", {}).get("training", {}).get(
                         "training_decisions", 0
                     )
                 )
@@ -551,7 +554,7 @@ def data_status(
         },
         {
             "key": "sequence_draft_model",
-            "label": "Chronological bag + GRU draft model",
+            "label": "Sequence + player familiarity draft model",
             "ready": sequence_draft_model["ready"],
             "detail": f'{sequence_draft_model["records"]:,} training decisions',
         },

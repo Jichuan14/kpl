@@ -3,7 +3,7 @@ import { computed, nextTick, ref, watch } from "vue";
 
 import { askDraftCoach, askDraftCoachStream, clearCoachConversation, prepareScoutReport } from "./api";
 import { coachErrorCopy } from "./coachStream";
-import { language, t } from "./i18n";
+import { language } from "./i18n";
 
 const props = defineProps({
   leagueId: { type: String, required: true },
@@ -99,9 +99,6 @@ const canPrepareScoutReport = computed(() =>
       props.draftState?.blue_team_name &&
       props.draftState?.red_team_name
   )
-);
-const answeredCount = computed(
-  () => messages.value.filter((message) => message.response).length
 );
 const suggestionPairs = [
   {
@@ -222,11 +219,6 @@ const composerPlaceholder = computed(() =>
   isChinese.value
     ? "询问 BP、战队、英雄或官方版本调整…"
     : "Ask about the draft, a team, a hero, or an official patch…"
-);
-const coachDisclaimer = computed(() =>
-  isChinese.value
-    ? "KPL BP 证据来自历史数据；官方版本来源描述游戏改动，不保证比赛结果。"
-    : "KPL draft evidence is historical; official patch sources describe game changes, not guaranteed outcomes."
 );
 const scoutReportLabel = computed(() =>
   isChinese.value ? "生成对阵侦察报告" : "Prepare scout report"
@@ -620,24 +612,7 @@ watch(messages, (value) => persistSessionHistory(value), { deep: true });
     </div>
 
     <form class="coach-form" @submit.prevent="submitQuestion()">
-      <label class="sr-only" for="coach-question">你的问题</label>
-      <textarea
-        id="coach-question"
-        v-model="question"
-        rows="2"
-        maxlength="4000"
-        :placeholder="composerPlaceholder"
-        :disabled="loading"
-        @keydown="handleComposerKeydown"
-      ></textarea>
-      <button type="submit" :disabled="loading || !question.trim() || !leagueId" aria-label="询问 BP 教练">
-        <span>{{ loading ? "…" : "↑" }}</span>
-      </button>
-      <div class="composer-toolbar">
-        <small data-i18n-ignore>
-          {{ seasonName || leagueId }} · {{ isChinese ? "已附加上下文" : t("context attached") }}
-          <template v-if="answeredCount"> · {{ answeredCount }} {{ isChinese ? "已回答" : t("answered") }}</template>
-        </small>
+      <div class="composer-actions">
         <div class="response-mode" role="group" :aria-label="isChinese ? '回答模式' : 'Response mode'">
           <button type="button" :class="{ active: responseMode === 'quick' }" :disabled="loading" @click="responseMode = 'quick'">
             {{ isChinese ? "简洁" : "Quick" }}
@@ -656,16 +631,25 @@ watch(messages, (value) => persistSessionHistory(value), { deep: true });
           {{ scoutReportLabel }}
         </button>
       </div>
+      <label class="sr-only" for="coach-question">你的问题</label>
+      <textarea
+        id="coach-question"
+        v-model="question"
+        rows="2"
+        maxlength="4000"
+        :placeholder="composerPlaceholder"
+        :disabled="loading"
+        @keydown="handleComposerKeydown"
+      ></textarea>
+      <button type="submit" :disabled="loading || !question.trim() || !leagueId" aria-label="询问 BP 教练">
+        <span>{{ loading ? "…" : "↑" }}</span>
+      </button>
     </form>
-
-    <p class="coach-disclaimer">
-      {{ coachDisclaimer }}
-    </p>
   </section>
 </template>
 
 <style scoped>
-.coach-panel { display:grid; grid-template-rows:auto minmax(260px, 1fr) auto auto; height:min(760px, calc(100vh - 2rem)); min-height:580px; overflow:hidden; border:1px solid var(--accent-deep); background:#f4f7f5; color:var(--ink); box-shadow:0 18px 42px rgba(16,42,46,.14); }
+.coach-panel { display:grid; grid-template-rows:auto minmax(260px, 1fr) auto; height:min(760px, calc(100vh - 2rem)); min-height:580px; overflow:hidden; border:1px solid var(--accent-deep); background:#f4f7f5; color:var(--ink); box-shadow:0 18px 42px rgba(16,42,46,.14); }
 .coach-header { display:flex; align-items:center; gap:.65rem; padding:.9rem 1rem; border-bottom:1px solid rgba(255,255,255,.12); background:linear-gradient(135deg, #084f42, #102a2e); color:#f7fbf8; }.coach-header > div:first-child { margin-right:auto; }
 .coach-eyebrow { display:flex; align-items:center; gap:.35rem; margin:0 0 .25rem; color:#8fe0c8; font-size:.57rem; letter-spacing:.13em; text-transform:uppercase; }.coach-eyebrow i { width:.45rem; height:.45rem; border-radius:50%; background:#8fe0c8; box-shadow:0 0 0 3px rgba(143,224,200,.12); }
 .coach-header h2 { margin:0; font:700 1.3rem var(--display); letter-spacing:-.04em; }
@@ -682,8 +666,7 @@ watch(messages, (value) => persistSessionHistory(value), { deep: true });
 .coach-response.stale { border-color:#e7a36c; }.stale-label, .report-label, .status-label { padding:.17rem .28rem; border-radius:20px; font-size:.52rem !important; white-space:nowrap; }.stale-label { background:#fff0df; color:#9a4d1c !important; }.report-label { background:#e7f4ee; color:var(--accent-deep) !important; }.status-label { background:#eef1ef; color:var(--ink-soft) !important; text-transform:capitalize; }.coach-answer { margin:.55rem 0 0 !important; white-space:pre-wrap; }
 .coach-answer-box { display:block; width:100%; min-height:8rem; max-height:28rem; margin-top:.55rem; padding:.7rem .75rem; resize:vertical; overflow:auto; border:1px solid var(--line); border-radius:8px; outline:none; background:#f8faf9; color:var(--ink); font:inherit; font-size:.69rem; line-height:1.62; white-space:pre-wrap; }.coach-answer-box:focus { border-color:var(--accent-deep); box-shadow:0 0 0 2px rgba(8,79,66,.08); }
 .follow-up-actions { display:grid; gap:.4rem; margin-top:.65rem; }.follow-up-actions button { display:grid; gap:.18rem; width:100%; padding:.48rem .58rem; border:1px solid rgba(8,79,66,.28); border-radius:8px; background:#f1f8f3; color:var(--accent-deep); text-align:left; cursor:pointer; }.follow-up-actions button strong { font:700 .58rem var(--display); }.follow-up-actions button small { color:var(--ink-soft); font-size:.52rem; line-height:1.35; }
-.coach-form { position:relative; display:grid; grid-template-columns:1fr auto; gap:.4rem; padding:.8rem .8rem .55rem; border-top:1px solid var(--line); background:#fff; }.coach-form textarea { width:100%; min-height:58px; max-height:120px; resize:none; padding:.62rem 2.5rem .62rem .7rem; border:1px solid var(--line); border-radius:8px; outline:none; background:#f8faf9; color:var(--ink); font:inherit; font-size:.7rem; line-height:1.45; }.coach-form textarea:focus { border-color:var(--accent-deep); box-shadow:0 0 0 2px rgba(8,79,66,.08); }.coach-form button[type="submit"] { align-self:end; width:2.4rem; height:2.4rem; min-height:2.4rem; aspect-ratio:1; margin:0 0 .38rem -3.1rem; padding:0; border:0; border-radius:50%; background:var(--accent-deep); color:#fff; font:700 1rem var(--mono); cursor:pointer; }.coach-form button[type="submit"]:disabled { cursor:default; opacity:.35; }.composer-toolbar { grid-column:1 / -1; display:flex; align-items:center; justify-content:space-between; gap:.5rem; }.composer-toolbar small { min-width:0; flex:1 1 9rem; color:var(--ink-soft); font-size:.52rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }.response-mode { display:flex; padding:.12rem; border:1px solid var(--line); border-radius:999px; }.response-mode button { padding:.2rem .4rem; border:0; border-radius:999px; background:transparent; color:var(--ink-soft); font:700 .49rem var(--mono); cursor:pointer; }.response-mode button.active { background:var(--accent-deep); color:#fff; }.composer-scout { flex:0 0 auto; padding:.22rem .45rem; border:1px solid rgba(8,79,66,.28); border-radius:999px; background:#e7f4ee; color:var(--accent-deep); font:700 .5rem var(--mono); letter-spacing:.03em; cursor:pointer; }.composer-scout:hover:not(:disabled) { border-color:var(--accent-deep); }.composer-scout:disabled { cursor:default; opacity:.5; }
-.coach-disclaimer { margin:0; padding:0 .8rem .7rem; background:#fff; color:var(--ink-soft); font-size:.51rem; }.sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+.coach-form { position:relative; display:grid; grid-template-columns:1fr auto; gap:.4rem; padding:.65rem .8rem .8rem; border-top:1px solid var(--line); background:#fff; }.composer-actions { grid-column:1 / -1; display:flex; align-items:center; gap:.45rem; min-width:0; }.coach-form textarea { width:100%; min-height:58px; max-height:120px; resize:none; padding:.62rem 2.5rem .62rem .7rem; border:1px solid var(--line); border-radius:8px; outline:none; background:#f8faf9; color:var(--ink); font:inherit; font-size:.7rem; line-height:1.45; }.coach-form textarea:focus { border-color:var(--accent-deep); box-shadow:0 0 0 2px rgba(8,79,66,.08); }.coach-form button[type="submit"] { align-self:end; width:2.4rem; height:2.4rem; min-height:2.4rem; aspect-ratio:1; margin:0 0 .38rem -3.1rem; padding:0; border:0; border-radius:50%; background:var(--accent-deep); color:#fff; font:700 1rem var(--mono); cursor:pointer; }.coach-form button[type="submit"]:disabled { cursor:default; opacity:.35; }.response-mode { display:flex; padding:.12rem; border:1px solid var(--line); border-radius:999px; }.response-mode button { padding:.24rem .48rem; border:0; border-radius:999px; background:transparent; color:var(--ink-soft); font:700 .54rem var(--mono); cursor:pointer; }.response-mode button.active { background:var(--accent-deep); color:#fff; }.composer-scout { flex:0 1 auto; min-width:0; padding:.28rem .52rem; border:1px solid rgba(8,79,66,.28); border-radius:999px; background:#e7f4ee; color:var(--accent-deep); font:700 .54rem var(--mono); letter-spacing:.03em; cursor:pointer; white-space:nowrap; }.composer-scout:hover:not(:disabled) { border-color:var(--accent-deep); }.composer-scout:disabled { cursor:default; opacity:.5; }.sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
 @media (max-width:1000px) { .coach-panel { height:auto; min-height:520px; max-height:700px; }.coach-thread { min-height:260px; } }
-@media (max-width:620px) { .coach-panel { min-height:500px; }.coach-header { align-items:flex-start; }.coach-context { max-width:9rem; }.coach-message { max-width:96%; }.coach-form textarea,.coach-answer-box { font-size:16px; }.composer-toolbar { flex-wrap:wrap; } }
+@media (max-width:620px) { .coach-panel { min-height:500px; }.coach-header { align-items:flex-start; }.coach-context { max-width:9rem; }.coach-message { max-width:96%; }.coach-form textarea,.coach-answer-box { font-size:16px; }.composer-actions { flex-wrap:wrap; } }
 </style>
