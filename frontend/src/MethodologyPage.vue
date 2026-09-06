@@ -10,6 +10,10 @@ const demoStep = ref(0);
 const demoPlaying = ref(false);
 let demoTimer = null;
 
+const productionPolicy = computed(() =>
+  model.value?.available_models?.find((candidate) => candidate.id === model.value?.default_model_type),
+);
+
 const demoActions = [
   { id: "a", label: "对方 Pick A", relation: "对方 Pick" },
   { id: "b", label: "我方 Pick B", relation: "己方 Pick" },
@@ -30,7 +34,8 @@ const demoStages = [
   "GRU 再读入第二手：我方 Pick B，形成 h₂。",
   "GRU 最后读入第三手：对方 Pick C，形成 h₃。",
   "两个 query 分别为所有当前合法英雄计算分数。",
-  "Bag 分数加上缩放后的 GRU 顺序修正，得到最终排序。",
+  "Bag 分数加上缩放后的 GRU 顺序修正，得到序列基线排序。",
+  "按当前可能阵容、位置与历史英雄熟练度做受限修正，再校准为最终概率。",
 ];
 
 const demoStageText = computed(() => demoStages[demoStep.value]);
@@ -63,6 +68,7 @@ const sections = [
   ["relations", "1. 四种英雄关系统计"],
   ["bag", "2. Bag 基线分支"],
   ["gru", "3. GRU 顺序分支"],
+  ["familiarity", "选手熟练度修正层"],
   ["scoring", "4. 候选英雄打分"],
   ["fusion", "5. 两个分支如何合并"],
   ["training", "6. 训练、评估与线上推理"],
@@ -120,10 +126,10 @@ onBeforeUnmount(() => {
       <p class="eyebrow">方法说明</p>
       <h1>BP 预测、Ban/Pick 推荐与阵容评分</h1>
       <p>
-        本页说明网站目前使用的三层方法。Bag + GRU 模型先判断职业比赛中下一手最可能出现什么；Pick 推荐再模拟后续 BP，并用完整阵容价值模型评价最终 5v5；Ban 推荐则由专用 Ban 价值模型估计限制对手的收益。完整阵容确定后，页面还可以直接给双方阵容评分和各项贡献。
+        本页说明网站目前使用的方法。Bag + GRU 先判断职业比赛中下一手最可能出现什么，选手熟练度层再根据赛前可知的阵容、位置与英雄使用历史做小幅修正；Pick 推荐随后模拟后续 BP，并用完整阵容价值模型评价最终 5v5；Ban 推荐则由专用 Ban 价值模型估计限制对手的收益。
       </p>
-      <p v-if="model?.sequenceModel?.available" class="model-note">
-        当前线上模型：{{ model.sequenceModel.name }}；隐藏维度 {{ model.sequenceModel.hiddenDim }}；残差系数 α = {{ Number(model.sequenceModel.residualAlpha).toFixed(4) }}。
+      <p v-if="productionPolicy?.available" class="model-note">
+        当前默认线上模型：Bag + GRU + 选手熟练度。它在序列基线基础上加入 20 个可训练参数的受限修正，并使用独立校准后的概率。
       </p>
 
       <div class="process-demo" aria-label="Bag 加 GRU 预测过程演示">
@@ -180,7 +186,7 @@ onBeforeUnmount(() => {
               </div>
             </div>
             <span class="flow-arrow">→</span>
-            <div class="final-rank" :class="{ ready: demoStep >= 6 }"><span>最终排序</span><strong>1. 英雄 X</strong><strong>2. 英雄 Y</strong><strong>3. 英雄 Z</strong></div>
+            <div class="final-rank" :class="{ ready: demoStep >= 7 }"><span>熟练度修正后排序</span><strong>1. 英雄 X</strong><strong>2. 英雄 Y</strong><strong>3. 英雄 Z</strong></div>
           </div>
         </div>
         <p class="demo-description">第 {{ demoStep + 1 }} 步：{{ demoStageText }}</p>
@@ -350,6 +356,50 @@ onBeforeUnmount(() => {
           </p>
         </section>
 
+        <section id="familiarity">
+          <h2>选手熟练度修正层（当前默认）</h2>
+          <p>
+            Bag + GRU 能理解英雄、战队和当前 BP 顺序，但“战队 ID”无法完整表达这一场更可能由哪些选手上场，以及这些选手最近更常使用哪些英雄。当前默认模型因此在冻结的 Bag + GRU 分数上增加一个很小的熟练度修正层，而不是重新替换整个模型。
+          </p>
+
+          <h3>它使用什么信息</h3>
+          <p>系统会为每一名当前可用英雄计算 9 个赛前特征：</p>
+          <ul>
+            <li>我方与对方选手对该英雄的历史熟练度。</li>
+            <li>该英雄对双方尚未补齐位置的适配程度。</li>
+            <li>双方是否在本系列更早的小局使用过该英雄。</li>
+            <li>历史阵容与位置推断的证据覆盖度。</li>
+            <li>双方是否已经没有可明确识别的空缺位置。</li>
+          </ul>
+          <p>
+            Pick 和 Ban 分别使用一组 9 个权重和 1 个偏置，所以总共只有 <code>2 × (9 + 1) = 20</code> 个可训练参数。分开建模是因为“我方擅长某英雄”通常支持 Pick，而“对方擅长某英雄”可能更支持 Ban。
+          </p>
+
+          <pre>familiarity_pick(j) = w_pick · features(j) + b_pick</pre>
+          <pre>familiarity_ban(j) = w_ban · features(j) + b_ban</pre>
+          <pre>correction(j) = coverage × tanh(center(familiarity(j)))</pre>
+          <pre>logit_final(j) = logit_bag+gru(j) + correction(j)</pre>
+
+          <p>
+            修正值会先在当前候选英雄之间居中，再经过 <code>tanh</code> 限幅，并乘以证据覆盖度。因此它只能调整英雄之间的相对排序，不能无限放大并覆盖原模型。如果找不到可安全使用的选手历史，覆盖度为 0，最终结果会精确回退为原 Bag + GRU 分数。
+          </p>
+
+          <h3>如何避免偷看未来</h3>
+          <p>
+            对某场比赛做预测时，只允许使用日期严格早于该场比赛的历史。当前局的最终首发、当前局产生的选手位置、同一天稍后发生的比赛，以及未来赛程都不会进入输入。阵容由更早比赛中的队伍—选手记录推断；转会、替补或新人导致证据不足时，覆盖度会自动降低。
+          </p>
+
+          <h3>概率校准</h3>
+          <p>
+            熟练度层完成训练后，系统会在独立校准窗口上拟合一个全局温度 <code>T</code>，然后才在未见的留出窗口上评分。温度只改变概率有多集中，不改变英雄排序。校准文件与精确模型权重、候选英雄规则和数据切分绑定；其中任何一项变化，都必须重新校准。
+          </p>
+          <pre>P(j) = softmax(logit_final(j) / T)</pre>
+
+          <p class="plain-note">
+            三个互不重叠的时间留出窗口、每个窗口三个随机种子的确认结果中，校准后负对数损失从 3.0561 降至 2.8628，Top-1 提高 1.89 个百分点，Top-5 提高 4.94 个百分点。这里预测的是职业 BP 选择行为，不是英雄强度、比赛胜率或理论最优选择。
+          </p>
+        </section>
+
         <section id="scoring">
           <h2>4. 候选英雄打分</h2>
           <p>模型会为每一个英雄建立候选表示，再分别与 Bag query 和 GRU query 做点积。</p>
@@ -420,15 +470,15 @@ onBeforeUnmount(() => {
           </ul>
 
           <p>
-            当前模型先在按时间划分的数据上选择训练轮数：最近 10 场作为验证集，再之后的 10 场作为留出测试集。加入系列赛上下文后，899 个留出测试决策上的 Top-1 为 24.69%，Top-5 为 58.18%，负对数损失为 2.8295。相比未加入系列赛上下文的同一模型，Top-1 从 22.91% 提升到 24.69%，Top-5 从 56.73% 提升到 58.18%。
+            当前生产训练按整场系列赛和时间顺序分成四段：较早比赛用于训练；之后 10 场用于选择训练轮数；再之后 10 场只用于概率校准；最后 10 场只用于留出评估。同一系列赛不会跨越不同窗口，也不会随机拆分单局。
           </p>
 
           <p>
-            留出测试并不参与梯度训练，也不用于挑选最终轮数；它只用于记录这次改动在未见比赛上的表现。完成评估后，线上发布的模型会使用同一套已确定的参数，在当前五个赛季窗口内全部 38,820 个可用决策上重新训练。这样既保留一份可比较的离线结果，也让线上模型学习到最新比赛的完整信息。
+            留出测试不参与梯度训练、轮数选择或温度拟合。管理页面更新网站时会重新执行完整流程，并且只有当熟练度模型在留出集上的负对数损失和 Top-5 都优于基础序列模型、校准窗口没有排除真实选择时，才会原子替换线上模型、校准和选手上下文文件。任何阶段失败都会保留上一版线上产物。
           </p>
 
           <p>
-            结果并不表示每个 BP 阶段都同样容易。开局 Ban 和首抢的留出 Top-1 为 47.11%，而第二轮 Ban 为 11.48%。后者仍是目前最不稳定的阶段：候选空间较大，且它更容易受到阵容、版本和临场策略变化影响。因此页面展示的是条件概率和排序，不把单次预测解释为确定的赛场结论。
+            最近一次生产留出评估包含 1,091 个 BP 决策：负对数损失从 3.1910 降至 2.9570，Top-1 从 21.91% 提升到 23.46%，Top-5 从 48.95% 提升到 55.36%，且没有真实选择被候选规则排除。不同 BP 阶段仍有明显难度差异，因此页面展示的是条件概率和排序，不把单次预测解释为确定的赛场结论。
           </p>
 
           <span id="rankings" aria-hidden="true"></span>
@@ -485,7 +535,7 @@ onBeforeUnmount(() => {
 
           <h3>7.3 Pick 推荐如何使用阵容模型</h3>
           <p>
-            系统先由 Bag + GRU 模型保留当前最符合真实 BP 行为的 10 个合法 Pick。对每个候选，系统强制执行这一手，再按策略模型模拟 12 条合法的后续 BP 路径，直到得到完整阵容。阵容价值模型会分别评价这 12 个终局，并转换为当前行动方的收益。
+            系统先由 Bag + GRU + 选手熟练度模型保留当前最符合真实 BP 行为的 10 个合法 Pick。对每个候选，系统强制执行这一手，再按同一策略模型模拟 12 条合法的后续 BP 路径，直到得到完整阵容。阵容价值模型会分别评价这 12 个终局，并转换为当前行动方的收益。
           </p>
 
           <pre>expected_value = 12 个模拟终局收益的平均值</pre>

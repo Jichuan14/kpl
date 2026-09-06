@@ -17,7 +17,8 @@ phase.
 
 ## Working rules
 
-1. A new tool must answer a question listed in `PHASE_1_QUESTIONS.md`.
+1. A new tool or supporting workflow must be documented in the current phase
+   scope and remain inside the registered read-only tool allowlist.
 2. Only one roadmap task may be in progress at a time.
 3. Heavy analysis runs after data synchronization, never inside a chat request.
 4. Runtime tools use cached artifacts or bounded, parameterized SQLite queries.
@@ -33,9 +34,17 @@ backend/app/
 ├── agent/
 │   ├── service.py
 │   ├── prompts.py
+│   ├── graph.py
+│   ├── workflows.py
+│   ├── evidence.py
+│   ├── answer_validation.py
+│   ├── conversation.py
+│   ├── runtime.py
 │   ├── tool_registry.py
 │   ├── artifact_cache.py
 │   ├── eval_phase1.py
+│   ├── eval_phase2.py
+│   ├── eval_phase3.py
 │   └── tools/
 │       ├── battles.py
 │       ├── draft.py
@@ -46,12 +55,40 @@ backend/app/
     └── coach.py
 ```
 
+The normal runtime is LangGraph. The legacy loop is an emergency fallback and
+does not implement conversation persistence, evidence planning, answer repair,
+or streaming. Server-issued conversation IDs are authorized by an opaque
+HttpOnly session cookie and used as LangGraph thread IDs; checkpoint data is
+stored separately from match data.
+
+The current LangGraph execution paths are:
+
+```text
+START → prepare_turn → scope_gate
+  refused ───────────────────────────────────────────────→ finalize
+  needs context → clarify ───────────────────────────────→ finalize
+  allowed → plan_evidence → prepare_context → call_model
+    tool calls → enforce_limits → execute_tools → register_evidence
+      budget remaining ──────────────────────────────────→ call_model
+      budget exhausted → finalize_budget_partial ────────→ finalize
+    answer → sanitize_answer → validate_answer
+      valid ─────────────────────────────────────────────→ finalize
+      repairable → bounded_repair ───────────────────────→ call_model
+      unsupported/incomplete → deterministic limitation ─→ finalize
+finalize → record_completed_turn → END
+```
+
+Policy, budget, evidence, and validation decisions are deterministic Python
+nodes. Provider candidates and conversation text are untrusted until those
+nodes accept or safely limit them.
+
 Run the deterministic catalog and regression gate without an API call:
 
 ```bash
 cd backend
 ./.venv/bin/python -m app.agent.eval_phase1
 ./.venv/bin/python -m app.agent.eval_phase2
+./.venv/bin/python -m app.agent.eval_phase3
 ```
 
 Run the bounded live Kimi gate only when a paid end-to-end evaluation is
@@ -92,3 +129,11 @@ cd backend
 
 The command prints the endpoint and model, confirms that a hidden key was
 loaded, and reports the answer and token count. It never prints the secret.
+
+## Current evidence boundary
+
+General hero, item, equipment, and mechanics questions currently depend on the
+bounded official patch-note index. The index reports its own latest indexed
+date; this is not represented as the latest official Tencent publication.
+Broader reference coverage requires separately scoped source ingestion and is
+not supplied by a larger prompt or unrestricted web access.

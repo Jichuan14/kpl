@@ -169,7 +169,7 @@ class DraftSimulationRequest(BaseModel):
     model_config = {"extra": "forbid"}
 
     league_id: str = Field(min_length=1, max_length=32)
-    model_type: Literal["stats", "learnable", "sequence"] = "stats"
+    model_type: Literal["stats", "learnable", "sequence", "personalized"] = "personalized"
     blue_team_id: str = Field(min_length=1, max_length=32)
     blue_team_name: str = Field(min_length=1, max_length=64)
     red_team_id: str = Field(min_length=1, max_length=32)

@@ -44,7 +44,9 @@ pipeline API.
 | `analysis/outputs/{league_id}/draft_model.json` | `build_draft_model.py` (`draft_model`) | Draft Simulator and published draft-model metadata |
 | `analysis/outputs/{league_id}/learnable_draft_choice_model.json` | `train_learnable_draft_choice_model.py` (`learnable_draft_model`) | Learned scoring in Draft Simulator and model-status API |
 | `analysis/outputs/{league_id}/learned_hero_feature_space.json` | `train_learnable_draft_choice_model.py` (`learnable_draft_model`) | Feature Space page and model-status API |
-| `analysis/outputs/{league_id}/sequence_draft_choice_model.json` | `train_sequence_draft_choice_model.py` (`sequence_draft_model`) | NumPy chronological bag + GRU scoring in Draft Simulator and Draft Coach |
+| `analysis/outputs/{league_id}/personalized_draft_choice_model.json` | `train_production_draft_policy.py` (`sequence_draft_model`) | Self-contained chronological bag + GRU policy with the selected 20-parameter familiarity residual |
+| `analysis/outputs/{league_id}/personalized_draft_probability_calibration.json` | `train_production_draft_policy.py` (`sequence_draft_model`) | Calibration temperature bound to the exact composite model and candidate policy |
+| `analysis/outputs/{league_id}/player_draft_context.json` | `train_production_draft_policy.py` (`sequence_draft_model`) | Point-in-time roster, role, and player–hero familiarity context used by the production policy |
 | `analysis/outputs/{league_id}/lineup_value_model.json` | `train_lineup_value_model.py` (`lineup_value_model`) | Completed-lineup value ranking for automatic recommendation rollouts |
 | `analysis/outputs/{league_id}/lineup_value_validation.json` | `train_lineup_value_model.py` (`lineup_value_model`) | Chronological validation and final-season benchmark for the lineup value model |
 | `analysis/outputs/{league_id}/lineup_value_parameter_search.json` | `train_lineup_value_model.py` (`lineup_value_model`) | Reproducible season-scoped hyperparameter search record |

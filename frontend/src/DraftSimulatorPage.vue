@@ -46,7 +46,7 @@ const search = ref("");
 const laneFilter = ref("all");
 // BP forecasts always use the chronological GRU model. Keeping this fixed
 // avoids presenting model choice in either the desktop or mobile interface.
-const modelType = "sequence";
+const modelType = "personalized";
 const bpOrder = ref(1);
 const board = ref(emptyBoard());
 const history = ref([]);

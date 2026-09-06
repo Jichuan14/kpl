@@ -36,3 +36,16 @@ Statuses: `planned`, `in progress`, `completed`, `blocked`.
 A validated battle-win or optimal-draft model remains out of scope. It must be
 trained, calibrated, and evaluated separately before the coach may make outcome
 or optimality claims.
+
+## Phase 3: LangGraph coach reliability and evidence UX
+
+| Order | Task | Status | Completion gate |
+|---:|---|---|---|
+| 0 | Reproduce baseline and add acceptance fixtures | completed | Local versions and the initial 76-pass/29-fail focused baseline are recorded; deterministic gap cases cover grounding, context, limits, and streaming. |
+| 1 | Surface evidence and correct errors/input limits | completed | 4,000-character validation is consistent; normalized cards, caveats, Retry/Edit, and safe storage behavior are implemented. |
+| 2 | Plan evidence and validate claims | completed | LangGraph tracks bounded evidence groups, stable evidence IDs, numeric grounding, coverage, and one bounded repair path. |
+| 3 | Add Quick and Analysis response modes | completed | Modes have separate output budgets and one validated answer source for plain text and sections. |
+| 4 | Add scoped conversation persistence | completed | Opaque sessions authorize server-issued conversation IDs used as LangGraph thread IDs; SQLite stores are separate from match data. |
+| 5 | Enforce request-wide budgets | completed | One deadline covers provider calls, retries, tools, and repair; verified evidence can finalize as a deterministic partial result. |
+| 6 | Stream safe progress and support cancellation | completed | POST streaming emits only versioned public events; Stop disconnects without a JSON resubmission, and duplicate logical requests reuse the scoped result. |
+| 7 | Strengthen evaluation and complete rollout gate | completed | Twelve-case EN/ZH offline catalog, five independent scores, full regressions, provenance, and safe rollout contracts pass; live release review remains explicitly pending separate authorization. |

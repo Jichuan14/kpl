@@ -136,7 +136,9 @@ analysis/exports/{league_id}/
 analysis/outputs/{league_id}/
   *_stats.jsonl
   *_draft_model.json
-  sequence_draft_choice_model.json
+  personalized_draft_choice_model.json
+  personalized_draft_probability_calibration.json
+  player_draft_context.json
   lineup_value_model.json
   ban_value_model.json
   power_rankings.json

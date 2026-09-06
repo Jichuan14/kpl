@@ -5,9 +5,24 @@ from fastapi.testclient import TestClient
 from starlette.requests import Request
 
 from app.agent.service import CoachLoopLimitError, KimiConfigurationError
-from app.api.coach import _is_direct_loopback_request
+from app.api.coach import (
+    _is_direct_loopback_request,
+    reset_coach_rate_limiter,
+    reset_coach_service,
+)
 from app.main import app
 from app.services.coach_rate_limit import CoachRateLimiter
+
+
+def _mock_service() -> Mock:
+    service = Mock()
+    service.conversation_store.ensure_session.return_value = "session-test"
+    record = Mock()
+    record.conversation_id = "conversation-test"
+    record.to_public_ref.return_value = {}
+    service.conversation_store.get_or_create.return_value = record
+    service.conversation_store.begin_turn.return_value = None
+    return service
 
 
 class CoachApiTest(unittest.TestCase):
@@ -15,8 +30,12 @@ class CoachApiTest(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.client = TestClient(app)
 
+    def setUp(self) -> None:
+        reset_coach_service()
+        reset_coach_rate_limiter()
+
     def test_returns_answer_evidence_warnings_usage_and_request_id(self) -> None:
-        service = Mock()
+        service = _mock_service()
         service.ask.return_value = {
             "request_id": "request-from-service",
             "model": "kimi-k2.6",
@@ -40,7 +59,7 @@ class CoachApiTest(unittest.TestCase):
             },
         }
 
-        with patch("app.api.coach.KimiCoachService", return_value=service):
+        with patch("app.api.coach.get_coach_service", return_value=service):
             response = self.client.post(
                 "/api/coach",
                 json={
@@ -64,9 +83,9 @@ class CoachApiTest(unittest.TestCase):
         self.assertEqual(len(service.ask.call_args.kwargs["request_id"]), 32)
 
     def test_validates_active_draft_state_before_calling_kimi(self) -> None:
-        service = Mock()
+        service = _mock_service()
 
-        with patch("app.api.coach.KimiCoachService", return_value=service):
+        with patch("app.api.coach.get_coach_service", return_value=service):
             response = self.client.post(
                 "/api/coach",
                 json={
@@ -85,7 +104,7 @@ class CoachApiTest(unittest.TestCase):
 
     def test_configuration_failure_returns_safe_503(self) -> None:
         with patch(
-            "app.api.coach.KimiCoachService",
+            "app.api.coach.get_coach_service",
             side_effect=KimiConfigurationError("secret configuration detail"),
         ):
             response = self.client.post(
@@ -100,10 +119,10 @@ class CoachApiTest(unittest.TestCase):
         self.assertNotIn("secret configuration detail", response.text)
 
     def test_tool_loop_limit_returns_safe_502(self) -> None:
-        service = Mock()
+        service = _mock_service()
         service.ask.side_effect = CoachLoopLimitError("internal loop detail")
 
-        with patch("app.api.coach.KimiCoachService", return_value=service):
+        with patch("app.api.coach.get_coach_service", return_value=service):
             response = self.client.post(
                 "/api/coach",
                 json={"message": "Keep searching", "league_id": "20260002"},
@@ -123,7 +142,7 @@ class CoachApiTest(unittest.TestCase):
             max_active_per_ip=1,
             max_active_server=2,
         )
-        service = Mock()
+        service = _mock_service()
         service.ask.return_value = {
             "request_id": "request-from-service",
             "model": "kimi-k2.6",
@@ -132,7 +151,7 @@ class CoachApiTest(unittest.TestCase):
             "usage": {},
         }
         with patch("app.api.coach.rate_limiter", limiter), patch(
-            "app.api.coach.KimiCoachService", return_value=service
+            "app.api.coach.get_coach_service", return_value=service
         ):
             first = self.client.post(
                 "/api/coach", json={"message": "One", "league_id": "20260002"}
@@ -153,13 +172,13 @@ class CoachApiTest(unittest.TestCase):
 
         request = httpx.Request("POST", "https://api.moonshot.cn/v1/chat/completions")
         limited = httpx.Response(429, request=request, json={"error": {"message": "rpm"}})
-        service = Mock()
+        service = _mock_service()
         service.ask.side_effect = RateLimitError(
             "Error code: 429 - please try again after 1 seconds",
             response=limited,
             body=limited.json(),
         )
-        with patch("app.api.coach.KimiCoachService", return_value=service):
+        with patch("app.api.coach.get_coach_service", return_value=service):
             response = self.client.post(
                 "/api/coach",
                 json={"message": "Hello", "league_id": "20260002"},
@@ -178,7 +197,7 @@ class CoachApiTest(unittest.TestCase):
             max_active_per_ip=1,
             max_active_server=1,
         )
-        service = Mock()
+        service = _mock_service()
         service.ask.return_value = {
             "request_id": "request-from-service",
             "model": "kimi-k2.6",
@@ -201,7 +220,7 @@ class CoachApiTest(unittest.TestCase):
         self.assertTrue(_is_direct_loopback_request(request))
         with (
             patch("app.api.coach.rate_limiter", limiter),
-            patch("app.api.coach.KimiCoachService", return_value=service),
+            patch("app.api.coach.get_coach_service", return_value=service),
             patch("app.api.coach._is_direct_loopback_request", return_value=True),
         ):
             first = self.client.post(

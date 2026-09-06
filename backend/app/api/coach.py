@@ -7,7 +7,8 @@ from ipaddress import ip_address
 from typing import NoReturn
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from openai import (
     APIConnectionError,
@@ -17,6 +18,23 @@ from openai import (
     RateLimitError,
 )
 
+from app.agent.conversation import (
+    SESSION_COOKIE,
+    SESSION_TTL_SECONDS,
+    SqliteConversationStore,
+    build_checkpointer,
+    extract_entities,
+    scoped_gate_reference,
+    board_fingerprint,
+)
+from app.agent.errors import (
+    CoachClassificationError,
+    CoachConversationError,
+    CoachUserInputError,
+    localized_user_error,
+)
+from app.agent.evidence import ANSWER_VERSION, build_evidence_cards
+from app.agent.scope import contains_chinese
 from app.agent.service import (
     CoachInput,
     CoachLoopLimitError,
@@ -35,6 +53,15 @@ from app.services.season_teams import validate_season_team_pair
 
 logger = logging.getLogger(__name__)
 
+PROGRESS_ZH = {
+    "Checking the selected season": "正在检查所选赛季",
+    "Planning the evidence needed": "正在规划所需证据",
+    "Collecting supporting data": "正在收集支持数据",
+    "Reviewing the evidence": "正在核对证据",
+    "Checking the answer against the evidence": "正在用证据核对回答",
+    "Repairing the answer from verified evidence": "正在根据已核实证据修正回答",
+}
+
 router = APIRouter(prefix="/api/coach", tags=["coach"])
 
 
@@ -51,6 +78,131 @@ def _new_rate_limiter() -> CoachRateLimiter:
 
 
 rate_limiter = _new_rate_limiter()
+_coach_service: KimiCoachService | None = None
+
+
+def get_coach_service() -> KimiCoachService:
+    """Reuse one service so the compiled graph is not rebuilt per request."""
+    global _coach_service
+    if _coach_service is None:
+        settings = get_settings()
+        persistent = (
+            settings.coach_enable_conversations
+            and settings.coach_orchestration == "langgraph"
+        )
+        _coach_service = KimiCoachService(
+            settings=settings,
+            conversation_store=(
+                SqliteConversationStore(settings.coach_conversation_path)
+                if persistent
+                else None
+            ),
+            checkpointer=(
+                build_checkpointer(True, settings.coach_checkpoint_path)
+                if persistent
+                else None
+            ),
+        )
+    return _coach_service
+
+
+def reset_coach_service() -> None:
+    global _coach_service
+    if _coach_service is not None:
+        _coach_service.close()
+    _coach_service = None
+
+
+def reset_coach_rate_limiter() -> None:
+    """Reset process-local counters for isolated application tests."""
+    global rate_limiter
+    rate_limiter = _new_rate_limiter()
+
+
+def _public_coach_data(result: dict) -> dict:
+    evidence: list[dict[str, object]] = []
+    warnings: list[str] = list(result.get("warnings") or [])
+    seen_warnings = set(warnings)
+    for call in result.get("tool_calls") or []:
+        if call.get("success"):
+            evidence.append({"tool": call["name"], "data": call["result"]})
+        else:
+            warning = f"{call['name']}: {call.get('error')}"
+            if warning not in seen_warnings:
+                warnings.append(warning)
+                seen_warnings.add(warning)
+    cards = result.get("evidence_cards")
+    if cards is None:
+        cards = build_evidence_cards(result.get("tool_calls") or [])
+    return {
+        "request_id": result["request_id"],
+        "model": result["model"],
+        "answer": result["answer"],
+        "evidence": evidence,
+        "warnings": warnings,
+        "usage": result["usage"],
+        "answer_version": result.get("answer_version", ANSWER_VERSION),
+        "response_mode": result.get("response_mode") or "quick",
+        "status": result.get("status") or "complete",
+        "sections": result.get("sections") or [],
+        "evidence_cards": cards,
+        "coverage": result.get("coverage") or {},
+        "follow_up_actions": result.get("follow_up_actions") or [],
+        "conversation_id": result.get("conversation_id"),
+    }
+
+
+def _attach_session_cookie(response: Response, session_id: str) -> None:
+    response.set_cookie(
+        SESSION_COOKIE,
+        session_id,
+        max_age=SESSION_TTL_SECONDS,
+        httponly=True,
+        samesite="lax",
+        secure=False,
+        path="/",
+    )
+
+
+def _finish_conversation_turn(
+    service: KimiCoachService,
+    conversation_record,
+    *,
+    request_id: str,
+    body: CoachInput,
+    result: dict,
+    payload: dict,
+) -> None:
+    if conversation_record is None:
+        return
+    payload["conversation_id"] = conversation_record.conversation_id
+    coverage = result.get("coverage") or {}
+    requested = list(coverage.get("requested") or []) if isinstance(coverage, dict) else []
+    service.conversation_store.finish_turn(
+        conversation_record,
+        result=payload,
+        turn={
+            "request_id": request_id,
+            "question": body.message,
+            "intent": requested[0] if requested else None,
+            "intents": requested,
+            "entities": extract_entities(
+                result.get("tool_calls") or [],
+                body.draft_state.model_dump(mode="json") if body.draft_state else None,
+            ),
+            "league_id": body.league_id,
+            "board_fingerprint": board_fingerprint(
+                body.league_id,
+                body.draft_state.model_dump(mode="json") if body.draft_state else None,
+            ),
+            "status": payload.get("status"),
+            "pending_clarification": (
+                None
+                if payload.get("status") != "needs_clarification"
+                else "clarification"
+            ),
+        },
+    )
 
 
 def _client_key(request: Request) -> str:
@@ -105,10 +257,12 @@ def _http_error(
 def ask_coach(
     body: CoachInput,
     request: Request,
+    response: Response,
     db: Session = Depends(get_db),
 ) -> ApiResponse:
     """Answer one question with Kimi and approved local evidence tools."""
     request_id = uuid4().hex
+    chinese = contains_chinese(body.message)
     rate_limit_bypassed = _is_direct_loopback_request(request)
     client_identity = _client_key(request)
     if not rate_limit_bypassed:
@@ -122,14 +276,29 @@ def ask_coach(
                 status_code=429,
                 detail={
                     "code": "coach_rate_limited",
-                    "message": "The Draft Coach is busy. Try again shortly.",
+                    "message": localized_user_error(
+                        "coach_rate_limited",
+                        "The Draft Coach is busy. Try again shortly.",
+                        chinese=chinese,
+                    ),
                     "request_id": request_id,
                 },
                 headers={"Retry-After": str(decision.retry_after_seconds)},
             )
     else:
         logger.info("coach_api_loopback_rate_limit_bypassed", extra={"request_id": request_id})
+    settings = get_settings()
+    service = None
+    session_id = None
+    conversation_record = None
+    conversation_ref = None
+    completed = False
     try:
+        service = get_coach_service()
+        session_id = service.conversation_store.ensure_session(
+            request.cookies.get(SESSION_COOKIE)
+        )
+        _attach_session_cookie(response, session_id)
         if body.draft_state is not None:
             teams = validate_season_team_pair(
                 db,
@@ -139,12 +308,69 @@ def ask_coach(
             )
             body.draft_state.blue_team_name = str(teams["blue"]["team_name"])
             body.draft_state.red_team_name = str(teams["red"]["team_name"])
-        result = KimiCoachService().ask(body, request_id=request_id)
+        if (
+            settings.coach_enable_conversations
+            and settings.coach_orchestration == "langgraph"
+        ):
+            conversation_record = service.conversation_store.get_or_create(
+                body.conversation_id,
+                session_id,
+            )
+            cached = service.conversation_store.begin_turn(
+                conversation_record,
+                client_request_id=body.client_request_id,
+                request_id=request_id,
+            )
+            if cached is not None:
+                completed = True
+                return ApiResponse(message="coach response completed", data=cached)
+            conversation_ref = scoped_gate_reference(
+                conversation_record.to_public_ref(),
+                current_league_id=body.league_id,
+                current_board=board_fingerprint(
+                    body.league_id,
+                    body.draft_state.model_dump(mode="json") if body.draft_state else None,
+                ),
+            )
+        result = service.ask(
+            body,
+            request_id=request_id,
+            conversation_ref=conversation_ref,
+            conversation_id=(
+                conversation_record.conversation_id if conversation_record else None
+            ),
+        )
+        completed = True
+    except CoachUserInputError as exc:
+        _http_error(
+            status_code=422,
+            code=exc.code,
+            message=localized_user_error(exc.code, exc.message, chinese=chinese),
+            request_id=request_id,
+        )
+    except CoachConversationError as exc:
+        _http_error(
+            status_code=404 if exc.code == "conversation_not_found" else 409,
+            code=exc.code,
+            message=localized_user_error(exc.code, exc.message, chinese=chinese),
+            request_id=request_id,
+        )
+    except CoachClassificationError as exc:
+        _http_error(
+            status_code=502,
+            code=exc.code,
+            message=localized_user_error(exc.code, exc.message, chinese=chinese),
+            request_id=request_id,
+        )
     except ValueError as exc:
         _http_error(
             status_code=422,
             code="invalid_team_context",
-            message=str(exc),
+            message=localized_user_error(
+                "invalid_team_context",
+                str(exc),
+                chinese=chinese,
+            ),
             request_id=request_id,
         )
     except (KimiConfigurationError, AuthenticationError) as exc:
@@ -231,33 +457,298 @@ def ask_coach(
             request_id=request_id,
         )
     finally:
+        if service is not None and conversation_record is not None and not completed:
+            service.conversation_store.abort_turn(conversation_record)
         if not rate_limit_bypassed:
             rate_limiter.release(client_identity)
 
-    evidence: list[dict[str, object]] = []
-    warnings: list[str] = []
-    for call in result["tool_calls"]:
-        if call["success"]:
-            evidence.append(
-                {
-                    "tool": call["name"],
-                    "data": call["result"],
-                }
-            )
-        else:
-            warnings.append(f"{call['name']}: {call['error']}")
+    payload = _public_coach_data(result)
+    _finish_conversation_turn(
+        service,
+        conversation_record,
+        request_id=request_id,
+        body=body,
+        result=result,
+        payload=payload,
+    )
+    return ApiResponse(message="coach response completed", data=payload)
 
-    return ApiResponse(
-        message="coach response completed",
-        data={
-            "request_id": result["request_id"],
-            "model": result["model"],
-            "answer": result["answer"],
-            "evidence": evidence,
-            "warnings": warnings,
-            "usage": result["usage"],
+
+@router.post("/stream")
+def stream_coach(
+    body: CoachInput,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+):
+    """Stream allowlisted progress events, then the same validated JSON result."""
+    settings = get_settings()
+    if not settings.coach_enable_streaming:
+        _http_error(
+            status_code=404,
+            code="streaming_disabled",
+            message="Streaming is not enabled.",
+            request_id=uuid4().hex,
+        )
+    request_id = uuid4().hex
+    chinese = contains_chinese(body.message)
+    rate_limit_bypassed = _is_direct_loopback_request(request)
+    client_identity = _client_key(request)
+    if not rate_limit_bypassed:
+        decision = rate_limiter.acquire(client_identity)
+        if not decision.allowed:
+            raise HTTPException(
+                status_code=429,
+                detail={
+                    "code": "coach_rate_limited",
+                    "message": localized_user_error(
+                        "coach_rate_limited",
+                        "The Draft Coach is busy. Try again shortly.",
+                        chinese=chinese,
+                    ),
+                    "request_id": request_id,
+                },
+                headers={"Retry-After": str(decision.retry_after_seconds)},
+            )
+
+    service = None
+    conversation_record = None
+    conversation_ref = None
+    cached = None
+    try:
+        service = get_coach_service()
+        session_id = service.conversation_store.ensure_session(
+            request.cookies.get(SESSION_COOKIE)
+        )
+        if body.draft_state is not None:
+            teams = validate_season_team_pair(
+                db,
+                body.league_id,
+                body.draft_state.blue_team_id,
+                body.draft_state.red_team_id,
+            )
+            body.draft_state.blue_team_name = str(teams["blue"]["team_name"])
+            body.draft_state.red_team_name = str(teams["red"]["team_name"])
+        if (
+            settings.coach_enable_conversations
+            and settings.coach_orchestration == "langgraph"
+        ):
+            conversation_record = service.conversation_store.get_or_create(
+                body.conversation_id,
+                session_id,
+            )
+            cached = service.conversation_store.begin_turn(
+                conversation_record,
+                client_request_id=body.client_request_id,
+                request_id=request_id,
+            )
+            conversation_ref = scoped_gate_reference(
+                conversation_record.to_public_ref(),
+                current_league_id=body.league_id,
+                current_board=board_fingerprint(
+                    body.league_id,
+                    body.draft_state.model_dump(mode="json") if body.draft_state else None,
+                ),
+            )
+    except CoachConversationError as exc:
+        if not rate_limit_bypassed:
+            rate_limiter.release(client_identity)
+        _http_error(
+            status_code=404 if exc.code == "conversation_not_found" else 409,
+            code=exc.code,
+            message=localized_user_error(exc.code, exc.message, chinese=chinese),
+            request_id=request_id,
+        )
+    except (KimiConfigurationError, AuthenticationError):
+        if not rate_limit_bypassed:
+            rate_limiter.release(client_identity)
+        _http_error(
+            status_code=503,
+            code="coach_unavailable",
+            message="The Draft Coach provider is not configured or authenticated.",
+            request_id=request_id,
+        )
+    except ValueError as exc:
+        if not rate_limit_bypassed:
+            rate_limiter.release(client_identity)
+        _http_error(
+            status_code=422,
+            code="invalid_team_context",
+            message=localized_user_error("invalid_team_context", str(exc), chinese=chinese),
+            request_id=request_id,
+        )
+
+    def generate():
+        import json
+        from app.agent.graph import (
+            PROGRESS_BY_NODE,
+            graph_recursion_limit,
+            initial_coach_state,
+        )
+        from app.agent.runtime import create_budget
+        from app.agent.scope import normalize_gate_message
+        from app.agent.service import reset_request_budget, set_request_budget
+
+        seq = 0
+        budget = create_budget(
+            request_id,
+            deadline_seconds=settings.coach_request_deadline_seconds,
+            reserve_seconds=settings.coach_finalize_reserve_seconds,
+        )
+
+        def emit(event_type: str, payload: dict) -> str:
+            nonlocal seq
+            seq += 1
+            event = {
+                "v": 1,
+                "seq": seq,
+                "type": event_type,
+                "request_id": request_id,
+                **payload,
+            }
+            return json.dumps(event, ensure_ascii=False) + "\n"
+
+        completed = False
+        try:
+            yield emit("accepted", {"status": "accepted"})
+            if cached is not None:
+                completed = True
+                yield emit("result", {"data": cached})
+                return
+            graph = service.compiled_coach_graph()
+            emitted_result = False
+            graph_updates = iter(graph.stream(
+                initial_coach_state(
+                    body,
+                    request_id=request_id,
+                    normalized_message=normalize_gate_message(body.message),
+                    usage={"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
+                    conversation_ref=conversation_ref,
+                    conversation_id=(
+                        conversation_record.conversation_id
+                        if conversation_record is not None
+                        else None
+                    ),
+                ),
+                config={
+                    "recursion_limit": graph_recursion_limit(
+                        service.settings.kimi_max_tool_rounds
+                    ),
+                    **(
+                        {
+                            "configurable": {
+                                "thread_id": conversation_record.conversation_id
+                            }
+                        }
+                        if conversation_record is not None
+                        else {}
+                    ),
+                },
+                stream_mode="updates",
+            ))
+            while True:
+                token = set_request_budget(budget)
+                try:
+                    update = next(graph_updates)
+                except StopIteration:
+                    break
+                finally:
+                    reset_request_budget(token)
+                if not isinstance(update, dict):
+                    continue
+                for node_name, payload in update.items():
+                    progress = PROGRESS_BY_NODE.get(node_name)
+                    if progress:
+                        if chinese:
+                            progress = PROGRESS_ZH.get(progress, progress)
+                        yield emit("progress", {"message": progress})
+                    if node_name == "register_evidence":
+                        cards = [
+                            record.get("card")
+                            for record in (payload or {}).get("evidence_records") or []
+                            if record.get("card")
+                        ]
+                        if cards:
+                            yield emit("evidence", {"evidence_cards": cards})
+                    if node_name == "finalize" and (payload or {}).get("result"):
+                        result = payload["result"]
+                        public_payload = _public_coach_data(result)
+                        _finish_conversation_turn(
+                            service,
+                            conversation_record,
+                            request_id=request_id,
+                            body=body,
+                            result=result,
+                            payload=public_payload,
+                        )
+                        yield emit(
+                            "result",
+                            {"data": public_payload},
+                        )
+                        emitted_result = True
+                        completed = True
+            if not emitted_result and not budget.cancelled():
+                yield emit(
+                    "error",
+                    {
+                        "code": "coach_incomplete",
+                        "message": localized_user_error(
+                            "coach_incomplete",
+                            "The Draft Coach could not finish within its safety limits.",
+                            chinese=chinese,
+                        ),
+                    },
+                )
+        except GeneratorExit:
+            budget.cancel()
+            raise
+        except CoachUserInputError as exc:
+            yield emit(
+                "error",
+                {
+                    "code": exc.code,
+                    "message": localized_user_error(exc.code, exc.message, chinese=chinese),
+                },
+            )
+        except Exception:
+            yield emit(
+                "error",
+                {
+                    "code": "coach_provider_error",
+                    "message": localized_user_error(
+                        "coach_provider_error",
+                        "The Draft Coach provider could not complete the request.",
+                        chinese=chinese,
+                    ),
+                },
+            )
+        finally:
+            if conversation_record is not None and not completed:
+                service.conversation_store.abort_turn(conversation_record)
+            if not rate_limit_bypassed:
+                rate_limiter.release(client_identity)
+
+    stream_response = StreamingResponse(
+        generate(),
+        media_type="application/x-ndjson",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
         },
     )
+    _attach_session_cookie(stream_response, session_id)
+    return stream_response
+
+
+@router.post("/conversation/clear")
+def clear_coach_conversation(request: Request, response: Response) -> ApiResponse:
+    """Clear server-side conversation state for the current session."""
+    service = get_coach_service()
+    session_id = request.cookies.get(SESSION_COOKIE)
+    if session_id:
+        service.clear_conversation_session(session_id)
+    response.delete_cookie(SESSION_COOKIE, path="/")
+    return ApiResponse(message="coach conversation cleared", data={"cleared": True})
 
 
 @router.post("/scout-report")

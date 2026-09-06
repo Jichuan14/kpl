@@ -83,21 +83,18 @@ class AnalysisPipelineTests(unittest.TestCase):
         feature_command = run.call_args_list[0].args[0]
         training_command = run.call_args_list[1].args[0]
         self.assertTrue(feature_command[1].endswith("build_hero_draft_feature_vectors.py"))
-        self.assertTrue(training_command[1].endswith("train_sequence_draft_choice_model.py"))
+        self.assertTrue(training_command[1].endswith("train_production_draft_policy.py"))
         self.assertEqual(
-            training_command[-4:],
+            training_command[-2:],
             [
                 "--league-id",
                 "20260003",
-                "--use-series-context",
-                "--train-on-all-data",
             ],
         )
-        self.assertEqual(training_command.count("--use-series-context"), 1)
-        self.assertEqual(training_command.count("--train-on-all-data"), 1)
+        self.assertNotIn("--train-on-all-data", training_command)
         self.assertNotIn("poc", str(training_command))
         self.assertTrue(
-            all(call.kwargs["timeout_seconds"] == 900 for call in run.call_args_list)
+            all(call.kwargs["timeout_seconds"] == 1800 for call in run.call_args_list)
         )
 
     def test_sequence_step_is_accepted_by_request_schema(self) -> None:
@@ -172,12 +169,12 @@ class AnalysisPipelineTests(unittest.TestCase):
                 patch.object(
                     analysis_pipeline,
                     "_run_command",
-                    side_effect=subprocess.TimeoutExpired(["python"], 900),
+                    side_effect=subprocess.TimeoutExpired(["python"], 1800),
                 ),
             ):
                 with self.assertRaisesRegex(
                     RuntimeError,
-                    "sequence_draft_model timed out after 900 seconds",
+                    "sequence_draft_model timed out after 1800 seconds",
                 ):
                     analysis_pipeline.AnalysisPipeline("20260003").run(
                         "sequence_draft_model"

@@ -153,11 +153,7 @@ class AnalysisPipeline:
         started = time.monotonic()
         outputs: list[str] = []
         for command in commands:
-            timeout_seconds = (
-                900
-                if step in {"sequence_draft_model", "lineup_value_model"}
-                else 300
-            )
+            timeout_seconds = 1800 if step == "sequence_draft_model" else 900 if step == "lineup_value_model" else 300
             try:
                 process = _run_command(
                     command,
@@ -278,11 +274,9 @@ class AnalysisPipeline:
         if step == "sequence_draft_model":
             return [
                 python,
-                str(ANALYSIS_DIR / "train_sequence_draft_choice_model.py"),
+                str(ANALYSIS_DIR / "train_production_draft_policy.py"),
                 "--league-id",
                 self.league_id,
-                "--use-series-context",
-                "--train-on-all-data",
             ]
         if step == "lineup_value_model":
             return [

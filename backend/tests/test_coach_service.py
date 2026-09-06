@@ -45,9 +45,15 @@ def tool_call(name: str, arguments: str, call_id: str = "call-1"):
     )
 
 
-def response(message: FakeMessage, input_tokens=10, output_tokens=5):
+def response(
+    message: FakeMessage,
+    input_tokens=10,
+    output_tokens=5,
+    *,
+    finish_reason: str | None = None,
+):
     return SimpleNamespace(
-        choices=[SimpleNamespace(message=message)],
+        choices=[SimpleNamespace(message=message, finish_reason=finish_reason)],
         usage=SimpleNamespace(
             prompt_tokens=input_tokens,
             completion_tokens=output_tokens,
@@ -103,6 +109,15 @@ def settings(**overrides) -> Settings:
     return Settings(_env_file=None, **values)
 
 
+SAMPLE_DRAFT_STATE = {
+    "bp_order": 1,
+    "blue_team_id": "blue-1",
+    "blue_team_name": "Blue Club",
+    "red_team_id": "red-1",
+    "red_team_name": "Red Club",
+}
+
+
 class KimiCoachServiceTest(unittest.TestCase):
     orchestration = "legacy"
 
@@ -124,17 +139,34 @@ class KimiCoachServiceTest(unittest.TestCase):
         self.assertNotIn("do-not-print-this", repr(configuration))
 
     def test_returns_direct_answer_without_tools(self) -> None:
-        client = FakeClient([response(FakeMessage(content="Choose Hero A."))])
+        client = FakeClient(
+            [response(FakeMessage(content="I can explain KPL draft evidence and team tendencies."))],
+            scope_responses=[
+                response(
+                    FakeMessage(
+                        content=(
+                            '{"decision":"allow","intents":["coach_capabilities"],'
+                            '"query_scope":"league_wide",'
+                            '"reason_code":"capability_question"}'
+                        )
+                    )
+                )
+            ],
+        )
         service = self.make_service(client)
 
         result = service.ask(
-            CoachInput(message="What is next?", league_id="20260002"),
+            CoachInput(message="What can you help with?", league_id="20260002"),
             request_id="request-1",
         )
 
-        self.assertEqual(result["answer"], "Choose Hero A.")
+        self.assertEqual(
+            result["answer"],
+            "I can explain KPL draft evidence and team tendencies.",
+        )
         self.assertEqual(result["tool_calls"], [])
-        self.assertEqual(result["usage"]["total_tokens"], 15)
+        # Usage covers both the scope gate and the answer call.
+        self.assertEqual(result["usage"]["total_tokens"], 30)
         provider_call = client.chat.completions.calls[0]
         self.assertEqual(provider_call["model"], "kimi-k2.6")
         self.assertNotIn("api_key", provider_call)
@@ -163,6 +195,7 @@ class KimiCoachServiceTest(unittest.TestCase):
             " ".join(provider_call["messages"][0]["content"].lower().split()),
         )
         user_payload = json.loads(provider_call["messages"][1]["content"])
+        self.assertEqual(user_payload["response_mode"], "quick")
         self.assertEqual(
             user_payload["response_style"],
             {
@@ -172,11 +205,10 @@ class KimiCoachServiceTest(unittest.TestCase):
                 "markdown_tables": False,
             },
         )
-        self.assertEqual(user_payload["intents"], ["draft_prediction"])
-        self.assertEqual(user_payload["analysis_scope"], "current_draft")
+        self.assertEqual(user_payload["intents"], ["coach_capabilities"])
+        self.assertEqual(user_payload["analysis_scope"], "league_wide")
         self.assertFalse(user_payload["dropped_unrelated"])
-        self.assertTrue(user_payload["missing_live_board"])
-        self.assertIn("No active draft board", user_payload["note"])
+        self.assertNotIn("missing_live_board", user_payload)
 
     def test_rewrites_provider_planning_text_before_returning_it(self) -> None:
         client = FakeClient(
@@ -187,7 +219,17 @@ class KimiCoachServiceTest(unittest.TestCase):
                     )
                 ),
                 response(FakeMessage(content="抱歉，我目前无法查询这项数据。")),
-            ]
+            ],
+            scope_responses=[
+                response(
+                    FakeMessage(
+                        content=(
+                            '{"decision":"allow","intents":["team_roster"],'
+                            '"query_scope":"team_specific","reason_code":"roster"}'
+                        )
+                    )
+                )
+            ],
         )
         service = self.make_service(client)
 
@@ -197,7 +239,7 @@ class KimiCoachServiceTest(unittest.TestCase):
         )
 
         self.assertEqual(result["answer"], "抱歉，我目前无法查询这项数据。")
-        self.assertEqual(result["usage"]["total_tokens"], 30)
+        self.assertEqual(result["usage"]["total_tokens"], 45)
         self.assertEqual(len(client.chat.completions.calls), 2)
         rewrite_call = client.chat.completions.calls[1]
         self.assertNotIn("tools", rewrite_call)
@@ -289,7 +331,19 @@ class KimiCoachServiceTest(unittest.TestCase):
         self.assertNotIn("get_team_draft_tendencies", names)
 
     def test_relays_only_server_filtered_history_as_untrusted_context(self) -> None:
-        client = FakeClient([response(FakeMessage(content="It refers to Wolves."))])
+        client = FakeClient(
+            [response(FakeMessage(content="It refers to Wolves."))],
+            scope_responses=[
+                response(
+                    FakeMessage(
+                        content=(
+                            '{"decision":"allow","intents":["team_draft_tendencies"],'
+                            '"query_scope":"team_specific","reason_code":"follow_up"}'
+                        )
+                    )
+                )
+            ],
+        )
         service = self.make_service(client)
 
         service.ask(
@@ -331,7 +385,7 @@ class KimiCoachServiceTest(unittest.TestCase):
             [
                 response(FakeMessage(tool_calls=[call])),
                 response(FakeMessage(content="Hero A is most likely.")),
-            ]
+            ],
         )
         service = self.make_service(client)
 
@@ -379,7 +433,11 @@ class KimiCoachServiceTest(unittest.TestCase):
         service = self.make_service(client)
 
         result = service.ask(
-            CoachInput(message="What is next?", league_id="20260002")
+            CoachInput(
+                message="What is next?",
+                league_id="20260002",
+                draft_state=SAMPLE_DRAFT_STATE,
+            )
         )
 
         self.assertFalse(result["tool_calls"][0]["success"])
@@ -398,7 +456,11 @@ class KimiCoachServiceTest(unittest.TestCase):
         with patch("app.agent.service.invoke_tool", return_value={"rows": []}):
             with self.assertRaisesRegex(CoachLoopLimitError, "tool-round limit"):
                 service.ask(
-                    CoachInput(message="Keep searching", league_id="20260002")
+                    CoachInput(
+                        message="Keep searching",
+                        league_id="20260002",
+                        draft_state=SAMPLE_DRAFT_STATE,
+                    )
                 )
 
     def test_retries_provider_rate_limit_then_answers(self) -> None:
@@ -412,7 +474,20 @@ class KimiCoachServiceTest(unittest.TestCase):
             response=limited,
             body=limited.json(),
         )
-        inner = FakeClient([response(FakeMessage(content="Choose Hero A."))])
+        inner = FakeClient(
+            [response(FakeMessage(content="Choose Hero A."))],
+            scope_responses=[
+                response(
+                    FakeMessage(
+                        content=(
+                            '{"decision":"allow","intents":["coach_capabilities"],'
+                            '"query_scope":"league_wide",'
+                            '"reason_code":"capability_question"}'
+                        )
+                    )
+                )
+            ],
+        )
         original_create = inner.chat.completions.create
         state = {"calls": 0}
 
@@ -423,17 +498,18 @@ class KimiCoachServiceTest(unittest.TestCase):
             return original_create(**kwargs)
 
         inner.chat.completions.create = flaky_create
-        service = self.make_service(inner)
+        from app.agent.runtime import FakeClock
 
-        with patch("app.agent.service.sleep") as sleeper:
-            result = service.ask(
-                CoachInput(message="What is next?", league_id="20260002"),
-                request_id="request-retry",
-            )
+        service = self.make_service(inner)
+        service.clock = FakeClock()
+
+        result = service.ask(
+            CoachInput(message="What can you do?", league_id="20260002"),
+            request_id="request-retry",
+        )
 
         self.assertEqual(result["answer"], "Choose Hero A.")
-        sleeper.assert_called_once()
-        self.assertGreaterEqual(sleeper.call_args.args[0], 20)
+        self.assertGreaterEqual(service.clock.slept[0], 20)
 
     def test_total_tool_call_limit_stops_before_dispatch(self) -> None:
         client = FakeClient(
@@ -454,7 +530,11 @@ class KimiCoachServiceTest(unittest.TestCase):
         with patch("app.agent.service.invoke_tool") as invoke:
             with self.assertRaisesRegex(CoachLoopLimitError, "total tool-call limit"):
                 service.ask(
-                    CoachInput(message="Keep searching", league_id="20260002")
+                    CoachInput(
+                        message="Keep searching",
+                        league_id="20260002",
+                        draft_state=SAMPLE_DRAFT_STATE,
+                    )
                 )
 
         invoke.assert_not_called()

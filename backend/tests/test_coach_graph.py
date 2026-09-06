@@ -76,16 +76,26 @@ class CoachGraphTest(unittest.TestCase):
         graph_ask.assert_called_once()
         self.assertEqual(result, dummy)
 
-    def test_compiled_graph_has_expected_nodes_and_no_checkpointer(self) -> None:
+    def test_compiled_graph_has_expected_nodes(self) -> None:
         service = KimiCoachService(
             client=FakeClient([]),
             settings=settings(coach_orchestration="langgraph"),
         )
         graph = service.compiled_coach_graph()
 
-        self.assertIsNone(getattr(graph, "checkpointer", None))
         self.assertEqual(set(GRAPH_NODE_NAMES), set(graph.nodes) - {"__start__"})
         self.assertIs(service.compiled_coach_graph(), graph)
+
+    def test_compiled_graph_can_use_an_in_memory_checkpointer(self) -> None:
+        from langgraph.checkpoint.memory import InMemorySaver
+
+        service = KimiCoachService(
+            client=FakeClient([]),
+            settings=settings(coach_orchestration="langgraph"),
+        )
+        service.checkpointer = InMemorySaver()
+        graph = service.compiled_coach_graph()
+        self.assertIsNotNone(getattr(graph, "checkpointer", None))
 
     def test_initial_state_is_serializable_and_excludes_runtime_objects(self) -> None:
         request = CoachInput(message="What is next?", league_id="20260002")

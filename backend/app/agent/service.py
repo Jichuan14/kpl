@@ -5,28 +5,37 @@ from __future__ import annotations
 import json
 import logging
 import re
-from time import perf_counter, sleep
+from contextvars import ContextVar
+from time import perf_counter
 from typing import Annotated, Any, Literal
 from uuid import uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
+from app.agent.conversation import ConversationStore, filter_raw_history, resolve_follow_up
+from app.agent.errors import CoachClassificationError, CoachUserInputError
 from app.agent.prompts import COACH_SYSTEM_PROMPT
+from app.agent.runtime import RequestBudget, retry_wait_seconds, run_with_optional_clock_sleep
 from app.agent.scope import (
     INTENT_TOOL_ALLOWLIST,
+    MAX_GATE_MESSAGE_LENGTH,
     MISSING_LIVE_BOARD_NOTE,
     SCOPE_GATE_MAX_TOKENS,
     SCOPE_GATE_SYSTEM_PROMPT,
     ScopeDecision,
+    classification_failure_answer,
+    contains_chinese,
     denial_answer,
     denied_decision,
     direct_deny_reason,
+    direct_hypothetical_draft_intent,
     missing_live_board,
     normalize_gate_message,
     reconcile_scope,
     scope_gate_user_payload,
 )
 from app.agent.tool_registry import available_tool_definitions, invoke_tool
+from app.agent.tools.draft import hero_names_in_message
 from app.config import Settings, get_settings
 from app.knowledge.patch_retrieval import PatchIndexUnavailableError
 
@@ -35,7 +44,15 @@ logger = logging.getLogger(__name__)
 DRAFT_TOOL_OPTIONS: dict[str, frozenset[str]] = {
     "predict_next_draft_action": frozenset({"limit"}),
     "simulate_future_draft": frozenset(
-        {"horizon", "choices_per_action", "seed"}
+        {
+            "horizon",
+            "choices_per_action",
+            "seed",
+            "unavailable_hero_names",
+            "start_at_next_pick",
+            "target_side",
+            "combination_size",
+        }
     ),
     "recommend_value_draft_action": frozenset({"top_k", "risk_mode", "seed"}),
     "score_current_lineup": frozenset(),
@@ -60,13 +77,15 @@ PLANNING_LEAK_MARKERS = (
     "i should",
 )
 
-# Moonshot's lowest public org RPM is 3. A tool-using coach question needs
-# a scope-gate call plus at least two coach completions, so a 429 on the
-# last call is common. Wait at least this long; the provider's "retry after
-# 1 second" hint is too short to clear a per-minute window.
-PROVIDER_RATE_LIMIT_RETRIES = 3
+# One retry owner: application-level 429 handling. The OpenAI client is
+# constructed with max_retries=0 so SDK retries are not stacked.
+PROVIDER_RATE_LIMIT_RETRIES = 1
 PROVIDER_RATE_LIMIT_MIN_WAIT_SECONDS = 20
 _RETRY_AFTER_SECONDS_RE = re.compile(r"after\s+(\d+)\s+seconds", re.IGNORECASE)
+_current_budget: ContextVar[RequestBudget | None] = ContextVar(
+    "coach_request_budget",
+    default=None,
+)
 
 
 class KimiConfigurationError(RuntimeError):
@@ -142,6 +161,34 @@ class CoachInput(BaseModel):
     )
     draft_state: CoachDraftState | None = None
     history: list[CoachHistoryTurn] = Field(default_factory=list, max_length=8)
+    response_mode: Literal["quick", "analysis"] = "quick"
+    conversation_id: str | None = Field(default=None, max_length=64)
+    client_request_id: str | None = Field(default=None, max_length=64)
+
+    @field_validator("conversation_id", "client_request_id", mode="before")
+    @classmethod
+    def blank_optional_id(cls, value: object) -> object:
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
+    @field_validator("conversation_id")
+    @classmethod
+    def valid_conversation_id(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        if not re.fullmatch(r"[A-Fa-f0-9-]{16,64}", value):
+            raise ValueError("conversation_id is not valid")
+        return value
+
+    @field_validator("client_request_id")
+    @classmethod
+    def valid_client_request_id(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        if not re.fullmatch(r"[A-Fa-f0-9-]{8,64}", value):
+            raise ValueError("client_request_id is not valid")
+        return value
 
 
 def build_kimi_client(settings: Settings | None = None):
@@ -166,6 +213,7 @@ def build_kimi_client(settings: Settings | None = None):
         api_key=api_key,
         base_url=configuration.kimi_base_url,
         timeout=configuration.kimi_timeout_seconds,
+        max_retries=0,
     )
 
 
@@ -177,28 +225,69 @@ class KimiCoachService:
         *,
         client: Any | None = None,
         settings: Settings | None = None,
+        conversation_store: ConversationStore | None = None,
+        checkpointer: Any | None = None,
     ):
         self.settings = settings or get_settings()
         self.client = client or build_kimi_client(self.settings)
         self._compiled_coach_graph = None
+        self.conversation_store = conversation_store or ConversationStore()
+        self.checkpointer = checkpointer
+        self.clock = None
 
     def compiled_coach_graph(self):
         """Compile the LangGraph orchestrator once per service instance."""
         if self._compiled_coach_graph is None:
             from app.agent.graph import build_coach_graph
 
-            self._compiled_coach_graph = build_coach_graph(self)
+            self._compiled_coach_graph = build_coach_graph(
+                self,
+                checkpointer=self.checkpointer,
+            )
         return self._compiled_coach_graph
+
+    def clear_conversation_session(self, session_id: str) -> None:
+        """Delete authorized conversation metadata and its LangGraph threads."""
+        conversation_ids = self.conversation_store.conversation_ids_for_session(
+            session_id
+        )
+        if self.checkpointer is not None:
+            delete_thread = getattr(self.checkpointer, "delete_thread", None)
+            if callable(delete_thread):
+                for conversation_id in conversation_ids:
+                    delete_thread(conversation_id)
+        self.conversation_store.clear_session(session_id)
+
+    def close(self) -> None:
+        """Release local persistence handles owned by the reusable service."""
+        self.conversation_store.close()
+        connection = getattr(self.checkpointer, "conn", None)
+        if connection is not None:
+            connection.close()
 
     def ask(
         self,
         request: CoachInput,
         *,
         request_id: str | None = None,
+        conversation_ref: dict[str, Any] | None = None,
+        conversation_id: str | None = None,
+        budget: Any | None = None,
+        config: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         request_id = request_id or uuid4().hex
         started = perf_counter()
         normalized_message = normalize_gate_message(request.message)
+        if not normalized_message:
+            raise CoachUserInputError(
+                "empty_input",
+                "Please enter a question.",
+            )
+        if len(normalized_message) > MAX_GATE_MESSAGE_LENGTH:
+            raise CoachUserInputError(
+                "input_too_long",
+                "The question is too long. Please keep it within 4,000 characters.",
+            )
         usage = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
         if self.settings.coach_orchestration == "langgraph":
             return self._ask_langgraph(
@@ -207,6 +296,10 @@ class KimiCoachService:
                 normalized_message=normalized_message,
                 usage=usage,
                 started=started,
+                conversation_ref=conversation_ref,
+                conversation_id=conversation_id,
+                budget=budget,
+                config=config,
             )
         return self._ask_legacy(
             request,
@@ -224,6 +317,10 @@ class KimiCoachService:
         normalized_message: str,
         usage: dict[str, int],
         started: float,
+        conversation_ref: dict[str, Any] | None = None,
+        conversation_id: str | None = None,
+        config: dict[str, Any] | None = None,
+        budget: Any | None = None,
     ) -> dict[str, Any]:
         from app.agent.graph import run_coach_graph
 
@@ -234,6 +331,10 @@ class KimiCoachService:
             normalized_message=normalized_message,
             usage=usage,
             started=started,
+            conversation_ref=conversation_ref,
+            conversation_id=conversation_id,
+            config=config,
+            budget=budget,
         )
 
     def _ask_legacy(
@@ -351,6 +452,7 @@ class KimiCoachService:
         decision: ScopeDecision,
         normalized_message: str,
         usage: dict[str, int],
+        conversation_reference: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
         """Build the trusted Kimi context after the scope gate has allowed."""
         intents = decision.resolved_intents()
@@ -359,36 +461,32 @@ class KimiCoachService:
             request.draft_state if decision.query_scope == "current_draft" else None
         )
         board_missing = missing_live_board(intents, has_draft_state=has_draft_state)
-        max_sentences = 6 if len(intents) > 1 else 3
+        response_mode = request.response_mode
+        if response_mode == "analysis" and not self.settings.coach_enable_analysis:
+            response_mode = "quick"
         payload: dict[str, Any] = {
             "question": normalized_message,
             "league_id": request.league_id,
             "intents": intents,
             "analysis_scope": decision.query_scope,
             "dropped_unrelated": decision.dropped_unrelated,
+            "response_mode": response_mode,
             "draft_state": (
                 active_draft_state.model_dump(mode="json")
                 if active_draft_state is not None
                 else None
             ),
-            "response_style": {
-                "language": "match the question",
-                "format": "concise plain language",
-                "normal_answer_max_sentences": max_sentences,
-                "markdown_tables": False,
-            },
+            "response_style": response_style_for_mode(response_mode, intents),
         }
         if board_missing:
             payload["missing_live_board"] = True
             payload["note"] = MISSING_LIVE_BOARD_NOTE
+        if conversation_reference:
+            payload["conversation_reference"] = conversation_reference
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": COACH_SYSTEM_PROMPT},
         ]
-        history, history_usage = self._trusted_history(
-            request.history,
-            request_id=request_id,
-        )
-        self._add_usage(usage, history_usage)
+        history = self._trusted_history(request.history)
         if history:
             messages.append(
                 {
@@ -431,14 +529,31 @@ class KimiCoachService:
             return self.client.chat.completions.create(**request)
 
         last_error: BaseException | None = None
+        budget = _current_budget.get()
         for attempt in range(PROVIDER_RATE_LIMIT_RETRIES + 1):
+            if budget is not None and not budget.allow_provider_call():
+                raise last_error or RuntimeError("Kimi ran out of request budget")
             try:
-                return self.client.chat.completions.create(**request)
+                if budget is not None:
+                    budget.record_provider_call()
+                current_request = request
+                if budget is not None:
+                    current_request = {
+                        **request,
+                        "timeout": budget.provider_timeout(),
+                    }
+                return self.client.chat.completions.create(**current_request)
             except RateLimitError as exc:
                 last_error = exc
-                if attempt >= PROVIDER_RATE_LIMIT_RETRIES:
+                wait_seconds = retry_wait_seconds(
+                    float(provider_retry_after_seconds(exc)),
+                    budget,
+                    minimum=float(PROVIDER_RATE_LIMIT_MIN_WAIT_SECONDS),
+                )
+                if wait_seconds is None or attempt >= PROVIDER_RATE_LIMIT_RETRIES:
                     raise
-                wait_seconds = provider_retry_after_seconds(exc)
+                if budget is not None:
+                    budget.record_provider_retry()
                 logger.warning(
                     "coach_provider_rate_limited",
                     extra={
@@ -447,7 +562,11 @@ class KimiCoachService:
                         "wait_seconds": wait_seconds,
                     },
                 )
-                sleep(wait_seconds)
+                run_with_optional_clock_sleep(
+                    wait_seconds,
+                    budget,
+                    sleeper=self.clock.sleep if self.clock is not None else None,
+                )
         raise last_error or RuntimeError("Kimi rate limit retry failed")
 
     def _completion(
@@ -457,12 +576,13 @@ class KimiCoachService:
         round_index: int,
         *,
         allowed_tools: frozenset[str],
+        response_mode: str = "quick",
     ):
         started = perf_counter()
         request: dict[str, Any] = {
             "model": self.settings.kimi_model,
             "messages": messages,
-            "max_tokens": self.settings.kimi_max_output_tokens,
+            "max_tokens": self._output_token_budget(response_mode),
             "extra_body": {"thinking": {"type": "disabled"}},
         }
         if allowed_tools:
@@ -485,9 +605,17 @@ class KimiCoachService:
         message: str,
         *,
         request_id: str,
+        reference: dict[str, Any] | None = None,
     ) -> tuple[ScopeDecision, Any | None]:
         """Classify input without exposing it to the tool-capable coach."""
         blocked_reason = direct_deny_reason(message)
+        if blocked_reason == "empty_message":
+            raise CoachUserInputError("empty_input", "Please enter a question.")
+        if blocked_reason == "message_too_long":
+            raise CoachUserInputError(
+                "input_too_long",
+                "The question is too long. Please keep it within 4,000 characters.",
+            )
         if blocked_reason:
             return denied_decision(blocked_reason), None
         response = self._provider_create(
@@ -495,7 +623,13 @@ class KimiCoachService:
                 "model": self.settings.kimi_model,
                 "messages": [
                     {"role": "system", "content": SCOPE_GATE_SYSTEM_PROMPT},
-                    {"role": "user", "content": scope_gate_user_payload(message)},
+                    {
+                        "role": "user",
+                        "content": scope_gate_user_payload(
+                            message,
+                            reference=reference,
+                        ),
+                    },
                 ],
                 "max_tokens": SCOPE_GATE_MAX_TOKENS,
                 "extra_body": {"thinking": {"type": "disabled"}},
@@ -512,9 +646,29 @@ class KimiCoachService:
                 "coach_scope_gate_invalid_response",
                 extra={"request_id": request_id},
             )
-            return denied_decision("invalid_gate_response"), getattr(
-                response, "usage", None
-            )
+            raise CoachClassificationError(classification_failure_answer(message)) from None
+        follow_up = resolve_follow_up(message, reference)
+        if (
+            decision.decision == "deny"
+            and follow_up.get("refers_to_prior")
+            and reference
+            and not reference.get("stale_season")
+        ):
+            prior_intents = [
+                intent
+                for intent in (
+                    list(reference.get("intents") or [])
+                    or [reference.get("previous_intent")]
+                )
+                if intent in INTENT_TOOL_ALLOWLIST
+            ][:3]
+            if prior_intents:
+                decision = ScopeDecision(
+                    decision="allow",
+                    intents=prior_intents,
+                    query_scope="league_wide",
+                    reason_code="contextual_follow_up",
+                )
         intents = decision.resolved_intents()
         if decision.decision == "allow" and (
             not intents or any(intent not in INTENT_TOOL_ALLOWLIST for intent in intents)
@@ -523,41 +677,48 @@ class KimiCoachService:
                 response, "usage", None
             )
         if decision.decision == "allow":
+            if direct_hypothetical_draft_intent(message):
+                intents = [
+                    intent for intent in decision.resolved_intents()
+                    if intent != "draft_prediction"
+                ]
+                if "draft_simulation" not in intents:
+                    intents.insert(0, "draft_simulation")
+                decision = decision.model_copy(
+                    update={"intents": intents[:3], "intent": intents[0]}
+                )
             decision = reconcile_scope(decision)
         return decision, getattr(response, "usage", None)
 
     def _trusted_history(
         self,
         turns: list[CoachHistoryTurn],
+    ) -> list[dict[str, str]]:
+        """Filter raw client history locally. Do not reclassify prior turns."""
+        return filter_raw_history(turns)
+
+    def _output_token_budget(self, response_mode: str | None = None) -> int:
+        if response_mode == "analysis":
+            return self.settings.kimi_analysis_max_output_tokens
+        return self.settings.kimi_max_output_tokens
+
+    def _rewrite_answer(
+        self,
+        answer: str,
         *,
         request_id: str,
-    ) -> tuple[list[dict[str, str]], dict[str, int]]:
-        """Reclassify client history before using it as untrusted reference data."""
-        accepted: list[dict[str, str]] = []
-        usage = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
-        for turn in turns[-4:]:
-            question = normalize_gate_message(turn.user)
-            answer = normalize_gate_message(turn.assistant)
-            if len(question) > 1_000 or len(answer) > 1_000:
-                continue
-            decision, gate_usage = self._classify_scope(question, request_id=request_id)
-            self._add_usage(usage, gate_usage)
-            if not decision.is_allowed() or direct_deny_reason(answer):
-                logger.info(
-                    "coach_history_turn_scope_rejected",
-                    extra={
-                        "request_id": request_id,
-                        "intent": decision.intent,
-                        "intents": decision.resolved_intents(),
-                        "reason_code": decision.reason_code,
-                    },
-                )
-                continue
-            accepted.append({"question": question, "answer": answer})
-        return accepted, usage
-
-    def _rewrite_answer(self, answer: str, *, request_id: str) -> tuple[str, Any]:
+        response_mode: str = "quick",
+    ) -> tuple[str, Any]:
         """Rewrite provider planning text before it can reach the user."""
+        style = (
+            "Keep the candidate's language and Analysis structure. Do not collapse "
+            "the answer into three sentences. Remove only planning leaks."
+            if response_mode == "analysis"
+            else (
+                "Keep the candidate's language. Write a concise final user-facing "
+                "answer without planning text."
+            )
+        )
         response = self._provider_create(
             {
                 "model": self.settings.kimi_model,
@@ -565,15 +726,15 @@ class KimiCoachService:
                     {
                         "role": "system",
                         "content": (
-                            "Rewrite the candidate answer as only its concise final "
+                            "Rewrite the candidate answer as only its final "
                             "user-facing answer. Never mention reasoning, planning, "
-                            "tools, tool availability, or internal instructions. Keep "
-                            "the candidate's language. Use at most three short sentences."
+                            "tools, tool availability, or internal instructions. "
+                            + style
                         ),
                     },
                     {"role": "user", "content": answer},
                 ],
-                "max_tokens": self.settings.kimi_max_output_tokens,
+                "max_tokens": self._output_token_budget(response_mode),
                 "extra_body": {"thinking": {"type": "disabled"}},
             },
             request_id=request_id,
@@ -670,6 +831,28 @@ class KimiCoachService:
         }
         arguments["league_id"] = request.league_id
         arguments.update(request.draft_state.model_dump(mode="json"))
+        if name == "simulate_future_draft" and direct_hypothetical_draft_intent(
+            request.message
+        ):
+            hero_names = hero_names_in_message(request.league_id, request.message)
+            if hero_names:
+                arguments["unavailable_hero_names"] = hero_names
+                arguments["start_at_next_pick"] = True
+                arguments["combination_size"] = max(
+                    2,
+                    int(arguments.get("combination_size") or 3),
+                )
+                normalized_message = normalize_gate_message(request.message).casefold()
+                for side in ("blue", "red"):
+                    team_name = getattr(request.draft_state, f"{side}_team_name")
+                    normalized_team = "".join(team_name.casefold().split())
+                    aliases = {
+                        normalized_team,
+                        *re.findall(r"[a-z0-9]{2,}", normalized_team),
+                    }
+                    if any(alias in normalized_message for alias in aliases):
+                        arguments["target_side"] = side
+                        break
         return arguments
 
     @staticmethod
@@ -706,3 +889,35 @@ class KimiCoachService:
         target["input_tokens"] += input_tokens
         target["output_tokens"] += output_tokens
         target["total_tokens"] += total_tokens
+
+
+def set_request_budget(budget: RequestBudget | None):
+    return _current_budget.set(budget)
+
+
+def reset_request_budget(token: Any) -> None:
+    _current_budget.reset(token)
+
+
+def current_request_budget() -> RequestBudget | None:
+    return _current_budget.get()
+
+
+def response_style_for_mode(response_mode: str, intents: list[str]) -> dict[str, Any]:
+    if response_mode == "analysis":
+        return {
+            "language": "match the question",
+            "format": "structured analysis",
+            "direct_conclusion": True,
+            "evidence_reasons": 3,
+            "compare_alternatives": True,
+            "include_uncertainty": True,
+            "markdown_tables": False,
+        }
+    max_sentences = 6 if len(intents) > 1 else 3
+    return {
+        "language": "match the question",
+        "format": "concise plain language",
+        "normal_answer_max_sentences": max_sentences,
+        "markdown_tables": False,
+    }

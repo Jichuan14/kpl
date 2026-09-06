@@ -31,7 +31,17 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.add_middleware(GZipMiddleware, minimum_size=1000)
+class CoachStreamGZipMiddleware(GZipMiddleware):
+    """Do not buffer Draft Coach streaming responses."""
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") == "http" and scope.get("path") == "/api/coach/stream":
+            await self.app(scope, receive, send)
+            return
+        await super().__call__(scope, receive, send)
+
+
+app.add_middleware(CoachStreamGZipMiddleware, minimum_size=1000)
 
 app.include_router(leagues.router)
 app.include_router(bp.router)
