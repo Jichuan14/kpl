@@ -38,6 +38,9 @@ analysis/outputs/*/draft_model.json
 .DS_Store
 *.log
 
+# Local Codex design skill installation
+.agents/skills/impeccable/
+
 # Node (frontend later)
 node_modules/
 dist/
