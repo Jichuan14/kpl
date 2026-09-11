@@ -5,9 +5,11 @@ import {
   fetchHeroMatchupRecommendations,
   fetchHeroResponses,
   fetchLearnedFeatureSpace,
-  fetchVisualizationSeasons,
 } from "./api";
-import { selectAvailableLeague, selectedLeagueId } from "./selectedLeague";
+import { selectedLeagueId } from "./selectedLeague";
+import { useLatestRequest } from "./composables/useLatestRequest";
+import { useSeasonCatalog } from "./composables/useSeasonCatalog";
+import { getStored, setStored } from "./storage";
 import { heroAsset } from "./heroAssets";
 import { mechanicLabel } from "./heroMechanicLabels";
 import { heroSearchAliases } from "./heroSearchAliases";
@@ -32,7 +34,8 @@ const MATCHUP_INSTRUCTIONS_SEEN_KEY = "draft-atlas-matchup-instructions-seen";
 const MAX_FAVORITE_HEROES = 12;
 const playableLanes = ["clash", "mid", "jungle", "farm", "roam"];
 
-const seasons = ref([]);
+const { seasons, loadSeasons } = useSeasonCatalog();
+const latestFeatureSpace = useLatestRequest();
 const leagueId = selectedLeagueId;
 const payload = shallowRef(null);
 const responses = shallowRef(null);
@@ -52,15 +55,15 @@ const matchupLoading = ref(false);
 const matchupError = ref("");
 const matchupRecommendationsExpanded = ref(false);
 const showMatchupInstructions = ref(
-  window.localStorage.getItem(MATCHUP_INSTRUCTIONS_SEEN_KEY) !== "true"
+  getStored(MATCHUP_INSTRUCTIONS_SEEN_KEY) !== "true"
 );
 const zoom = ref(1);
 const pan = ref({ x: 0, y: 0 });
 const dragState = ref(null);
 const activePointers = new Map();
 let pinchState = null;
-let requestController = null;
 let matchupRequestNumber = 0;
+let featureLoadVersion = 0;
 
 const laneLabels = {
   clash: "Clash",
@@ -255,7 +258,7 @@ function selectHero(heroId) {
 
 function persistFavorites() {
   try {
-    window.localStorage.setItem(
+    setStored(
       FAVORITE_HERO_STORAGE_KEY,
       JSON.stringify(favoriteHeroIds.value.map(Number))
     );
@@ -267,7 +270,7 @@ function persistFavorites() {
 function dismissMatchupInstructions() {
   showMatchupInstructions.value = false;
   try {
-    window.localStorage.setItem(MATCHUP_INSTRUCTIONS_SEEN_KEY, "true");
+    setStored(MATCHUP_INSTRUCTIONS_SEEN_KEY, "true");
   } catch {
     // The hint stays hidden for this visit if persistent storage is unavailable.
   }
@@ -276,7 +279,7 @@ function dismissMatchupInstructions() {
 function selectPreferredLane(lane) {
   preferredLane.value = preferredLane.value === lane ? "" : lane;
   try {
-    window.localStorage.setItem(PLAYED_LANE_STORAGE_KEY, preferredLane.value);
+    setStored(PLAYED_LANE_STORAGE_KEY, preferredLane.value);
   } catch {
     // The selected lane remains available for this session when storage is blocked.
   }
@@ -482,28 +485,26 @@ function laneLabel(lane) {
   return t(laneLabels[lane] || laneLabels.unknown);
 }
 
-async function loadSeasons() {
-  seasons.value = (await fetchVisualizationSeasons()) || [];
-  selectAvailableLeague(seasons.value);
-}
-
 async function loadFeatureSpace() {
   if (!leagueId.value) return;
-  requestController?.abort();
-  const controller = new AbortController();
-  requestController = controller;
+  const loadVersion = ++featureLoadVersion;
   loading.value = true;
   error.value = "";
   payload.value = null;
   responses.value = null;
   historicalLineups.value = [];
   try {
+    const result = await latestFeatureSpace(async (signal, current) => {
     const [featureSpace, responseData, historicalData] = await Promise.all([
       fetchLearnedFeatureSpace(leagueId.value),
-      fetchHeroResponses(leagueId.value, { signal: controller.signal }).catch(() => null),
-      fetchBattleLineups(leagueId.value, { signal: controller.signal }).catch(() => null),
+      fetchHeroResponses(leagueId.value, { signal }).catch(() => null),
+      fetchBattleLineups(leagueId.value, { signal }).catch(() => null),
     ]);
-    if (requestController !== controller) return;
+    if (!current()) return null;
+    return { featureSpace, responseData, historicalData };
+    });
+    if (!result) return;
+    const { featureSpace, responseData, historicalData } = result;
     payload.value = featureSpace;
     responses.value = responseData;
     historicalLineups.value = historicalData?.battles || [];
@@ -514,13 +515,13 @@ async function loadFeatureSpace() {
     let storedFavoriteIds = [];
     let hasStoredFavoritePool = false;
     try {
-      const storedValue = window.localStorage.getItem(FAVORITE_HERO_STORAGE_KEY);
+      const storedValue = getStored(FAVORITE_HERO_STORAGE_KEY);
       hasStoredFavoritePool = storedValue !== null;
       const stored = JSON.parse(storedValue || "[]");
       if (Array.isArray(stored)) storedFavoriteIds = stored.map(Number);
       if (!hasStoredFavoritePool && !storedFavoriteIds.length) {
         const legacy = Number(
-          window.localStorage.getItem(LEGACY_FAVORITE_HERO_STORAGE_KEY)
+          getStored(LEGACY_FAVORITE_HERO_STORAGE_KEY)
         );
         if (legacy) storedFavoriteIds = [legacy];
       }
@@ -532,7 +533,7 @@ async function loadFeatureSpace() {
       .filter((heroId) => availableIds.has(heroId))
       .slice(0, MAX_FAVORITE_HEROES);
     try {
-      const storedLane = window.localStorage.getItem(PLAYED_LANE_STORAGE_KEY) || "";
+      const storedLane = getStored(PLAYED_LANE_STORAGE_KEY, "") || "";
       preferredLane.value = favoriteHeroIds.value.length && playableLanes.includes(storedLane)
         ? storedLane
         : "";
@@ -546,11 +547,10 @@ async function loadFeatureSpace() {
     showAllHeroes.value = false;
     resetView();
   } catch (err) {
-    if (requestController !== controller) return;
     if (err.name === "AbortError") return;
     error.value = t("No learned feature space is available for this season. Train the learnable model first.");
   } finally {
-    if (requestController === controller) loading.value = false;
+    if (loadVersion === featureLoadVersion) loading.value = false;
   }
 }
 
@@ -567,7 +567,6 @@ watch(leagueId, () => {
   matchupRequestNumber += 1;
   loadFeatureSpace();
 });
-onBeforeUnmount(() => requestController?.abort());
 </script>
 
 <template>

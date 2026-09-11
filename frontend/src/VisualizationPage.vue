@@ -4,14 +4,16 @@ import {
   fetchMetaHistory,
   fetchPatternManifest,
   fetchVisualizationPatterns,
-  fetchVisualizationSeasons,
 } from "./api";
-import { selectAvailableLeague, selectedLeagueId } from "./selectedLeague";
+import { selectedLeagueId } from "./selectedLeague";
+import { useLatestRequest } from "./composables/useLatestRequest";
+import { useSeasonCatalog } from "./composables/useSeasonCatalog";
 import { heroAsset } from "./heroAssets";
 import { language, t } from "./i18n";
 import { finishStartupLoading } from "./startupLoader";
 
-const seasons = ref([]);
+const { seasons, loadSeasons } = useSeasonCatalog();
+const latestPatterns = useLatestRequest();
 const leagueId = selectedLeagueId;
 const payload = shallowRef(null);
 const loading = ref(false);
@@ -31,9 +33,9 @@ const support = ref(3);
 const resultCount = ref("20");
 const search = ref("");
 const debouncedSearch = ref("");
-let patternController = null;
 let searchTimer = null;
 let relationScrollY = null;
+let patternLoadVersion = 0;
 
 const relationOptions = [
   { value: "counter_pick", label: "Counter picks", short: "Counter picks" },
@@ -244,45 +246,39 @@ function metaPickWidth(hero) {
   )}%`;
 }
 
-async function loadSeasons() {
-  seasons.value = (await fetchVisualizationSeasons()) || [];
-  selectAvailableLeague(seasons.value);
-}
-
 async function loadPatterns() {
   if (!leagueId.value) return;
-  patternController?.abort();
-  const controller = new AbortController();
-  patternController = controller;
+  const loadVersion = ++patternLoadVersion;
   loading.value = true;
   error.value = "";
   try {
-    const [manifest, patterns] = await Promise.all([
-      fetchPatternManifest(leagueId.value, { signal: controller.signal }),
+    const result = await latestPatterns(async (signal, current) => {
+      const [manifest, patterns] = await Promise.all([
+      fetchPatternManifest(leagueId.value, { signal }),
       fetchVisualizationPatterns({
         leagueId: leagueId.value,
         minSelections: 2,
         relation: relation.value,
         context: context.value,
-        signal: controller.signal,
+        signal,
       }),
     ]);
-    if (patternController !== controller) return;
-    payload.value = { ...manifest, rows: patterns.rows || [] };
+      return current() ? { ...manifest, rows: patterns.rows || [] } : null;
+    });
+    if (!result) return;
+    payload.value = result;
   } catch (err) {
-    if (patternController !== controller) return;
     if (err.name === "AbortError") return;
     payload.value = null;
     error.value = err.message || "Could not load this season's patterns.";
   } finally {
-    if (patternController === controller) {
+      if (loadVersion !== patternLoadVersion) return;
       loading.value = false;
       if (relationScrollY != null) {
         const scrollY = relationScrollY;
         relationScrollY = null;
         window.requestAnimationFrame(() => window.scrollTo({ top: scrollY, behavior: "auto" }));
       }
-    }
   }
 }
 
@@ -330,7 +326,6 @@ watch(relation, () => {
   if (relation.value !== "ban_response") responseScope.value = "all";
 });
 onBeforeUnmount(() => {
-  patternController?.abort();
   if (searchTimer) window.clearTimeout(searchTimer);
 });
 </script>

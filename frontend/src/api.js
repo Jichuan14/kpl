@@ -46,13 +46,17 @@ async function request(path, options = {}) {
 }
 
 const staticCache = new Map();
+const STATIC_CACHE_TTL = 5 * 60_000;
 
 async function staticData(path, { signal, cache = true } = {}) {
-  if (cache && staticCache.has(path)) return staticCache.get(path);
+  // Never share a caller-owned AbortSignal: aborting one view must not abort a
+  // concurrent consumer of the same published artifact.
+  const cached = staticCache.get(path);
+  if (cache && cached && cached.expiresAt > Date.now()) return cached.promise;
   const load = (async () => {
   let res;
   try {
-    res = await fetch(path, { signal });
+    res = await fetch(path, { signal: cache ? undefined : signal });
   } catch (err) {
     if (err.name === "AbortError") throw err;
     throw new Error(`Cannot load published analysis (${err.message}).`);
@@ -63,11 +67,19 @@ async function staticData(path, { signal, cache = true } = {}) {
   return res.json();
   })();
   if (cache) {
-    staticCache.set(path, load);
-    load.catch(() => staticCache.delete(path));
+    staticCache.set(path, { promise: load, expiresAt: Date.now() + STATIC_CACHE_TTL });
+    load.catch(() => { if (staticCache.get(path)?.promise === load) staticCache.delete(path); });
   }
   return load;
 }
+
+export function invalidatePublishedData(leagueId) {
+  const prefix = leagueId ? `/assets/data/${encodeURIComponent(leagueId)}/` : "/assets/data/";
+  for (const path of staticCache.keys()) if (path.startsWith(prefix)) staticCache.delete(path);
+}
+
+// Kept intentionally small and explicit for deterministic browser-client tests.
+export function resetPublishedDataCacheForTests() { staticCache.clear(); }
 
 export function fetchLeagues() {
   return request("/api/leagues");
@@ -169,9 +181,9 @@ export function fetchBattleLineups(leagueId, options) {
   return staticData(`/assets/data/${encodeURIComponent(leagueId)}/battle-lineups.json`, options);
 }
 
-export function fetchTeamSynergies({ leagueId, minSelections = 2 }) {
+export function fetchTeamSynergies({ leagueId, minSelections = 2, signal } = {}) {
   void minSelections;
-  return staticData(`/assets/data/${encodeURIComponent(leagueId)}/team-synergies.json`);
+  return staticData(`/assets/data/${encodeURIComponent(leagueId)}/team-synergies.json`, { signal });
 }
 
 export function fetchPowerRankings(leagueId, options) {
@@ -371,7 +383,7 @@ export function publishFrontendAssets(leagueId) {
   return request("/api/pipeline/publish", {
     method: "POST",
     body: JSON.stringify({ league_id: leagueId }),
-  });
+  }).then((result) => { invalidatePublishedData(leagueId); return result; });
 }
 
 export function fetchHeroBp({ leagueId, sort = "presence", limit = 40 } = {}) {

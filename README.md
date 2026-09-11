@@ -1,5 +1,13 @@
 # Draft Atlas
 
+## Frontend architecture
+
+The Vue frontend uses history-mode Vue Router for page URLs and route-level lazy
+loading. Shared `useSeasonCatalog`, `useLatestRequest`, and `usePolling`
+composables keep season readiness filtering, cancellation, and monitor lifecycle
+consistent across views. Published JSON artifacts are cached with bounded
+freshness; publishing explicitly invalidates the affected season cache.
+
 Draft Atlas is a local-first exploration tool for **King Pro League (KPL)**
 ban/pick data. It downloads official match data into SQLite, turns completed
 seasons into analysis artifacts, and presents the results through an interactive

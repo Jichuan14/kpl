@@ -1,18 +1,20 @@
 <script setup>
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onMounted, ref, shallowRef, watch } from "vue";
 import {
   fetchTeamSynergies,
-  fetchVisualizationSeasons,
 } from "./api";
+import { useLatestRequest } from "./composables/useLatestRequest";
+import { useSeasonCatalog } from "./composables/useSeasonCatalog";
 import { selectAvailableLeague, selectedLeagueId } from "./selectedLeague";
 import { heroAsset } from "./heroAssets";
 import { language } from "./i18n";
 import { finishStartupLoading } from "./startupLoader";
 
-const seasons = ref([]);
+const { seasons, loadSeasons } = useSeasonCatalog((season) => season.team_synergy_ready);
+const latestRequest = useLatestRequest();
 const leagueId = selectedLeagueId;
 const teamId = ref("");
-const payload = ref(null);
+const payload = shallowRef(null);
 const loading = ref(false);
 const error = ref("");
 
@@ -111,21 +113,18 @@ function selectTeam(nextTeamId) {
   teamDirectoryOpen.value = false;
 }
 
-async function loadSeasons() {
-  const allSeasons = (await fetchVisualizationSeasons()) || [];
-  seasons.value = allSeasons.filter((season) => season.team_synergy_ready);
-  selectAvailableLeague(seasons.value);
-}
-
 async function loadTeamSynergies() {
   if (!leagueId.value) return;
   loading.value = true;
   error.value = "";
   try {
-    payload.value = await fetchTeamSynergies({
+    const next = await latestRequest((signal, current) => fetchTeamSynergies({
       leagueId: leagueId.value,
       minSelections: 2,
-    });
+      signal,
+    }).then((value) => current() ? value : null));
+    if (!next) return;
+    payload.value = next;
     if (!teams.value.some((team) => team.team_id === teamId.value)) {
       teamId.value = teams.value[0]?.team_id || "";
     }

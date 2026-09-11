@@ -1,10 +1,11 @@
 import { ref, watch } from "vue";
+import { getStored, setStored } from "./storage";
 
 const storageKey = "kpl-lab-language";
 
 // Chinese is intentionally the first-run default. Visitors can switch to English
 // and their choice is retained for subsequent visits.
-const savedLanguage = window.localStorage.getItem(storageKey);
+const savedLanguage = getStored(storageKey);
 export const language = ref(savedLanguage === "en" ? "en" : "zh-CN");
 
 export const messages = {
@@ -1029,7 +1030,7 @@ export function setupPageLocalization() {
 }
 
 watch(language, (value) => {
-  window.localStorage.setItem(storageKey, value);
+  setStored(storageKey, value);
   document.documentElement.lang = value;
   document.title = value === "zh-CN" ? "Draft Atlas · 赛事 BP 数据学习工具" : "Draft Atlas · Draft learning tool";
   translateTree();

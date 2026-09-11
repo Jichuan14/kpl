@@ -19,6 +19,7 @@ Generated artifact locations and Git policy: `ARTIFACTS.md`
 | Question or task | Start here | Related locations |
 | --- | --- | --- |
 | App routes, navigation, season selection, management UI | `frontend/src/App.vue` | `frontend/src/selectedLeague.js`, `frontend/src/style.css` |
+| Frontend routing and shared async behavior | `frontend/src/router.js` | `frontend/src/composables/`, `frontend/src/storage.js` |
 | Hero comparison, matchup recommendations, feature space | `frontend/src/HeroFeatureSpacePage.vue` | `frontend/src/LineupAnalyzerWidget.vue`, `frontend/src/heroAssets.js` |
 | BP relationship evidence and season priorities | `frontend/src/VisualizationPage.vue` | `frontend/src/api.js`, `CALCULATION_METHODOLOGY.md` sections 3–6 |
 | BP simulator | `frontend/src/DraftSimulatorPage.vue` | `frontend/src/DraftCoachPanel.vue`, `backend/app/api/simulation.py`, `backend/app/services/draft_simulator.py` |
