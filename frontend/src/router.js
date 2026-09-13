@@ -3,7 +3,6 @@ import { createRouter, createWebHistory } from "vue-router";
 import RouteLoadError from "./RouteLoadError.vue";
 const lazy = (loader) => defineAsyncComponent({ loader, timeout: 15000, errorComponent: RouteLoadError });
 export const routes = [
-  { path: "/new/:section?/:view?", component: () => import("./NewAtlasPage.vue") },
   { path: "/", component: lazy(() => import("./HeroFeatureSpacePage.vue")) },
   { path: "/feature-space/:pathMatch(.*)*", component: lazy(() => import("./HeroFeatureSpacePage.vue")) },
   { path: "/bp-data/:pathMatch(.*)*", component: lazy(() => import("./VisualizationPage.vue")) },

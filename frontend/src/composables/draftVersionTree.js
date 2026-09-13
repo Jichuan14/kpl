@@ -1,158 +1,94 @@
 export function copyVersionAction(entry) {
-  return {
-    field: String(entry.field),
-    heroId: Number(entry.heroId),
-    bpOrder: Number(entry.bpOrder),
-  };
+  return { field: String(entry.field), heroId: Number(entry.heroId), bpOrder: Number(entry.bpOrder) };
 }
 
 export function snapshotVersionState(state) {
   return {
     board: {
-      blue_picks: [...state.board.blue_picks].map(Number),
-      red_picks: [...state.board.red_picks].map(Number),
-      blue_bans: [...state.board.blue_bans].map(Number),
-      red_bans: [...state.board.red_bans].map(Number),
+      blue_picks: [...state.board.blue_picks].map(Number), red_picks: [...state.board.red_picks].map(Number),
+      blue_bans: [...state.board.blue_bans].map(Number), red_bans: [...state.board.red_bans].map(Number),
     },
-    bpOrder: Number(state.bpOrder),
-    history: [...state.history].map(copyVersionAction),
-    blueUsed: [...state.blueUsed].map(Number),
-    redUsed: [...state.redUsed].map(Number),
+    bpOrder: Number(state.bpOrder), history: [...state.history].map(copyVersionAction),
+    blueUsed: [...state.blueUsed].map(Number), redUsed: [...state.redUsed].map(Number),
   };
-}
-
-export function cloneVersionNode(node) {
-  if (node.type === "segment") {
-    return {
-      id: node.id,
-      type: "segment",
-      actions: [...node.actions].map(copyVersionAction),
-      state: node.state ? snapshotVersionState(node.state) : null,
-    };
-  }
-  return {
-    id: node.id,
-    type: "fork",
-    selectedBranchId: node.selectedBranchId ?? null,
-    baseState: node.baseState ? snapshotVersionState(node.baseState) : null,
-    branches: [...(node.branches || [])].map((branch) => ({
-      id: branch.id,
-      actions: [...branch.actions].map(copyVersionAction),
-      state: branch.state ? snapshotVersionState(branch.state) : null,
-    })),
-  };
-}
-
-export function createVersionSegment(id, actions, state) {
-  return {
-    id,
-    type: "segment",
-    actions: [...actions].map(copyVersionAction),
-    state: snapshotVersionState(state),
-  };
-}
-
-export function createVersionFork(id, baseState) {
-  return {
-    id,
-    type: "fork",
-    branches: [],
-    selectedBranchId: null,
-    baseState: snapshotVersionState(baseState),
-  };
-}
-
-export function updateVersionFork(nodes, payload) {
-  return nodes.map((node) => {
-    if (node.id !== payload.sessionId || node.type !== "fork") return cloneVersionNode(node);
-    return {
-      ...cloneVersionNode(node),
-      selectedBranchId: payload.selectedBranchId ?? node.selectedBranchId,
-      branches: payload.branches
-        .map((branch) => ({
-          id: branch.id,
-          actions: [...branch.actions].map(copyVersionAction),
-          state: branch.state ? snapshotVersionState(branch.state) : null,
-        }))
-        .filter((branch) => branch.actions.length),
-    };
-  });
-}
-
-export function pinVersionForkBranch(nodes, sessionId, branch, selectedBranchId = null) {
-  const pinned = {
-    id: branch.id,
-    actions: [...(branch.actions || [])].map(copyVersionAction),
-    state: branch.state ? snapshotVersionState(branch.state) : null,
-  };
-  return nodes.map((node) => {
-    if (node.id !== sessionId || node.type !== "fork") return cloneVersionNode(node);
-    const next = cloneVersionNode(node);
-    const index = next.branches.findIndex((item) => sameVersionId(item.id, pinned.id));
-    if (!pinned.actions.length) {
-      if (index >= 0) next.branches.splice(index, 1);
-    } else if (index >= 0) {
-      next.branches[index] = pinned;
-    } else {
-      next.branches.push(pinned);
-    }
-    if (selectedBranchId != null) next.selectedBranchId = selectedBranchId;
-    return next;
-  });
-}
-
-function sameVersionId(left, right) {
-  return left != null && right != null && String(left) === String(right);
 }
 
 export function sameVersionHistory(left = [], right = []) {
-  if (left.length !== right.length) return false;
-  return left.every((entry, index) => {
+  return left.length === right.length && left.every((entry, index) => {
     const other = right[index];
-    return Number(entry.heroId) === Number(other.heroId)
-      && String(entry.field) === String(other.field)
-      && Number(entry.bpOrder) === Number(other.bpOrder);
+    return Number(entry.heroId) === Number(other?.heroId)
+      && String(entry.field) === String(other?.field)
+      && Number(entry.bpOrder) === Number(other?.bpOrder);
   });
 }
 
-export function findForkAtHistory(nodes, history) {
-  return nodes.find((node) => (
-    node.type === "fork" && sameVersionHistory(node.baseState?.history || [], history)
-  )) || null;
+export function cloneVersionNode(node) {
+  return {
+    id: String(node.id), parentId: node.parentId == null ? null : String(node.parentId),
+    actions: [...(node.actions || [])].map(copyVersionAction),
+    state: snapshotVersionState(node.state), createdOrder: Number(node.createdOrder || 0),
+  };
 }
 
-export function upsertMainPath(nodes, actions, state, id = "main-path") {
-  const copied = [...actions].map(copyVersionAction);
-  const forks = nodes.filter((node) => node.type === "fork").map(cloneVersionNode);
-  if (!copied.length) return forks;
-  const existing = nodes.find((node) => node.type === "segment");
-  return [createVersionSegment(existing?.id || id, copied, state), ...forks];
+export function createVersionCheckpoint({ id, parentId = null, actions, state, createdOrder = 0 }) {
+  const copiedActions = [...(actions || [])].map(copyVersionAction);
+  if (!copiedActions.length) return null;
+  return {
+    id: String(id), parentId: parentId == null ? null : String(parentId), actions: copiedActions,
+    state: snapshotVersionState(state), createdOrder: Number(createdOrder),
+  };
 }
 
-function checkpointState(node, branchId) {
-  if (branchId == null) {
-    return node.type === "segment" ? node.state : node.baseState;
-  }
-  if (node.type !== "fork") return null;
-  const branch = node.branches.find((item) => sameVersionId(item.id, branchId));
-  return branch?.state || null;
+export function appendVersionCheckpoint(nodes, checkpoint) {
+  if (!checkpoint?.actions?.length) return [...nodes].map(cloneVersionNode);
+  const next = [...nodes].map(cloneVersionNode);
+  // Repeated saves at the same board do not create duplicate checkpoints.
+  if (next.some((node) => sameVersionHistory(node.state.history, checkpoint.state.history))) return next;
+  return [...next, cloneVersionNode(checkpoint)];
+}
+
+export function findVersionCheckpoint(nodes, id) {
+  return nodes.find((node) => String(node.id) === String(id)) || null;
+}
+
+export function findDeepestVersionPrefix(nodes, history) {
+  return nodes
+    .filter((node) => {
+      const candidate = node.state?.history || [];
+      return candidate.length < history.length
+        && sameVersionHistory(history.slice(0, candidate.length), candidate);
+    })
+    .sort((left, right) => (
+      (right.state.history.length - left.state.history.length)
+      || (right.createdOrder - left.createdOrder)
+    ))[0] || null;
 }
 
 export function restoreVersionTree(nodes, checkpoint) {
-  const index = nodes.findIndex((node) => node.id === checkpoint.nodeId);
-  if (index < 0) return null;
-  const next = nodes.map(cloneVersionNode);
-  const node = next[index];
-  const state = checkpointState(node, checkpoint.branchId);
-  if (!state) return null;
-  if (checkpoint.branchId != null) {
-    if (node.type !== "fork") return null;
-    node.selectedBranchId = node.branches.find((item) => sameVersionId(item.id, checkpoint.branchId))?.id ?? null;
-  }
+  const node = findVersionCheckpoint(nodes, checkpoint?.nodeId);
+  if (!node?.state) return null;
   return {
-    nodes: next,
-    state: snapshotVersionState(state),
-    cursor: state.history.length,
-    activeCheckpoint: checkpoint.branchId == null ? node.id : `${node.id}:${checkpoint.branchId}`,
+    nodes: nodes.map(cloneVersionNode), state: snapshotVersionState(node.state),
+    cursor: node.state.history.length, activeCheckpoint: node.id,
   };
+}
+
+export function actionsSinceCheckpoint(history, checkpoint) {
+  const base = checkpoint?.state?.history || [];
+  if (!sameVersionHistory(history.slice(0, base.length), base)) return [...history].map(copyVersionAction);
+  return history.slice(base.length).map(copyVersionAction);
+}
+
+export function buildVersionTree(nodes) {
+  const byParent = new Map();
+  const ids = new Set(nodes.map((node) => String(node.id)));
+  [...nodes].map(cloneVersionNode)
+    .sort((a, b) => a.createdOrder - b.createdOrder || a.id.localeCompare(b.id))
+    .forEach((node) => {
+      const parentId = node.parentId && ids.has(node.parentId) ? node.parentId : null;
+      const list = byParent.get(parentId) || [];
+      list.push(node);
+      byParent.set(parentId, list);
+    });
+  return byParent;
 }

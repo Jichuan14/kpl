@@ -25,7 +25,7 @@ import { heroAsset } from "./heroAssets";
 import { messages, t as uiT } from "./i18n";
 import { finishStartupLoading } from "./startupLoader";
 import { MAX_SCENARIO_NODES, nextScenarioNode, snapshotDraft } from "./composables/draftScenario";
-import { createVersionFork, findForkAtHistory, pinVersionForkBranch, restoreVersionTree, sameVersionHistory, snapshotVersionState, updateVersionFork, upsertMainPath } from "./composables/draftVersionTree";
+import { actionsSinceCheckpoint, appendVersionCheckpoint, createVersionCheckpoint, findDeepestVersionPrefix, findVersionCheckpoint, restoreVersionTree, sameVersionHistory, snapshotVersionState } from "./composables/draftVersionTree";
 
 const leagueId = selectedLeagueId;
 const seasons = ref([]);
@@ -100,10 +100,9 @@ const whatIfWorkspaceOpen = ref(false);
 const whatIfBaseSnapshot = ref(null);
 const versionTreeNodes = ref([]);
 const versionActiveCheckpoint = ref("");
-const versionFollowsBoard = ref(true);
-const versionAnchorForkId = ref("");
+const versionRecordingAnchorId = ref("");
 const versionAnchorLength = ref(0);
-const versionLiveBranchId = ref("");
+const versionTreeMessage = ref("");
 let nextVersionSessionId = 1;
 let scenarioAbortController = null;
 let scenarioRequestNumber = 0;
@@ -1230,10 +1229,9 @@ async function applyScenario(node) {
 function clearVersionTree() {
   versionTreeNodes.value = [];
   versionActiveCheckpoint.value = "";
-  versionFollowsBoard.value = true;
-  versionAnchorForkId.value = "";
+  versionRecordingAnchorId.value = "";
   versionAnchorLength.value = 0;
-  versionLiveBranchId.value = "";
+  versionTreeMessage.value = "";
   nextVersionSessionId = 1;
   whatIfWorkspaceOpen.value = false;
   whatIfBaseSnapshot.value = null;
@@ -1253,96 +1251,59 @@ function rawVersionNodes() {
   return toRaw(versionTreeNodes.value).map((node) => toRaw(node));
 }
 
-function syncLiveMainPath(force = false) {
-  if (!force && !versionFollowsBoard.value) return;
-  versionTreeNodes.value = upsertMainPath(rawVersionNodes(), history.value, versionStateSnapshot());
-}
-
-function ensureAnchorFork(snapshot) {
-  const nodes = rawVersionNodes();
-  const current = versionAnchorForkId.value
-    ? nodes.find((node) => node.id === versionAnchorForkId.value && node.type === "fork")
-    : null;
-  if (current && sameVersionHistory(current.baseState?.history || [], snapshot.history)) {
-    return current.id;
-  }
-  const matching = findForkAtHistory(nodes, snapshot.history);
-  if (matching) {
-    versionAnchorForkId.value = matching.id;
-    return matching.id;
-  }
-  const forkId = `what-if-${nextVersionSessionId++}`;
-  versionTreeNodes.value = [...nodes, createVersionFork(forkId, snapshot)];
-  versionAnchorForkId.value = forkId;
-  return forkId;
-}
-
-function syncLiveBranch() {
-  const forkId = versionAnchorForkId.value;
-  if (!forkId) return;
-  const actions = history.value.slice(versionAnchorLength.value);
-  if (!actions.length) {
-    if (versionLiveBranchId.value) {
-      versionTreeNodes.value = pinVersionForkBranch(
-        rawVersionNodes(),
-        forkId,
-        { id: versionLiveBranchId.value, actions: [], state: versionStateSnapshot() }
-      );
-      versionLiveBranchId.value = "";
-    }
-    return;
-  }
-  if (!versionLiveBranchId.value) versionLiveBranchId.value = `board-${nextVersionSessionId++}`;
-  versionTreeNodes.value = pinVersionForkBranch(
-    rawVersionNodes(),
-    forkId,
-    {
-      id: versionLiveBranchId.value,
-      actions,
-      state: versionStateSnapshot(),
-    },
-    versionLiveBranchId.value
-  );
-  versionActiveCheckpoint.value = `${forkId}:${versionLiveBranchId.value}`;
-}
+const versionRecordingActions = computed(() => {
+  const anchor = findVersionCheckpoint(rawVersionNodes(), versionRecordingAnchorId.value);
+  return actionsSinceCheckpoint(history.value, anchor);
+});
 
 function syncVersionTreeWithBoard() {
-  if (versionFollowsBoard.value) return;
-  syncLiveBranch();
+  // Saved nodes are immutable. The live interval is derived only when the rail renders.
+  versionTreeMessage.value = "";
+  versionActiveCheckpoint.value = "";
 }
 
 function pinPracticeBoardToTree() {
   if (isPeakDuel.value || liveHeroSelectionLocked.value || !history.value.length) return;
   assistantTab.value = "tree";
   const snapshot = versionStateSnapshot();
-  const hasMain = rawVersionNodes().some((node) => node.type === "segment" && node.actions.length);
-  if (versionFollowsBoard.value || !hasMain) {
-    versionTreeNodes.value = upsertMainPath(rawVersionNodes(), snapshot.history, snapshot);
-    versionActiveCheckpoint.value = versionTreeNodes.value.find((node) => node.type === "segment")?.id || "";
-  } else if (versionLiveBranchId.value && history.value.length > versionAnchorLength.value) {
-    const liveId = versionLiveBranchId.value;
-    const forkId = versionAnchorForkId.value;
-    syncLiveBranch();
-    versionActiveCheckpoint.value = `${forkId}:${liveId}`;
+  const parent = findVersionCheckpoint(rawVersionNodes(), versionRecordingAnchorId.value);
+  const actions = actionsSinceCheckpoint(snapshot.history, parent);
+  if (!actions.length) {
+    versionTreeMessage.value = uiT("No new BP actions to save.");
+    return;
   }
-  versionLiveBranchId.value = "";
+  const checkpoint = createVersionCheckpoint({
+    id: `checkpoint-${nextVersionSessionId++}`,
+    parentId: parent?.id || null,
+    actions,
+    state: snapshot,
+    createdOrder: nextVersionSessionId,
+  });
+  const next = appendVersionCheckpoint(rawVersionNodes(), checkpoint);
+  if (next.length === versionTreeNodes.value.length) {
+    versionTreeMessage.value = uiT("This board is already saved.");
+    return;
+  }
+  versionTreeNodes.value = next;
+  versionRecordingAnchorId.value = checkpoint.id;
+  versionActiveCheckpoint.value = checkpoint.id;
   versionAnchorLength.value = snapshot.history.length;
-  versionFollowsBoard.value = false;
-  ensureAnchorFork(snapshot);
-}
-
-function updateWhatIfVersions(payload) {
-  versionTreeNodes.value = updateVersionFork(versionTreeNodes.value, payload);
 }
 
 function pinWhatIfSnapshot(payload) {
   if (!payload?.sessionId || !payload.branch) return;
-  versionTreeNodes.value = pinVersionForkBranch(
-    rawVersionNodes(),
-    payload.sessionId,
-    payload.branch,
-    payload.selectedBranchId
-  );
+  const branchHistory = payload.branch.state?.history || [];
+  const parent = findDeepestVersionPrefix(rawVersionNodes(), branchHistory);
+  const checkpoint = createVersionCheckpoint({
+    id: `checkpoint-${nextVersionSessionId++}`,
+    parentId: parent?.id || null,
+    actions: actionsSinceCheckpoint(branchHistory, parent),
+    state: payload.branch.state,
+    createdOrder: nextVersionSessionId,
+  });
+  const next = appendVersionCheckpoint(rawVersionNodes(), checkpoint);
+  if (next.length === versionTreeNodes.value.length) versionTreeMessage.value = uiT("This board is already saved.");
+  else versionTreeNodes.value = next;
 }
 
 function applyVersionState(state) {
@@ -1361,32 +1322,28 @@ async function restoreVersionCheckpoint(checkpoint) {
   versionTreeNodes.value = restored.nodes;
   applyVersionState(restored.state);
   versionActiveCheckpoint.value = restored.activeCheckpoint;
-  versionFollowsBoard.value = false;
-  versionLiveBranchId.value = "";
+  versionRecordingAnchorId.value = restored.activeCheckpoint;
   versionAnchorLength.value = restored.state.history.length;
-  ensureAnchorFork(restored.state);
+  versionTreeMessage.value = "";
   await forecast();
 }
 
 function closeWhatIfWorkspace() {
-  const sessionId = whatIfBaseSnapshot.value?.versionSessionId;
-  versionTreeNodes.value = versionTreeNodes.value.filter((node) =>
-    node.id !== sessionId || node.branches?.some((branch) => branch.actions.length)
-  );
   whatIfWorkspaceOpen.value = false;
   whatIfBaseSnapshot.value = null;
 }
 
 function openWhatIfWorkspace() {
   if (!teamsReady.value || isPeakDuel.value || liveHeroSelectionLocked.value) return;
-  if (versionFollowsBoard.value) syncLiveMainPath(true);
+  // A modal branch needs a durable parent so its compact action list is unambiguous.
+  if (versionRecordingActions.value.length) pinPracticeBoardToTree();
   const versionSessionId = `what-if-${nextVersionSessionId++}`;
   const baseState = versionStateSnapshot();
-  versionTreeNodes.value.push(createVersionFork(versionSessionId, baseState));
   whatIfBaseSnapshot.value = snapshotDraft({
     ...baseState,
     startHistoryLength: history.value.length,
     versionSessionId,
+    parentCheckpointId: versionRecordingAnchorId.value || null,
   });
   whatIfWorkspaceOpen.value = true;
 }
@@ -1403,11 +1360,10 @@ async function applyWhatIfWorkspaceScenario(scenario) {
   history.value = scenario.history.map((entry) => ({ ...entry }));
   whatIfWorkspaceOpen.value = false;
   whatIfBaseSnapshot.value = null;
-  versionActiveCheckpoint.value = sessionId ? `${sessionId}:${scenario.id}` : "";
-  versionFollowsBoard.value = false;
-  versionLiveBranchId.value = "";
+  versionActiveCheckpoint.value = "";
+  const appliedCheckpoint = rawVersionNodes().find((node) => sameVersionHistory(node.state?.history, history.value));
+  versionRecordingAnchorId.value = appliedCheckpoint?.id || "";
   versionAnchorLength.value = history.value.length;
-  ensureAnchorFork(versionStateSnapshot());
   await forecast();
 }
 
@@ -1935,8 +1891,7 @@ onBeforeUnmount(() => {
           </label>
         </div>
         <div class="simulator-actions">
-          <button type="button" :disabled="isPeakDuel || liveHeroSelectionLocked" @click="openWhatIfWorkspace">{{ uiT('Open what-if workspace') }}</button>
-          <button type="button" :disabled="isPeakDuel || !history.length || liveHeroSelectionLocked" @click="pinPracticeBoardToTree">{{ uiT('Add snapshot to tree') }}</button>
+          <button type="button" :disabled="!teamsReady || isPeakDuel || liveHeroSelectionLocked" @click="openWhatIfWorkspace">打开 What-if 窗口</button>
           <button type="button" :disabled="isPeakDuel || !history.length || simulating || liveHeroSelectionLocked" @click="undo">撤销</button>
           <button type="button" :disabled="isPeakDuel || simulating || liveHeroSelectionLocked" @click="reset">重置</button>
         </div>
@@ -2007,6 +1962,21 @@ onBeforeUnmount(() => {
             </aside>
           </section>
 
+          <section v-if="!isPeakDuel" class="whatif-launcher">
+            <div>
+              <h2>版本树快照</h2>
+              <p>保存当前 BP 进度，之后可以从这个检查点继续推演或建立新的分支。</p>
+            </div>
+            <div class="whatif-launcher-actions">
+              <button
+                type="button"
+                class="tree-snapshot-action"
+                :disabled="!history.length || liveHeroSelectionLocked"
+                @click="pinPracticeBoardToTree"
+              >{{ uiT('Add snapshot to tree') }}</button>
+            </div>
+          </section>
+
           <section v-if="lineupComplete || lineupScoreLoading || lineupScoreError" class="lineup-score-panel">
             <header>
               <div>
@@ -2067,7 +2037,6 @@ onBeforeUnmount(() => {
             @close="closeWhatIfWorkspace"
             @apply="applyWhatIfWorkspaceScenario"
             @pin-snapshot="pinWhatIfSnapshot"
-            @versions-change="updateWhatIfVersions"
           />
 
           <section v-if="!isPeakDuel" class="recommendation-panel">
@@ -2225,6 +2194,9 @@ onBeforeUnmount(() => {
                 :heroes="heroes"
                 :hero-asset="heroIcon"
                 :active-checkpoint="versionActiveCheckpoint"
+                :recording-actions="versionRecordingActions"
+                :recording-from="versionRecordingAnchorId"
+                :message="versionTreeMessage"
                 @restore-checkpoint="restoreVersionCheckpoint"
               />
             </div>
@@ -2253,6 +2225,20 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.tree-snapshot-action { min-height:2.1rem; padding:.42rem .62rem; border:1px solid var(--accent-deep); background:var(--accent-deep); color:#fff; font:700 .6rem var(--mono); cursor:pointer; white-space:nowrap; }
+.tree-snapshot-action:hover:not(:disabled) { background:#084f42; }
+.tree-snapshot-action:focus-visible { outline:2px solid #28745d; outline-offset:3px; }
+.tree-snapshot-action:disabled { cursor:not-allowed; opacity:.45; }
+.whatif-launcher { display:flex; width:calc(100% - .75rem - clamp(250px,31%,320px)); box-sizing:border-box; align-items:center; justify-content:space-between; gap:1rem; margin-top:.75rem; padding:.85rem 1rem; border:1px solid #b8d8c9; background:#edf7f2; }
+.whatif-launcher h2 { margin:0; color:var(--accent-deep); font:700 .92rem var(--display); letter-spacing:-.02em; }
+.whatif-launcher p { max-width:62ch; margin:.2rem 0 0; color:#28745d; font-size:.63rem; line-height:1.45; }
+.whatif-launcher-actions { display:flex; flex:0 0 auto; flex-wrap:wrap; justify-content:flex-end; gap:.45rem; }
+.whatif-launcher button { min-height:2.35rem; padding:.48rem .7rem; border:1px solid var(--accent-deep); background:#fff; color:var(--accent-deep); font:700 .62rem var(--mono); cursor:pointer; white-space:nowrap; }
+.whatif-launcher .tree-snapshot-action { background:var(--accent-deep); color:#fff; }
+.whatif-launcher button:hover:not(:disabled) { background:#dff1e7; }
+.whatif-launcher .tree-snapshot-action:hover:not(:disabled) { background:#084f42; }
+.whatif-launcher button:focus-visible { outline:2px solid #28745d; outline-offset:3px; }
+.whatif-launcher button:disabled { cursor:not-allowed; opacity:.45; }
 .simulator-page { width: min(1560px, calc(100% - 2rem)); margin: 0 auto; padding: 2.25rem 0 5rem; }
 .simulator-hero, .simulator-status, .simulator-layout { display: flex; gap: 1.5rem; justify-content: space-between; }
 .simulator-hero { align-items: flex-end; }
@@ -2376,4 +2362,6 @@ onBeforeUnmount(() => {
 }
 @media (max-width: 620px) { .simulator-page { width:calc(100% - 1rem); padding-top:1.25rem; }.simulator-status { gap:1rem; }.simulator-actions { flex-wrap:wrap; }.picker-heading { align-items:stretch; flex-direction:column; }.picker-controls { align-items:stretch; flex-direction:column; }.picker-controls input, .hero-lane-filter select { width:100%; }.hero-options { grid-template-columns:repeat(auto-fill, minmax(3.25rem, 1fr)); }.coach-rail{display:none}.coach-rail.coach-open{position:fixed;z-index:91;right:.75rem;bottom:calc(5.25rem + env(safe-area-inset-bottom));left:.75rem;display:block;overflow:hidden;border:1px solid var(--line);border-radius:.8rem;background:#fff;box-shadow:0 1rem 3rem rgba(16,42,46,.28)}.coach-rail.coach-open .assistant-rail-shell{height:100%;min-height:0;max-height:none}.coach-rail.coach-open :deep(.coach-panel){height:auto;min-height:0;max-height:none;grid-template-rows:auto minmax(150px,auto) auto auto;border:0;box-shadow:none}.coach-rail.coach-open :deep(.coach-header){padding:.72rem 3.25rem .72rem .8rem}.coach-rail.coach-open :deep(.coach-thread){min-height:150px;max-height:42dvh;padding:.75rem}.coach-rail.coach-open :deep(.coach-form){padding:.65rem .7rem .45rem}.coach-rail.coach-open :deep(.coach-disclaimer){padding:0 .7rem .45rem}.coach-scrim{position:fixed;z-index:90;inset:0;display:block;width:100%;height:100%;border:0;background:rgba(16,42,46,.28)}.mobile-coach-toggle{position:fixed;z-index:80;right:1rem;bottom:calc(6rem + env(safe-area-inset-bottom));display:grid;width:3.5rem;height:3.5rem;place-items:center;border:1px solid rgba(255,255,255,.7);border-radius:50%;background:var(--ink);color:#fff;box-shadow:0 .6rem 1.4rem rgba(16,42,46,.28);font-family:var(--mono)}.mobile-coach-toggle span{position:absolute;top:.38rem;right:.5rem;color:#8fe0c8;font-size:.8rem}.mobile-coach-toggle strong{font-size:.7rem;letter-spacing:.08em}.coach-open~.mobile-coach-toggle{display:none}.mobile-coach-close{position:absolute;z-index:3;top:.5rem;right:.55rem;display:grid;width:1.85rem;height:1.85rem;min-height:1.85rem;place-items:center;margin:0;padding:0;border:1px solid rgba(255,255,255,.28);border-radius:.5rem;background:rgba(255,255,255,.12);color:#fff;box-shadow:none;font:400 1.15rem/1 var(--display)} }
 @media (max-width: 620px) { .coach-rail.coach-open{top:auto;height:75dvh;max-height:75dvh;border-radius:1rem}.coach-rail.coach-open :deep(.coach-panel){height:100% !important;min-height:0 !important;max-height:none !important;grid-template-rows:auto minmax(0,1fr) auto auto !important}.coach-rail.coach-open :deep(.coach-thread){min-height:0 !important;max-height:none !important} }
+@media(max-width:860px){.whatif-launcher{width:100%}}
+@media(max-width:620px){.tree-snapshot-action{min-height:2.35rem}.whatif-launcher{align-items:stretch;flex-direction:column}.whatif-launcher-actions{display:grid;grid-template-columns:1fr 1fr}.whatif-launcher button{width:100%}}
 </style>
