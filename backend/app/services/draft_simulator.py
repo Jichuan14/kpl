@@ -12,7 +12,7 @@ from typing import Any
 
 import numpy as np
 
-from app.services.analysis_pipeline import ANALYSIS_DIR, OUTPUT_ROOT
+from app.services.analysis_pipeline import ANALYSIS_DIR, OUTPUT_ROOT, REPO_ROOT
 from app.services.draft_calibration import (
     CALIBRATION_FILENAME,
     CalibrationResolution,
@@ -32,7 +32,7 @@ from app.services.sequence_model_runtime import (
 from app.services.personalized_model_runtime import personalized_logits, prepare_personalized_parameters
 from app.services.player_draft_context import candidate_features as personalized_candidate_features, load_context_snapshot
 
-_CACHE: dict[Path, tuple[int, dict[str, Any]]] = {}
+_CACHE: dict[Path, tuple[tuple[int, int], dict[str, Any]]] = {}
 _LEARNABLE_CACHE: dict[Path, tuple[int, dict[str, Any]]] = {}
 _SEQUENCE_CACHE: dict[Path, tuple[tuple[int, int, int, str], dict[str, Any]]] = {}
 _PERSONALIZED_CACHE: dict[Path, tuple[tuple[int, int, int], dict[str, Any]]] = {}
@@ -45,6 +45,16 @@ _TEAM_TENDENCY_CACHE: dict[
 ] = {}
 LEGACY_SPECIALTY_FEATURES_PATH = ANALYSIS_DIR / "hero_specialty_vectors_thermometer.json"
 DRAFT_FEATURES_PATH = ANALYSIS_DIR / "hero_draft_feature_vectors.json"
+OFFICIAL_HEROLIST_PATH = REPO_ROOT / "knowledge" / "sources" / "official" / "herolist.json"
+# Tencent herolist `roles` uses 1–5 for 对抗/打野/中路/发育/游走.
+# KPL `hero_positions` uses 6/5/2/7/4 for the same lanes.
+TENCENT_LANE_TO_POSITION = {
+    1: 6,
+    2: 5,
+    3: 2,
+    4: 7,
+    5: 4,
+}
 # Public requests and AI tool calls use this fixed, lowest supported rollout
 # count.  Keep the low-level ``simulate`` function parameterized for offline
 # analysis and deterministic unit tests, but do not expose that control at an
@@ -146,13 +156,87 @@ def feature_artifact_path(model: dict[str, Any]) -> Path:
         raise ValueError(f"Unsupported learnable feature artifact: {filename}") from exc
 
 
+def parse_official_lane_ids(value: Any) -> list[int]:
+    """Parse Tencent `roles` (`majority|secondary`) into KPL position IDs."""
+    if value in (None, "", 0, "0"):
+        return []
+    positions: list[int] = []
+    for part in str(value).replace(",", "|").split("|"):
+        token = part.strip()
+        if not token:
+            continue
+        try:
+            lane_id = int(token)
+        except ValueError:
+            continue
+        position = TENCENT_LANE_TO_POSITION.get(lane_id)
+        if position and position not in positions:
+            positions.append(position)
+    return positions
+
+
+def official_hero_positions(path: Path | None = None) -> dict[int, list[int]]:
+    """Majority and optional secondary lanes from the official herolist catalog."""
+    source = path or OFFICIAL_HEROLIST_PATH
+    if not source.is_file():
+        return {}
+    catalog = json.loads(source.read_text(encoding="utf-8"))
+    mapping: dict[int, list[int]] = {}
+    if not isinstance(catalog, list):
+        return mapping
+    for row in catalog:
+        if not isinstance(row, dict):
+            continue
+        hero_id = int(row.get("ename") or 0)
+        if hero_id <= 0:
+            continue
+        positions = parse_official_lane_ids(row.get("roles"))
+        if positions:
+            mapping[hero_id] = positions
+    return mapping
+
+
+def apply_official_lane_eligibility(
+    model: dict[str, Any],
+    official_positions: dict[int, list[int]] | None = None,
+) -> dict[str, Any]:
+    """Use official majority/secondary lanes for hero-table role eligibility."""
+    mapping = official_hero_positions() if official_positions is None else official_positions
+    names = model.get("hero_names") or {}
+    positions = {
+        str(hero_id): [int(position) for position in values]
+        for hero_id, values in (model.get("hero_positions") or {}).items()
+    }
+    for hero_id, lanes in mapping.items():
+        key = str(hero_id)
+        if key in names or key in positions:
+            positions[key] = [int(position) for position in lanes]
+    model["hero_positions"] = positions
+    model["role_ids"] = sorted(
+        {
+            int(role_id)
+            for role_id in model.get("role_ids") or []
+        }
+        | {
+            int(position)
+            for values in positions.values()
+            for position in values
+        }
+    )
+    return model
+
+
 def load_model(league_id: str) -> dict[str, Any]:
     path = model_path(league_id)
     if not path.is_file():
         raise FileNotFoundError(f"No draft model has been generated for {league_id}")
     modified = path.stat().st_mtime_ns
+    official_modified = (
+        OFFICIAL_HEROLIST_PATH.stat().st_mtime_ns if OFFICIAL_HEROLIST_PATH.is_file() else 0
+    )
+    cache_key = (modified, official_modified)
     cached = _CACHE.get(path)
-    if cached and cached[0] == modified:
+    if cached and cached[0] == cache_key:
         return cached[1]
     with path.open(encoding="utf-8") as source:
         model = json.load(source)
@@ -169,6 +253,7 @@ def load_model(league_id: str) -> dict[str, Any]:
     for hero_id, positions in HERO_POSITION_FALLBACKS.items():
         if str(hero_id) in model.get("hero_names", {}) and not model.get("hero_positions", {}).get(str(hero_id)):
             model.setdefault("hero_positions", {})[str(hero_id)] = list(positions)
+    apply_official_lane_eligibility(model)
     role_bits = {
         int(role_id): 1 << index
         for index, role_id in enumerate(model.get("role_ids", []))
@@ -180,7 +265,7 @@ def load_model(league_id: str) -> dict[str, Any]:
         )
         for hero_id, positions in model.get("hero_positions", {}).items()
     }
-    _CACHE[path] = (modified, model)
+    _CACHE[path] = (cache_key, model)
     return model
 
 
@@ -565,6 +650,23 @@ def _legal_heroes(
     candidates = [hero_id for hero_id in candidates if hero_id not in previous_match_used]
     team_picks = [int(hero_id) for hero_id in state.get(f"{side}_picks", [])]
     return _heroes_that_fit_open_roles(model, team_picks, candidates)
+
+
+def _restrict_probabilities_to_legal_heroes(
+    model: dict[str, Any],
+    state: dict[str, Any],
+    step: dict[str, Any],
+    rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Drop role-infeasible candidates from a scored distribution and renormalize."""
+    legal = {int(hero_id) for hero_id in _legal_heroes(model, state, step)}
+    kept = [dict(row) for row in rows if int(row["hero_id"]) in legal]
+    total = sum(float(row["probability"]) for row in kept)
+    if total <= 0:
+        return []
+    for row in kept:
+        row["probability"] = float(row["probability"]) / total
+    return kept
 
 
 def _game_available_heroes(
@@ -1262,8 +1364,11 @@ def _prepare_prediction(
     if start_index is None:
         raise ValueError(f"bp_order={start_order} is not in the model sequence")
     next_step = sequence[start_index]
-    next_probabilities = _predict(
-        model, state, next_step, learnable_model, sequence_model
+    next_probabilities = _restrict_probabilities_to_legal_heroes(
+        model,
+        state,
+        next_step,
+        _predict(model, state, next_step, learnable_model, sequence_model),
     )
     if not next_probabilities:
         raise ValueError("No legal heroes remain")

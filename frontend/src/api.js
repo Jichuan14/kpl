@@ -7,6 +7,7 @@ async function request(path, options = {}) {
       ...options,
     });
   } catch (err) {
+    if (err.name === "AbortError") throw err;
     throw new Error(
       `Cannot reach API (${err.message}). Is the backend running on :8000?`
     );
@@ -225,6 +226,14 @@ export function fetchUltimateCounterLineup({ leagueId, targetHeroIds }) {
 export function simulateDraft(state) {
   return request("/api/simulations/draft", {
     method: "POST",
+    body: JSON.stringify(state),
+  });
+}
+
+export function simulateDraftScenario(state, { signal } = {}) {
+  return request("/api/simulations/draft-scenario", {
+    method: "POST",
+    signal,
     body: JSON.stringify(state),
   });
 }

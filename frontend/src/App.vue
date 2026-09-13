@@ -68,6 +68,7 @@ const isFeatureSpace = computed(
 );
 const isRankings = computed(() => routePath.value.startsWith("/rankings"));
 const isBpData = computed(() => routePath.value.startsWith("/bp-data"));
+const isNewAtlas = computed(() => routePath.value.startsWith("/new"));
 
 function dismissProjectNotice() {
   setStored(firstVisitKey, "true");
@@ -549,13 +550,13 @@ watch(() => route.path, () => {
   </Transition>
 
   <DailyPredictionsModal
-    v-if="showDailyPredictions"
+    v-if="showDailyPredictions && !isNewAtlas"
     :date="dailyMatchesDate"
     :matches="dailyMatches"
     :visitor-id="anonymousVisitorId()"
     @close="dismissDailyPredictions"
   />
-  <nav class="site-navigation">
+  <nav v-if="!isNewAtlas" class="site-navigation">
     <a class="site-brand" href="/" @click.prevent="navigate('/')">
       <img src="/assets/brand/draft-atlas-icon.png" alt="" aria-hidden="true" />
       <span class="site-brand-name">Draft <b>Atlas</b></span>
@@ -645,9 +646,9 @@ watch(() => route.path, () => {
     </div>
   </nav>
 
-  <RouterView />
+  <RouterView :key="isNewAtlas ? language : 'legacy-site'" />
 
-  <footer class="site-footnote">
+  <footer v-if="!isNewAtlas" class="site-footnote">
     <div>
       <strong>赛事 BP 数据学习工具 · 基于公开赛事信息的个人数据分析实践</strong>
       <span>本站为非官方个人学习与研究项目，仅展示基于赛事信息生成的统计与分析结果，不提供赛事内容、视频、图片或原始数据下载。本站与腾讯、王者荣耀及 KPL 联赛不存在隶属、合作、赞助或认可关系。如权利人认为本站内容涉及其合法权益，请通过 {{ rightsContactEmail }} 联系，我会及时核查和处理。</span>
@@ -1781,7 +1782,6 @@ select {
     top: .75rem;
     right: 0;
   }
-
 
   .page {
     padding: 1.1rem 0 3rem;

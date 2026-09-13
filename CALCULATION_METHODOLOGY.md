@@ -376,6 +376,19 @@ times hero was sampled at that order / requested rollout count
 `banned_by_end` uses the same denominator across all rollouts. A seed makes
 the pseudo-random sampling reproducible.
 
+### Current-draft what-if tree
+
+The BP board's what-if tree freezes one current-draft state, then branches on
+one legal next pick or ban at a time. Each expanded branch reports the policy
+probability of that forced action and samples a bounded 50 legal completions
+of the *current draft*. Completion frequency is the share of those 50 samples
+that reached a legal final lineup; it is not an outcome forecast.
+
+For completed samples, the lineup-value model supplies a relative Blue-versus-
+Red lineup advantage. That value is shown separately from policy probability
+and is not a game win probability. The tree does not simulate later games in
+a series, final match scores, standings, or the remaining season.
+
 ## 8. Important interpretation limits
 
 - All relationship and synergy figures are observational associations. Patch
@@ -387,6 +400,9 @@ the pseudo-random sampling reproducible.
   through quality flags and legal overrides.
 - The draft model predicts historical choice tendencies under its training
   window; it does not prescribe an optimal draft or estimate a chance to win.
+- What-if-tree policy probabilities, completion frequencies, and relative
+  lineup advantages describe different quantities; none is a full-series or
+  season forecast.
 
 ## 9. Key implementation files
 

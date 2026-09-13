@@ -191,6 +191,12 @@ class DraftSimulationRequest(BaseModel):
         return self
 
 
+class DraftScenarioRequest(DraftSimulationRequest):
+    """A bounded what-if branch rooted at the current legal draft action."""
+
+    forced_hero_id: int = Field(ge=1)
+
+
 class LineupRecommendationRequest(DraftSimulationRequest):
     """A live draft state plus presentation preferences for ranked actions."""
 

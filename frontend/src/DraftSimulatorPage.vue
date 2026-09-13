@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, toRaw, watch } from "vue";
 import {
   fetchDraftModel,
   fetchLiveMatch,
@@ -13,13 +13,19 @@ import {
   recommendLineup,
   scoreLineup,
   simulateDraft,
+  simulateDraftScenario,
 } from "./api";
 import DraftCoachPanel from "./DraftCoachPanel.vue";
+import DraftScenarioPanel from "./DraftScenarioPanel.vue";
+import DraftVersionTree from "./DraftVersionTree.vue";
+import WhatIfWorkspaceModal from "./WhatIfWorkspaceModal.vue";
 import TeamCombobox from "./TeamCombobox.vue";
 import { selectAvailableLeague, selectedLeagueId } from "./selectedLeague";
 import { heroAsset } from "./heroAssets";
-import { messages } from "./i18n";
+import { messages, t as uiT } from "./i18n";
 import { finishStartupLoading } from "./startupLoader";
+import { MAX_SCENARIO_NODES, nextScenarioNode, snapshotDraft } from "./composables/draftScenario";
+import { createVersionFork, findForkAtHistory, pinVersionForkBranch, restoreVersionTree, sameVersionHistory, snapshotVersionState, updateVersionFork, upsertMainPath } from "./composables/draftVersionTree";
 
 const leagueId = selectedLeagueId;
 const seasons = ref([]);
@@ -76,6 +82,7 @@ const winnerSide = ref(null);
 const nextBlueTeam = ref(null);
 const pickerTarget = ref("draft");
 const coachOpen = ref(false);
+const assistantTab = ref("tree");
 const usedHeroesModalSide = ref(null);
 const draftBoardElement = ref(null);
 const liveFollowStorageKey = "kpl-live-match-following";
@@ -84,6 +91,22 @@ const liveWinnerPredictions = ref(null);
 const liveWinnerPredictionLoading = ref(false);
 const liveWinnerPredictionSaving = ref(false);
 const liveWinnerPredictionSelections = ref({});
+const scenarioNodes = ref([]);
+const scenarioLoadingId = ref("");
+const scenarioError = ref("");
+const scenarioStale = ref(false);
+const scenarioMode = ref(false);
+const whatIfWorkspaceOpen = ref(false);
+const whatIfBaseSnapshot = ref(null);
+const versionTreeNodes = ref([]);
+const versionActiveCheckpoint = ref("");
+const versionFollowsBoard = ref(true);
+const versionAnchorForkId = ref("");
+const versionAnchorLength = ref(0);
+const versionLiveBranchId = ref("");
+let nextVersionSessionId = 1;
+let scenarioAbortController = null;
+let scenarioRequestNumber = 0;
 
 function bpT(key) {
   return messages["zh-CN"][key] || key;
@@ -116,7 +139,7 @@ const lineupComplete = computed(
 );
 
 const currentLabel = computed(() => {
-  if (isPeakDuel.value) return "巅峰对决，不用BP";
+  if (isPeakDuel.value) return uiT("Peak duel · no draft");
   if (!currentStep.value) return bpT("Draft complete");
   const side = bpT(currentStep.value.side === "blue" ? "Blue" : "Red");
   const action = bpT(currentStep.value.action === "ban" ? "ban" : "pick");
@@ -181,16 +204,15 @@ const availableHeroes = computed(() => {
   const targetSide = pickerTarget.value.replace("global-", "");
   const targetTeam = teamsBySide.value[targetSide];
   const candidates =
-    pickerTarget.value === "draft" && result.value
-      ? result.value.next_action_probabilities
+    pickerTarget.value === "draft"
+      ? (result.value?.next_action_probabilities || [])
           .map((row) => heroes.value.find((hero) => Number(hero.hero_id) === Number(row.hero_id)))
           .filter(Boolean)
       : heroes.value;
   return candidates
     .filter((hero) => {
       const heroId = Number(hero.hero_id);
-      const unavailableForTarget =
-        pickerTarget.value === "draft"
+      const unavailableForTarget = pickerTarget.value === "draft"
           ? usedHeroIds.value.has(heroId)
           : globalUsed.value[targetTeam].includes(heroId) || usedHeroIds.value.has(heroId);
       const matchesLane =
@@ -220,6 +242,19 @@ const teamsReady = computed(
     Boolean(selectedTeam(TEAM_A) && selectedTeam(TEAM_B)) &&
     selectedTeamIds.value[TEAM_A] !== selectedTeamIds.value[TEAM_B]
 );
+
+const whatIfSimulationContext = computed(() => {
+  if (!teamsReady.value || !model.value) return null;
+  const blueTeam = selectedTeam(teamsBySide.value.blue);
+  const redTeam = selectedTeam(teamsBySide.value.red);
+  if (!blueTeam || !redTeam) return null;
+  return {
+    leagueId: leagueId.value,
+    modelType,
+    blueTeam,
+    redTeam,
+  };
+});
 
 const scheduledMatchStarted = computed(() => {
   const delay = scheduledLiveCheckDelay(upcomingMatch.value);
@@ -787,9 +822,14 @@ async function applyLiveMatchState(state) {
   board.value = emptyBoard();
   history.value = [];
   bpOrder.value = 1;
+  clearVersionTree();
   pickerTarget.value = "draft";
   winnerSide.value = null;
   nextBlueTeam.value = null;
+  if (scenarioNodes.value.length) {
+    scenarioStale.value = true;
+    scenarioAbortController?.abort();
+  }
   await forecast();
 }
 
@@ -822,6 +862,7 @@ async function moveToNextScheduledFixture() {
   board.value = emptyBoard();
   history.value = [];
   bpOrder.value = 1;
+  clearVersionTree();
   result.value = null;
   commentary.value = null;
   liveMatch.value = null;
@@ -935,6 +976,7 @@ async function loadModel() {
   board.value = emptyBoard();
   history.value = [];
   bpOrder.value = 1;
+  clearVersionTree();
   globalMode.value = "match";
   seriesGame.value = 1;
   bestOf.value = 5;
@@ -955,7 +997,14 @@ async function loadModel() {
         teams.find((team) => String(team.team_id) === String(fixtureTeam.team_id))
       )
       .filter(Boolean);
-    if (scheduledTeams.length === 2 && String(scheduledTeams[0].team_id) !== String(scheduledTeams[1].team_id)) {
+    const wolves = teams.find((team) => /狼队|wolves/i.test(team.team_name));
+    const ttg = teams.find((team) => /ttg/i.test(team.team_name));
+    if (wolves && ttg && String(wolves.team_id) !== String(ttg.team_id)) {
+      selectedTeamIds.value = {
+        [TEAM_A]: String(wolves.team_id),
+        [TEAM_B]: String(ttg.team_id),
+      };
+    } else if (scheduledTeams.length === 2 && String(scheduledTeams[0].team_id) !== String(scheduledTeams[1].team_id)) {
       selectedTeamIds.value = {
         [TEAM_A]: String(scheduledTeams[0].team_id),
         [TEAM_B]: String(scheduledTeams[1].team_id),
@@ -1093,7 +1142,7 @@ async function recommendCurrentDraft() {
 }
 
 async function chooseHero(heroId) {
-  if (!teamsReady.value || isPeakDuel.value || liveHeroSelectionLocked.value) return;
+  if (!teamsReady.value || isPeakDuel.value || liveHeroSelectionLocked.value || simulating.value) return;
   if (pickerTarget.value !== "draft") {
     if (liveOfficialHeroContextLocked.value) return;
     const side = pickerTarget.value.replace("global-", "");
@@ -1105,6 +1154,10 @@ async function chooseHero(heroId) {
     return;
   }
   if (!currentStep.value || usedHeroIds.value.has(Number(heroId))) return;
+  const legalIds = new Set(
+    (result.value?.next_action_probabilities || []).map((row) => Number(row.hero_id))
+  );
+  if (!legalIds.has(Number(heroId))) return;
   const preSelectionState = coachDraftState.value;
   if (commentaryEnabled.value && preSelectionState) {
     const requestNumber = ++commentaryRequestNumber;
@@ -1132,7 +1185,238 @@ async function chooseHero(heroId) {
   history.value.push({ field, heroId: Number(heroId), bpOrder: bpOrder.value });
   bpOrder.value += 1;
   search.value = "";
+  syncVersionTreeWithBoard();
   await forecast();
+}
+
+async function expandScenario(hero, parent = null) {
+  const state = parent?.result?.transition_state || coachDraftState.value;
+  if (!state || scenarioStale.value || scenarioNodes.value.length >= MAX_SCENARIO_NODES) return;
+  const node = nextScenarioNode(scenarioNodes.value, parent?.id || null, hero, state);
+  if (!node) return;
+  scenarioNodes.value = [...scenarioNodes.value, node];
+  scenarioAbortController?.abort();
+  const controller = new AbortController();
+  scenarioAbortController = controller;
+  const requestNumber = ++scenarioRequestNumber;
+  scenarioLoadingId.value = node.id;
+  scenarioError.value = "";
+  try {
+    const result = await simulateDraftScenario({ league_id: leagueId.value, ...node.state, forced_hero_id: Number(hero.hero_id) }, { signal: controller.signal });
+    if (requestNumber === scenarioRequestNumber && !scenarioStale.value) {
+      scenarioNodes.value = scenarioNodes.value.map((item) => item.id === node.id ? { ...item, result } : item);
+    }
+  } catch (err) {
+    if (err.name !== "AbortError" && requestNumber === scenarioRequestNumber) scenarioError.value = err.message || uiT("Could not complete this hypothetical branch.");
+  } finally {
+    if (scenarioLoadingId.value === node.id) scenarioLoadingId.value = "";
+  }
+}
+
+async function applyScenario(node) {
+  const state = node?.result?.transition_state;
+  if (scenarioStale.value || !state) return;
+  board.value = snapshotDraft({
+    blue_picks: state.blue_picks, red_picks: state.red_picks,
+    blue_bans: state.blue_bans, red_bans: state.red_bans,
+  });
+  bpOrder.value = state.bp_order;
+  globalUsed.value[teamsBySide.value.blue] = [...state.blue_used_previous_battles];
+  globalUsed.value[teamsBySide.value.red] = [...state.red_used_previous_battles];
+  history.value = [];
+  await forecast();
+}
+
+function clearVersionTree() {
+  versionTreeNodes.value = [];
+  versionActiveCheckpoint.value = "";
+  versionFollowsBoard.value = true;
+  versionAnchorForkId.value = "";
+  versionAnchorLength.value = 0;
+  versionLiveBranchId.value = "";
+  nextVersionSessionId = 1;
+  whatIfWorkspaceOpen.value = false;
+  whatIfBaseSnapshot.value = null;
+}
+
+function versionStateSnapshot() {
+  return snapshotVersionState({
+    board: board.value,
+    bpOrder: bpOrder.value,
+    history: history.value,
+    blueUsed: globalUsed.value[teamsBySide.value.blue],
+    redUsed: globalUsed.value[teamsBySide.value.red],
+  });
+}
+
+function rawVersionNodes() {
+  return toRaw(versionTreeNodes.value).map((node) => toRaw(node));
+}
+
+function syncLiveMainPath(force = false) {
+  if (!force && !versionFollowsBoard.value) return;
+  versionTreeNodes.value = upsertMainPath(rawVersionNodes(), history.value, versionStateSnapshot());
+}
+
+function ensureAnchorFork(snapshot) {
+  const nodes = rawVersionNodes();
+  const current = versionAnchorForkId.value
+    ? nodes.find((node) => node.id === versionAnchorForkId.value && node.type === "fork")
+    : null;
+  if (current && sameVersionHistory(current.baseState?.history || [], snapshot.history)) {
+    return current.id;
+  }
+  const matching = findForkAtHistory(nodes, snapshot.history);
+  if (matching) {
+    versionAnchorForkId.value = matching.id;
+    return matching.id;
+  }
+  const forkId = `what-if-${nextVersionSessionId++}`;
+  versionTreeNodes.value = [...nodes, createVersionFork(forkId, snapshot)];
+  versionAnchorForkId.value = forkId;
+  return forkId;
+}
+
+function syncLiveBranch() {
+  const forkId = versionAnchorForkId.value;
+  if (!forkId) return;
+  const actions = history.value.slice(versionAnchorLength.value);
+  if (!actions.length) {
+    if (versionLiveBranchId.value) {
+      versionTreeNodes.value = pinVersionForkBranch(
+        rawVersionNodes(),
+        forkId,
+        { id: versionLiveBranchId.value, actions: [], state: versionStateSnapshot() }
+      );
+      versionLiveBranchId.value = "";
+    }
+    return;
+  }
+  if (!versionLiveBranchId.value) versionLiveBranchId.value = `board-${nextVersionSessionId++}`;
+  versionTreeNodes.value = pinVersionForkBranch(
+    rawVersionNodes(),
+    forkId,
+    {
+      id: versionLiveBranchId.value,
+      actions,
+      state: versionStateSnapshot(),
+    },
+    versionLiveBranchId.value
+  );
+  versionActiveCheckpoint.value = `${forkId}:${versionLiveBranchId.value}`;
+}
+
+function syncVersionTreeWithBoard() {
+  if (versionFollowsBoard.value) return;
+  syncLiveBranch();
+}
+
+function pinPracticeBoardToTree() {
+  if (isPeakDuel.value || liveHeroSelectionLocked.value || !history.value.length) return;
+  assistantTab.value = "tree";
+  const snapshot = versionStateSnapshot();
+  const hasMain = rawVersionNodes().some((node) => node.type === "segment" && node.actions.length);
+  if (versionFollowsBoard.value || !hasMain) {
+    versionTreeNodes.value = upsertMainPath(rawVersionNodes(), snapshot.history, snapshot);
+    versionActiveCheckpoint.value = versionTreeNodes.value.find((node) => node.type === "segment")?.id || "";
+  } else if (versionLiveBranchId.value && history.value.length > versionAnchorLength.value) {
+    const liveId = versionLiveBranchId.value;
+    const forkId = versionAnchorForkId.value;
+    syncLiveBranch();
+    versionActiveCheckpoint.value = `${forkId}:${liveId}`;
+  }
+  versionLiveBranchId.value = "";
+  versionAnchorLength.value = snapshot.history.length;
+  versionFollowsBoard.value = false;
+  ensureAnchorFork(snapshot);
+}
+
+function updateWhatIfVersions(payload) {
+  versionTreeNodes.value = updateVersionFork(versionTreeNodes.value, payload);
+}
+
+function pinWhatIfSnapshot(payload) {
+  if (!payload?.sessionId || !payload.branch) return;
+  versionTreeNodes.value = pinVersionForkBranch(
+    rawVersionNodes(),
+    payload.sessionId,
+    payload.branch,
+    payload.selectedBranchId
+  );
+}
+
+function applyVersionState(state) {
+  const snapshot = snapshotVersionState(state);
+  board.value = snapshot.board;
+  bpOrder.value = snapshot.bpOrder;
+  history.value = snapshot.history;
+  globalUsed.value[teamsBySide.value.blue] = snapshot.blueUsed;
+  globalUsed.value[teamsBySide.value.red] = snapshot.redUsed;
+}
+
+async function restoreVersionCheckpoint(checkpoint) {
+  const restored = restoreVersionTree(rawVersionNodes(), checkpoint);
+  if (!restored?.state) return;
+  closeWhatIfWorkspace();
+  versionTreeNodes.value = restored.nodes;
+  applyVersionState(restored.state);
+  versionActiveCheckpoint.value = restored.activeCheckpoint;
+  versionFollowsBoard.value = false;
+  versionLiveBranchId.value = "";
+  versionAnchorLength.value = restored.state.history.length;
+  ensureAnchorFork(restored.state);
+  await forecast();
+}
+
+function closeWhatIfWorkspace() {
+  const sessionId = whatIfBaseSnapshot.value?.versionSessionId;
+  versionTreeNodes.value = versionTreeNodes.value.filter((node) =>
+    node.id !== sessionId || node.branches?.some((branch) => branch.actions.length)
+  );
+  whatIfWorkspaceOpen.value = false;
+  whatIfBaseSnapshot.value = null;
+}
+
+function openWhatIfWorkspace() {
+  if (!teamsReady.value || isPeakDuel.value || liveHeroSelectionLocked.value) return;
+  if (versionFollowsBoard.value) syncLiveMainPath(true);
+  const versionSessionId = `what-if-${nextVersionSessionId++}`;
+  const baseState = versionStateSnapshot();
+  versionTreeNodes.value.push(createVersionFork(versionSessionId, baseState));
+  whatIfBaseSnapshot.value = snapshotDraft({
+    ...baseState,
+    startHistoryLength: history.value.length,
+    versionSessionId,
+  });
+  whatIfWorkspaceOpen.value = true;
+}
+
+async function applyWhatIfWorkspaceScenario(scenario) {
+  const sessionId = whatIfBaseSnapshot.value?.versionSessionId;
+  board.value = {
+    blue_picks: [...scenario.board.blue_picks],
+    red_picks: [...scenario.board.red_picks],
+    blue_bans: [...scenario.board.blue_bans],
+    red_bans: [...scenario.board.red_bans],
+  };
+  bpOrder.value = scenario.bpOrder;
+  history.value = scenario.history.map((entry) => ({ ...entry }));
+  whatIfWorkspaceOpen.value = false;
+  whatIfBaseSnapshot.value = null;
+  versionActiveCheckpoint.value = sessionId ? `${sessionId}:${scenario.id}` : "";
+  versionFollowsBoard.value = false;
+  versionLiveBranchId.value = "";
+  versionAnchorLength.value = history.value.length;
+  ensureAnchorFork(versionStateSnapshot());
+  await forecast();
+}
+
+function resetScenarioTree() {
+  scenarioAbortController?.abort();
+  scenarioRequestNumber += 1;
+  scenarioNodes.value = [];
+  scenarioError.value = "";
+  scenarioStale.value = false;
 }
 
 watch(commentaryEnabled, (enabled) => {
@@ -1149,6 +1433,7 @@ async function undo() {
   const index = board.value[event.field].lastIndexOf(event.heroId);
   if (index >= 0) board.value[event.field].splice(index, 1);
   bpOrder.value = event.bpOrder;
+  syncVersionTreeWithBoard();
   await forecast();
 }
 
@@ -1159,6 +1444,8 @@ async function reset() {
   bpOrder.value = 1;
   search.value = "";
   commentary.value = null;
+  resetScenarioTree();
+  clearVersionTree();
   await forecast();
 }
 
@@ -1171,6 +1458,7 @@ async function startGlobalBp() {
   history.value = [];
   bpOrder.value = 1;
   pickerTarget.value = "draft";
+  clearVersionTree();
   await forecast();
 }
 
@@ -1183,6 +1471,7 @@ async function customizeGlobalBp() {
   history.value = [];
   bpOrder.value = 1;
   pickerTarget.value = "global-blue";
+  clearVersionTree();
   await forecast();
 }
 
@@ -1191,6 +1480,7 @@ async function clearGlobalBp() {
   seriesGame.value = 1;
   resetSeriesTeams();
   pickerTarget.value = "draft";
+  clearVersionTree();
   await forecast();
 }
 
@@ -1215,6 +1505,7 @@ async function startNextBattle() {
   seriesGame.value += 1;
   winnerSide.value = null;
   nextBlueTeam.value = null;
+  clearVersionTree();
   await forecast();
 }
 
@@ -1357,6 +1648,7 @@ watch(
 );
 
 onBeforeUnmount(() => {
+  scenarioAbortController?.abort();
   stopLiveMatchPolling();
   stopLiveMatchCheckSchedule();
   stopLiveScheduleClock();
@@ -1643,6 +1935,8 @@ onBeforeUnmount(() => {
           </label>
         </div>
         <div class="simulator-actions">
+          <button type="button" :disabled="isPeakDuel || liveHeroSelectionLocked" @click="openWhatIfWorkspace">{{ uiT('Open what-if workspace') }}</button>
+          <button type="button" :disabled="isPeakDuel || !history.length || liveHeroSelectionLocked" @click="pinPracticeBoardToTree">{{ uiT('Add snapshot to tree') }}</button>
           <button type="button" :disabled="isPeakDuel || !history.length || simulating || liveHeroSelectionLocked" @click="undo">撤销</button>
           <button type="button" :disabled="isPeakDuel || simulating || liveHeroSelectionLocked" @click="reset">重置</button>
         </div>
@@ -1762,6 +2056,20 @@ onBeforeUnmount(() => {
             </template>
           </section>
 
+          <WhatIfWorkspaceModal
+            v-if="whatIfWorkspaceOpen && whatIfBaseSnapshot"
+            :base="whatIfBaseSnapshot"
+            :heroes="heroes"
+            :draft-sequence="model?.draft_sequence || []"
+            :hero-asset="heroIcon"
+            :simulation-context="whatIfSimulationContext"
+            :initial-forecast="simulating ? null : result"
+            @close="closeWhatIfWorkspace"
+            @apply="applyWhatIfWorkspaceScenario"
+            @pin-snapshot="pinWhatIfSnapshot"
+            @versions-change="updateWhatIfVersions"
+          />
+
           <section v-if="!isPeakDuel" class="recommendation-panel">
             <header>
               <div>
@@ -1845,7 +2153,7 @@ onBeforeUnmount(() => {
           <section v-if="!isPeakDuel" class="hero-picker">
             <div class="picker-heading">
               <div>
-                <p class="simulator-eyebrow">{{ pickerTarget === 'draft' ? '添加下一步操作' : '全局 BP 设置' }}</p>
+                <p class="simulator-eyebrow">{{ pickerTarget === 'draft' ? bpT('Add the next action') : bpT('Global BP setup') }}</p>
                 <h2 data-i18n-ignore>{{ pickerTitle }}</h2>
               </div>
               <div class="picker-controls">
@@ -1892,14 +2200,43 @@ onBeforeUnmount(() => {
           aria-label="关闭 BP 教练"
           @click="coachOpen = false"
         ></button>
-        <aside class="coach-rail" :class="{ 'coach-open': coachOpen }" aria-label="BP 教练对话">
+        <aside class="coach-rail" :class="{ 'coach-open': coachOpen }" aria-label="BP 辅助工具">
           <button class="mobile-coach-close" type="button" aria-label="关闭 BP 教练" @click="coachOpen = false">×</button>
-          <DraftCoachPanel
-            :league-id="leagueId"
-            :season-name="selectedSeason?.league_name || leagueId"
-            :draft-state="coachDraftState"
-            :force-chinese="true"
-          />
+          <div class="assistant-rail-shell">
+            <div class="assistant-tabs" role="tablist" aria-label="BP 辅助工具">
+              <button
+                type="button"
+                role="tab"
+                :aria-selected="assistantTab === 'tree'"
+                :class="{ active: assistantTab === 'tree' }"
+                @click="assistantTab = 'tree'"
+              >版本树</button>
+              <button
+                type="button"
+                role="tab"
+                :aria-selected="assistantTab === 'coach'"
+                :class="{ active: assistantTab === 'coach' }"
+                @click="assistantTab = 'coach'"
+              >AI 教练</button>
+            </div>
+            <div v-show="assistantTab === 'tree'" class="assistant-view tree-view" role="tabpanel">
+              <DraftVersionTree
+                :nodes="versionTreeNodes"
+                :heroes="heroes"
+                :hero-asset="heroIcon"
+                :active-checkpoint="versionActiveCheckpoint"
+                @restore-checkpoint="restoreVersionCheckpoint"
+              />
+            </div>
+            <div v-show="assistantTab === 'coach'" class="assistant-view coach-view" role="tabpanel">
+              <DraftCoachPanel
+                :league-id="leagueId"
+                :season-name="selectedSeason?.league_name || leagueId"
+                :draft-state="coachDraftState"
+                :force-chinese="true"
+              />
+            </div>
+          </div>
         </aside>
         <button
           class="mobile-coach-toggle"
@@ -1962,7 +2299,7 @@ onBeforeUnmount(() => {
 .upcoming-match-note { grid-column:1 / -1; margin:0; padding:.65rem .75rem; border-left:3px solid var(--accent); background:#edf8f3; color:var(--accent-deep); font-size:.68rem; line-height:1.45; }
 .live-match-panel { grid-column:1 / -1; display:flex; align-items:center; justify-content:space-between; gap:1rem; margin:0; padding:.75rem; border:1px solid #d9b663; background:#fff8e7; }.live-match-panel.active { border-color:var(--accent-deep); background:#edf8f3; }.live-match-panel strong { display:block; margin:.1rem 0; font:700 .8rem var(--mono); }.live-match-panel small { display:block; max-width:48rem; color:var(--ink-soft); font-size:.62rem; line-height:1.45; }.live-match-panel .live-refresh-note { margin-top:.25rem; color:var(--accent-deep); }.live-match-panel > div:last-child { display:flex; flex-wrap:wrap; gap:.35rem; }.live-match-panel button { min-height:32px; padding:.4rem .55rem; border:1px solid var(--accent-deep); background:var(--accent-deep); color:#fff; font:700 .61rem var(--mono); cursor:pointer; white-space:nowrap; }.live-match-panel button.quiet { border-color:var(--line); background:#fff; color:var(--ink-soft); }.live-match-panel button:disabled { cursor:not-allowed; opacity:.55; }
 .live-winner-prediction { grid-column:1 / -1; display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:.75rem; border:1px solid #9ab9cd; background:#f3f9fd; }.live-winner-prediction strong { display:block; margin:.1rem 0; font:700 .8rem var(--mono); }.live-winner-prediction small { display:block; color:var(--ink-soft); font-size:.62rem; line-height:1.45; }.live-winner-choices { display:flex; flex-wrap:wrap; gap:.4rem; }.live-winner-choices button { display:grid; gap:.1rem; min-width:7.5rem; min-height:38px; padding:.4rem .6rem; border:1px solid #9ab9cd; background:#fff; color:var(--ink); font:700 .64rem var(--mono); cursor:pointer; }.live-winner-choices button.active { border-color:var(--accent-deep); background:var(--ink); color:#fff; }.live-winner-choices button.active small { color:#fff; }.live-winner-choices button:disabled { cursor:not-allowed; opacity:.6; }
-.simulator-workspace { display:grid; grid-template-columns:minmax(0, 1fr) minmax(340px, 390px); gap:.85rem; align-items:start; margin-top:.75rem; }.simulator-main-column { min-width:0; }.coach-rail { position:sticky; top:1rem; min-width:0; }.simulator-layout { align-items: stretch; margin-top:0; gap:.75rem; }.draft-board { display: grid; flex: 1; min-width:0; grid-template-columns: repeat(2, minmax(0,1fr)); gap: .75rem; }
+.simulator-workspace { display:grid; grid-template-columns:minmax(0, 1fr) minmax(340px, 390px); gap:.85rem; align-items:start; margin-top:.75rem; }.simulator-main-column { min-width:0; }.coach-rail { position:sticky; top:1rem; min-width:0; }.assistant-rail-shell{display:grid;grid-template-rows:auto minmax(0,1fr);height:min(760px,calc(100vh - 2rem));min-height:580px}.assistant-tabs{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--accent-deep);border-bottom:0;background:#102a2e}.assistant-tabs button{min-height:44px;border:0;border-right:1px solid rgba(255,255,255,.14);background:transparent;color:rgba(255,255,255,.7);font:700 .66rem var(--mono);cursor:pointer}.assistant-tabs button:last-child{border-right:0}.assistant-tabs button.active{background:#084f42;color:#fff}.assistant-tabs button:focus-visible{position:relative;z-index:1;outline:2px solid #8fe0c8;outline-offset:-3px}.assistant-view{min-height:0;overflow:hidden}.coach-view :deep(.coach-panel){height:100%;min-height:0;border-top:0}.tree-view :deep(.version-tree){border-top:0}.simulator-layout { align-items: stretch; margin-top:0; gap:.75rem; }.draft-board { display: grid; flex: 1; min-width:0; grid-template-columns: repeat(2, minmax(0,1fr)); gap: .75rem; }
 .peak-duel-board { display:grid; min-height:20rem; flex:1; place-content:center; padding:2rem; border:1px dashed var(--line); background:rgba(255,255,255,.6); color:var(--ink-soft); text-align:center; }
 .peak-duel-board h2 { margin:0; color:var(--ink); font:700 clamp(1.8rem, 4vw, 3rem) var(--display); letter-spacing:-.04em; }
 .mobile-group-title { display:none; }
@@ -1979,7 +2316,8 @@ onBeforeUnmount(() => {
 .recommendation-details > p { margin:.55rem 0 0; color:var(--ink-soft); font-size:.57rem; line-height:1.4; }
 .commentary-panel { margin-top:.75rem; padding:1rem 1.15rem; border:1px solid var(--accent-deep); background:linear-gradient(120deg, rgba(232,191,108,.18), rgba(255,255,255,.84)); }.commentary-panel h2 { max-width:70rem; margin:.25rem 0 0; font:700 1rem/1.55 var(--display); letter-spacing:-.015em; }.commentary-loading { margin:0; color:var(--ink-soft); font-size:.75rem; }
 .hero-picker { margin-top: .75rem; padding: 1rem; }.picker-heading { display:flex; align-items:end; justify-content:space-between; gap:1rem; }.picker-heading h2 { font-size:1.4rem; }.picker-controls { display:flex; align-items:end; gap:.55rem; }.picker-controls input { width:min(100%, 260px); }.hero-lane-filter { display:grid; gap:.22rem; color:var(--ink-soft); font-size:.67rem; font-weight:700; letter-spacing:.04em; }.hero-lane-filter select { min-width:9.2rem; }.picker-targets { margin-top:.85rem; }.hero-options { display:grid; grid-template-columns:repeat(auto-fill, minmax(3.6rem, 1fr)); gap:.45rem; margin-top:1rem; max-height:360px; overflow:auto; }.hero-options button { position:relative; display:grid; place-items:center; aspect-ratio:1; padding:0; overflow:hidden; }.hero-options button img { width:100%; height:100%; object-fit:cover; }.hero-options button small { position:absolute; right:0; bottom:0; padding:.14rem .2rem; background:rgba(16,42,46,.84); color:#fff; font-size:.56rem; }.hero-options button:hover:not(:disabled), .draft-slots button:not(:disabled):hover { border-color: var(--accent); color: var(--accent-deep); }
-@media (max-width: 1000px) { .simulator-workspace { grid-template-columns:1fr; }.coach-rail { position:static; }.coach-rail { grid-row:1; }.simulator-main-column { grid-row:2; } }
+.scenario-mode { display:flex; align-items:center; gap:.28rem; color:var(--ink-soft); font-size:.61rem; white-space:nowrap; }.scenario-mode input { width:auto; accent-color:var(--accent-deep); }
+@media (max-width: 1000px) { .simulator-workspace { grid-template-columns:1fr; }.coach-rail { position:static; }.coach-rail { grid-row:1; }.assistant-rail-shell{height:auto;min-height:520px;max-height:700px}.simulator-main-column { grid-row:2; } }
 @media (max-width: 860px) { .simulator-hero, .simulator-status, .simulator-layout { flex-direction:column; align-items:stretch; }.simulator-header-controls { justify-content:stretch; }.simulator-season, .forecast-panel { width:100%; }.simulator-season { min-width:0; }.simulator-settings { align-self:flex-end; }.forecast-panel { min-width:0; }.simulator-actions { justify-content:space-between; }.side-assignment { position:static; width:100%; transform:none; }.side-assignment label { flex:1; }.draft-board { grid-template-columns:1fr; }.global-bp-panel { grid-template-columns:1fr; }.global-used { grid-template-columns:1fr; }.next-battle { justify-self:start; }.recommendation-list,.lineup-score-breakdown { grid-template-columns:1fr; } }
 @media (max-width:620px) {
   .settings-menu { left:0; right:auto; width:min(19rem, calc(100vw - 1rem)); }
@@ -2036,6 +2374,6 @@ onBeforeUnmount(() => {
   .draft-slots button, .draft-slots span { max-width:none; font-size:.55rem; }
   .draft-slots button { min-height:0; overflow:hidden; }
 }
-@media (max-width: 620px) { .simulator-page { width:calc(100% - 1rem); padding-top:1.25rem; }.simulator-status { gap:1rem; }.simulator-actions { flex-wrap:wrap; }.picker-heading { align-items:stretch; flex-direction:column; }.picker-controls { align-items:stretch; flex-direction:column; }.picker-controls input, .hero-lane-filter select { width:100%; }.hero-options { grid-template-columns:repeat(auto-fill, minmax(3.25rem, 1fr)); }.coach-rail{display:none}.coach-rail.coach-open{position:fixed;z-index:91;right:.75rem;bottom:calc(5.25rem + env(safe-area-inset-bottom));left:.75rem;display:block;overflow:hidden;border:1px solid var(--line);border-radius:.8rem;background:#fff;box-shadow:0 1rem 3rem rgba(16,42,46,.28)}.coach-rail.coach-open :deep(.coach-panel){height:auto;min-height:0;max-height:none;grid-template-rows:auto minmax(150px,auto) auto auto;border:0;box-shadow:none}.coach-rail.coach-open :deep(.coach-header){padding:.72rem 3.25rem .72rem .8rem}.coach-rail.coach-open :deep(.coach-thread){min-height:150px;max-height:42dvh;padding:.75rem}.coach-rail.coach-open :deep(.coach-form){padding:.65rem .7rem .45rem}.coach-rail.coach-open :deep(.coach-disclaimer){padding:0 .7rem .45rem}.coach-scrim{position:fixed;z-index:90;inset:0;display:block;width:100%;height:100%;border:0;background:rgba(16,42,46,.28)}.mobile-coach-toggle{position:fixed;z-index:80;right:1rem;bottom:calc(6rem + env(safe-area-inset-bottom));display:grid;width:3.5rem;height:3.5rem;place-items:center;border:1px solid rgba(255,255,255,.7);border-radius:50%;background:var(--ink);color:#fff;box-shadow:0 .6rem 1.4rem rgba(16,42,46,.28);font-family:var(--mono)}.mobile-coach-toggle span{position:absolute;top:.38rem;right:.5rem;color:#8fe0c8;font-size:.8rem}.mobile-coach-toggle strong{font-size:.7rem;letter-spacing:.08em}.coach-open~.mobile-coach-toggle{display:none}.mobile-coach-close{position:absolute;z-index:2;top:.65rem;right:.65rem;display:grid;width:1.85rem;height:1.85rem;min-height:1.85rem;place-items:center;margin:0;padding:0;border:1px solid rgba(255,255,255,.28);border-radius:.5rem;background:rgba(255,255,255,.12);color:#fff;box-shadow:none;font:400 1.15rem/1 var(--display)} }
+@media (max-width: 620px) { .simulator-page { width:calc(100% - 1rem); padding-top:1.25rem; }.simulator-status { gap:1rem; }.simulator-actions { flex-wrap:wrap; }.picker-heading { align-items:stretch; flex-direction:column; }.picker-controls { align-items:stretch; flex-direction:column; }.picker-controls input, .hero-lane-filter select { width:100%; }.hero-options { grid-template-columns:repeat(auto-fill, minmax(3.25rem, 1fr)); }.coach-rail{display:none}.coach-rail.coach-open{position:fixed;z-index:91;right:.75rem;bottom:calc(5.25rem + env(safe-area-inset-bottom));left:.75rem;display:block;overflow:hidden;border:1px solid var(--line);border-radius:.8rem;background:#fff;box-shadow:0 1rem 3rem rgba(16,42,46,.28)}.coach-rail.coach-open .assistant-rail-shell{height:100%;min-height:0;max-height:none}.coach-rail.coach-open :deep(.coach-panel){height:auto;min-height:0;max-height:none;grid-template-rows:auto minmax(150px,auto) auto auto;border:0;box-shadow:none}.coach-rail.coach-open :deep(.coach-header){padding:.72rem 3.25rem .72rem .8rem}.coach-rail.coach-open :deep(.coach-thread){min-height:150px;max-height:42dvh;padding:.75rem}.coach-rail.coach-open :deep(.coach-form){padding:.65rem .7rem .45rem}.coach-rail.coach-open :deep(.coach-disclaimer){padding:0 .7rem .45rem}.coach-scrim{position:fixed;z-index:90;inset:0;display:block;width:100%;height:100%;border:0;background:rgba(16,42,46,.28)}.mobile-coach-toggle{position:fixed;z-index:80;right:1rem;bottom:calc(6rem + env(safe-area-inset-bottom));display:grid;width:3.5rem;height:3.5rem;place-items:center;border:1px solid rgba(255,255,255,.7);border-radius:50%;background:var(--ink);color:#fff;box-shadow:0 .6rem 1.4rem rgba(16,42,46,.28);font-family:var(--mono)}.mobile-coach-toggle span{position:absolute;top:.38rem;right:.5rem;color:#8fe0c8;font-size:.8rem}.mobile-coach-toggle strong{font-size:.7rem;letter-spacing:.08em}.coach-open~.mobile-coach-toggle{display:none}.mobile-coach-close{position:absolute;z-index:3;top:.5rem;right:.55rem;display:grid;width:1.85rem;height:1.85rem;min-height:1.85rem;place-items:center;margin:0;padding:0;border:1px solid rgba(255,255,255,.28);border-radius:.5rem;background:rgba(255,255,255,.12);color:#fff;box-shadow:none;font:400 1.15rem/1 var(--display)} }
 @media (max-width: 620px) { .coach-rail.coach-open{top:auto;height:75dvh;max-height:75dvh;border-radius:1rem}.coach-rail.coach-open :deep(.coach-panel){height:100% !important;min-height:0 !important;max-height:none !important;grid-template-rows:auto minmax(0,1fr) auto auto !important}.coach-rail.coach-open :deep(.coach-thread){min-height:0 !important;max-height:none !important} }
 </style>

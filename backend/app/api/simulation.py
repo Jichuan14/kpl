@@ -1,4 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from copy import deepcopy
+from math import fsum
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -7,6 +9,7 @@ from app.schemas import (
     ApiResponse,
     DraftSelectionCommentaryRequest,
     DraftSimulationRequest,
+    DraftScenarioRequest,
     HeroMatchupRecommendationRequest,
     LineupRecommendationRequest,
     LineupScoreRequest,
@@ -18,6 +21,8 @@ from app.services.draft_simulator import (
     FIXED_ROLLOUTS,
     learned_feature_space,
     metadata,
+    predict_next_action,
+    sample_forced_draft_completions,
     simulate,
 )
 from app.services.season_teams import validate_season_team_pair
@@ -209,6 +214,73 @@ def draft_simulation(
                 model_type=body.model_type,
             )
         )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    finally:
+        simulation_rate_limiter.release(key)
+
+
+@router.post("/draft-scenario")
+def draft_scenario(
+    body: DraftScenarioRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> ApiResponse:
+    """Sample at most 50 legal completions after one explicit what-if action."""
+    key = _simulation_client_key(request)
+    decision = simulation_rate_limiter.acquire(key)
+    if not decision.allowed:
+        raise HTTPException(
+            status_code=429,
+            detail={"code": "simulation_rate_limited", "message": "The simulator is busy. Try again shortly."},
+            headers={"Retry-After": str(decision.retry_after_seconds)},
+        )
+    state = body.model_dump(exclude={"league_id", "model_type", "seed", "forced_hero_id"})
+    try:
+        teams = validate_season_team_pair(db, body.league_id, body.blue_team_id, body.red_team_id)
+        state.update(blue_team_name=str(teams["blue"]["team_name"]), red_team_name=str(teams["red"]["team_name"]))
+        sampled = sample_forced_draft_completions(
+            body.league_id, state, forced_first_hero_id=body.forced_hero_id,
+            rollouts=FIXED_ROLLOUTS, seed=body.seed, model_type=body.model_type,
+        )
+        transition_state = deepcopy(state)
+        step = sampled["next_step"]
+        field = f"{step['side']}_{'picks' if step['action'] == 'pick' else 'bans'}"
+        transition_state.setdefault(field, []).append(int(body.forced_hero_id))
+        if transition_state.get("legal_hero_ids") is not None:
+            transition_state["legal_hero_ids"] = [
+                hero_id for hero_id in transition_state["legal_hero_ids"]
+                if int(hero_id) != int(body.forced_hero_id)
+            ]
+        transition_state["bp_order"] = int(step["bp_order"]) + 1
+        next_actions = []
+        if transition_state["bp_order"] <= 20:
+            try:
+                next_actions = predict_next_action(
+                    body.league_id, transition_state, model_type=body.model_type, limit=5
+                )["next_action_probabilities"]
+            except ValueError:
+                # A completed or constrained draft is a valid leaf, not an API failure.
+                next_actions = []
+        scorer = load_lineup_value_model(body.league_id)
+        leaves = []
+        for completion in sampled["completions"]:
+            leaf_state = completion["state"]
+            advantage = None
+            if completion["completed"] and len(leaf_state.get("blue_picks", [])) == 5 and len(leaf_state.get("red_picks", [])) == 5:
+                advantage = scorer.score(body.blue_team_id, leaf_state["blue_picks"], body.red_team_id, leaf_state["red_picks"])["blue_advantage"]
+            leaves.append({"completed": completion["completed"], "path": completion["path"], "state": leaf_state, "blue_relative_lineup_advantage": advantage})
+        completed = [leaf for leaf in leaves if leaf["completed"] and leaf["blue_relative_lineup_advantage"] is not None]
+        return ApiResponse(data={
+            "next_step": sampled["next_step"], "forced_hero_id": sampled["forced_hero_id"],
+            "transition_state": transition_state, "next_actions": next_actions,
+            "policy_likelihood": sampled["forced_policy_probability"], "rollouts": FIXED_ROLLOUTS,
+            "completed_count": len(completed), "incomplete_count": FIXED_ROLLOUTS - len(completed),
+            "average_blue_relative_lineup_advantage": fsum(leaf["blue_relative_lineup_advantage"] for leaf in completed) / len(completed) if completed else None,
+            "leaves": leaves[:8],
+        })
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
