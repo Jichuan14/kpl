@@ -1,4 +1,8 @@
+import json
+import os
+import tempfile
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -11,12 +15,14 @@ def hero(
     *,
     mechanics: list[str],
     conditions: list[str] | None = None,
+    skills: list[dict] | None = None,
 ) -> dict:
     return {
         "hero_id": hero_id,
         "hero_name": name,
         "mechanics": mechanics,
         "conditions": conditions or [],
+        "skills": skills or [],
     }
 
 
@@ -98,6 +104,58 @@ class DraftCommentaryEvidenceTest(unittest.TestCase):
         self.assertIn("沈梦溪可以保持距离承担远程消耗、区域压制", claim["detail"])
         self.assertNotIn("创造更稳定的命中窗口", claim["detail"])
 
+    def test_reversed_allied_pick_order_preserves_tactical_direction(self) -> None:
+        engager = with_roles(
+            hero(1, "先手", mechanics=["control_stun"]),
+            ("primary_engage", "主动开团"),
+        )
+        follower = with_roles(
+            hero(2, "跟进", mechanics=["damage_magic"]),
+            ("burst_damage", "爆发伤害"),
+        )
+
+        first = draft_commentary._tactical_pair_claim(engager, follower)
+        reversed_order = draft_commentary._tactical_pair_claim(follower, engager)
+
+        self.assertEqual(first["detail"], reversed_order["detail"])
+        self.assertEqual(first["source_hero_id"], 1)
+        self.assertEqual(first["target_hero_id"], 2)
+
+    def test_named_ability_fact_only_uses_supported_skill_mechanics_and_conditions(self) -> None:
+        ability_hero = hero(
+            99,
+            "测试英雄",
+            mechanics=["control_stun", "mobility_dash"],
+            skills=[{
+                "skill_name": "定身突袭",
+                "mechanics": ["control_stun", "mobility_dash"],
+                "conditions": ["directional"],
+            }],
+        )
+
+        claim = draft_commentary._mechanic_claim(
+            ability_hero, action="pick", allies=[], enemies=[]
+        )
+
+        self.assertIn("「定身突袭」", claim["detail"])
+        self.assertIn("眩晕", claim["detail"])
+        self.assertIn("方向性技能", claim["detail"])
+        self.assertEqual(claim["ability"]["condition_keys"], ["directional"])
+
+    def test_official_enemy_relationship_is_found_when_only_enemy_side_has_it(self) -> None:
+        selected = with_roles(hero(1, "后选英雄", mechanics=[]))
+        enemy = with_roles(hero(2, "先选英雄", mechanics=[]))
+        enemy["tactical"]["official_relationships"] = {
+            "suppresses": [{"hero_id": 1, "matched_terms": ["克制说明"]}],
+            "suppressed_by": [],
+        }
+
+        claims = draft_commentary._official_relationship_claims(selected, [enemy])
+
+        self.assertEqual(len(claims), 1)
+        self.assertEqual(claims[0]["source_hero_id"], 2)
+        self.assertEqual(claims[0]["target_hero_id"], 1)
+
     def test_reposition_is_connected_to_carry_job_not_generic_damage(self) -> None:
         master = with_roles(
             hero(525, "鲁班大师", mechanics=["support_ally_reposition", "control_pull"]),
@@ -168,8 +226,40 @@ class DraftCommentaryEvidenceTest(unittest.TestCase):
 
         self.assertEqual(
             draft_commentary._required_claim_ids(evidence),
-            ["claim_1", "claim_2"],
+            ["claim_3", "claim_1", "claim_2"],
         )
+
+    def test_coverage_selection_keeps_hero_ally_and_opponent_perspectives(self) -> None:
+        evidence = [
+            {"id": "mechanic", "kind": "技能机制", "detail": "提供控制", "priority": 35},
+            {"id": "synergy", "kind": "阵容联动", "detail": "帮助队友输出", "priority": 124},
+            {"id": "counter", "kind": "克制关系", "detail": "限制敌方突进", "priority": 121},
+            {"id": "team", "kind": "战队联动", "detail": "出现倾向更高", "priority": 98},
+            {"id": "trend", "kind": "战队趋势", "detail": "近期优先级上升", "priority": 80},
+        ]
+
+        selected = draft_commentary._select_coverage_claims(evidence, limit=3)
+
+        self.assertEqual([claim["facet"] for claim in selected], ["hero", "allies", "opponents"])
+        self.assertEqual(
+            draft_commentary._required_claim_ids(selected),
+            ["mechanic", "synergy", "counter"],
+        )
+
+    def test_deterministic_commentary_uses_a_connected_three_facet_story(self) -> None:
+        evidence = [
+            {"facet": "hero", "detail": "张飞的战术分工偏向拆火", "kind": "战术定位"},
+            {"facet": "allies", "detail": "张飞负责拆火，沈梦溪可以保持距离消耗", "kind": "阵容联动"},
+            {"facet": "opponents", "detail": "张飞可以限制敌方英雄的突进", "kind": "克制关系"},
+        ]
+
+        commentary = draft_commentary._deterministic_commentary(
+            team_name="AG", action="pick", selected=self.zhangfei, evidence=evidence
+        )
+
+        self.assertIn("张飞的战术分工偏向拆火", commentary)
+        self.assertIn("放进己方阵容时", commentary)
+        self.assertIn("面对对手", commentary)
 
     def test_visible_evidence_references_are_rejected(self) -> None:
         for text in (
@@ -186,6 +276,24 @@ class DraftCommentaryEvidenceTest(unittest.TestCase):
                 "张飞负责拆火，沈梦溪保持距离消耗。"
             )
         )
+
+    def test_commentary_sentence_limit_matches_narration_contract(self) -> None:
+        self.assertEqual(draft_commentary._sentence_count("一。二。三。四。"), 4)
+        self.assertEqual(draft_commentary._sentence_count("一。二。三。四。五。"), 5)
+
+    def test_artifact_cache_identity_refreshes_when_a_file_is_republished(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "roles.json"
+            path.write_text(json.dumps({"version": 1}), encoding="utf-8")
+            first = draft_commentary._read_json(path)
+            before = path.stat()
+            path.write_text(json.dumps({"version": 2}), encoding="utf-8")
+            os.utime(path, ns=(before.st_atime_ns, before.st_mtime_ns + 1))
+
+            refreshed = draft_commentary._read_json(path)
+
+        self.assertEqual(first["version"], 1)
+        self.assertEqual(refreshed["version"], 2)
 
     def test_kimi_output_with_visible_claim_id_falls_back(self) -> None:
         settings = MagicMock()

@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, toRaw, watch } from "vue";
 import {
   fetchDraftModel,
   fetchLiveMatch,
@@ -13,13 +13,19 @@ import {
   recommendLineup,
   scoreLineup,
   simulateDraft,
+  simulateDraftScenario,
 } from "./api";
 import DraftCoachPanel from "./DraftCoachPanel.vue";
+import DraftScenarioPanel from "./DraftScenarioPanel.vue";
+import DraftVersionTree from "./DraftVersionTree.vue";
+import WhatIfWorkspaceModal from "./WhatIfWorkspaceModal.vue";
 import TeamCombobox from "./TeamCombobox.vue";
 import { selectAvailableLeague, selectedLeagueId } from "./selectedLeague";
 import { heroAsset } from "./heroAssets";
-import { messages } from "./i18n";
+import { messages, t as uiT } from "./i18n";
 import { finishStartupLoading } from "./startupLoader";
+import { MAX_SCENARIO_NODES, nextScenarioNode, snapshotDraft } from "./composables/draftScenario";
+import { actionsSinceCheckpoint, appendVersionCheckpoint, createVersionCheckpoint, findDeepestVersionPrefix, findVersionCheckpoint, restoreVersionTree, sameVersionHistory, snapshotVersionState } from "./composables/draftVersionTree";
 
 const leagueId = selectedLeagueId;
 const seasons = ref([]);
@@ -37,6 +43,7 @@ const commentaryLoading = ref(false);
 const commentaryEnabled = ref(false);
 const settingsOpen = ref(false);
 let commentaryRequestNumber = 0;
+let commentaryAbortController = null;
 let recommendationRequestNumber = 0;
 let lineupScoreRequestNumber = 0;
 const loading = ref(false);
@@ -70,12 +77,21 @@ let liveMatchCheckTimer = null;
 let liveScheduleTimer = null;
 let liveMatchRequestNumber = 0;
 const selectedTeamIds = ref({ [TEAM_A]: "", [TEAM_B]: "" });
+
+function clearCommentary() {
+  commentaryRequestNumber += 1;
+  commentaryAbortController?.abort();
+  commentaryAbortController = null;
+  commentaryLoading.value = false;
+  commentary.value = null;
+}
 const teamsBySide = ref({ blue: TEAM_A, red: TEAM_B });
 const seriesWins = ref({ [TEAM_A]: 0, [TEAM_B]: 0 });
 const winnerSide = ref(null);
 const nextBlueTeam = ref(null);
 const pickerTarget = ref("draft");
 const coachOpen = ref(false);
+const assistantTab = ref("tree");
 const usedHeroesModalSide = ref(null);
 const draftBoardElement = ref(null);
 const liveFollowStorageKey = "kpl-live-match-following";
@@ -84,6 +100,21 @@ const liveWinnerPredictions = ref(null);
 const liveWinnerPredictionLoading = ref(false);
 const liveWinnerPredictionSaving = ref(false);
 const liveWinnerPredictionSelections = ref({});
+const scenarioNodes = ref([]);
+const scenarioLoadingId = ref("");
+const scenarioError = ref("");
+const scenarioStale = ref(false);
+const scenarioMode = ref(false);
+const whatIfWorkspaceOpen = ref(false);
+const whatIfBaseSnapshot = ref(null);
+const versionTreeNodes = ref([]);
+const versionActiveCheckpoint = ref("");
+const versionRecordingAnchorId = ref("");
+const versionAnchorLength = ref(0);
+const versionTreeMessage = ref("");
+let nextVersionSessionId = 1;
+let scenarioAbortController = null;
+let scenarioRequestNumber = 0;
 
 function bpT(key) {
   return messages["zh-CN"][key] || key;
@@ -116,7 +147,7 @@ const lineupComplete = computed(
 );
 
 const currentLabel = computed(() => {
-  if (isPeakDuel.value) return "巅峰对决，不用BP";
+  if (isPeakDuel.value) return uiT("Peak duel · no draft");
   if (!currentStep.value) return bpT("Draft complete");
   const side = bpT(currentStep.value.side === "blue" ? "Blue" : "Red");
   const action = bpT(currentStep.value.action === "ban" ? "ban" : "pick");
@@ -181,16 +212,15 @@ const availableHeroes = computed(() => {
   const targetSide = pickerTarget.value.replace("global-", "");
   const targetTeam = teamsBySide.value[targetSide];
   const candidates =
-    pickerTarget.value === "draft" && result.value
-      ? result.value.next_action_probabilities
+    pickerTarget.value === "draft"
+      ? (result.value?.next_action_probabilities || [])
           .map((row) => heroes.value.find((hero) => Number(hero.hero_id) === Number(row.hero_id)))
           .filter(Boolean)
       : heroes.value;
   return candidates
     .filter((hero) => {
       const heroId = Number(hero.hero_id);
-      const unavailableForTarget =
-        pickerTarget.value === "draft"
+      const unavailableForTarget = pickerTarget.value === "draft"
           ? usedHeroIds.value.has(heroId)
           : globalUsed.value[targetTeam].includes(heroId) || usedHeroIds.value.has(heroId);
       const matchesLane =
@@ -220,6 +250,19 @@ const teamsReady = computed(
     Boolean(selectedTeam(TEAM_A) && selectedTeam(TEAM_B)) &&
     selectedTeamIds.value[TEAM_A] !== selectedTeamIds.value[TEAM_B]
 );
+
+const whatIfSimulationContext = computed(() => {
+  if (!teamsReady.value || !model.value) return null;
+  const blueTeam = selectedTeam(teamsBySide.value.blue);
+  const redTeam = selectedTeam(teamsBySide.value.red);
+  if (!blueTeam || !redTeam) return null;
+  return {
+    leagueId: leagueId.value,
+    modelType,
+    blueTeam,
+    redTeam,
+  };
+});
 
 const scheduledMatchStarted = computed(() => {
   const delay = scheduledLiveCheckDelay(upcomingMatch.value);
@@ -767,6 +810,7 @@ function isOfficialSeriesComplete(state) {
 
 async function applyLiveMatchState(state) {
   if (!state?.match || !teamsReady.value) return;
+  clearCommentary();
   globalMode.value = "match";
   if (Number(state.match.bo) > 0) bestOf.value = Number(state.match.bo);
   resetSeriesTeams();
@@ -787,9 +831,14 @@ async function applyLiveMatchState(state) {
   board.value = emptyBoard();
   history.value = [];
   bpOrder.value = 1;
+  clearVersionTree();
   pickerTarget.value = "draft";
   winnerSide.value = null;
   nextBlueTeam.value = null;
+  if (scenarioNodes.value.length) {
+    scenarioStale.value = true;
+    scenarioAbortController?.abort();
+  }
   await forecast();
 }
 
@@ -822,8 +871,9 @@ async function moveToNextScheduledFixture() {
   board.value = emptyBoard();
   history.value = [];
   bpOrder.value = 1;
+  clearVersionTree();
   result.value = null;
-  commentary.value = null;
+  clearCommentary();
   liveMatch.value = null;
   liveFollowDismissed.value = false;
   selectedTeamIds.value = {
@@ -920,7 +970,7 @@ async function loadModel() {
   lineupScore.value = null;
   lineupScoreLoading.value = false;
   lineupScoreError.value = "";
-  commentary.value = null;
+  clearCommentary();
   model.value = null;
   seasonTeams.value = [];
   upcomingMatch.value = null;
@@ -935,6 +985,7 @@ async function loadModel() {
   board.value = emptyBoard();
   history.value = [];
   bpOrder.value = 1;
+  clearVersionTree();
   globalMode.value = "match";
   seriesGame.value = 1;
   bestOf.value = 5;
@@ -955,7 +1006,14 @@ async function loadModel() {
         teams.find((team) => String(team.team_id) === String(fixtureTeam.team_id))
       )
       .filter(Boolean);
-    if (scheduledTeams.length === 2 && String(scheduledTeams[0].team_id) !== String(scheduledTeams[1].team_id)) {
+    const wolves = teams.find((team) => /狼队|wolves/i.test(team.team_name));
+    const ttg = teams.find((team) => /ttg/i.test(team.team_name));
+    if (wolves && ttg && String(wolves.team_id) !== String(ttg.team_id)) {
+      selectedTeamIds.value = {
+        [TEAM_A]: String(wolves.team_id),
+        [TEAM_B]: String(ttg.team_id),
+      };
+    } else if (scheduledTeams.length === 2 && String(scheduledTeams[0].team_id) !== String(scheduledTeams[1].team_id)) {
       selectedTeamIds.value = {
         [TEAM_A]: String(scheduledTeams[0].team_id),
         [TEAM_B]: String(scheduledTeams[1].team_id),
@@ -1093,7 +1151,7 @@ async function recommendCurrentDraft() {
 }
 
 async function chooseHero(heroId) {
-  if (!teamsReady.value || isPeakDuel.value || liveHeroSelectionLocked.value) return;
+  if (!teamsReady.value || isPeakDuel.value || liveHeroSelectionLocked.value || simulating.value) return;
   if (pickerTarget.value !== "draft") {
     if (liveOfficialHeroContextLocked.value) return;
     const side = pickerTarget.value.replace("global-", "");
@@ -1105,9 +1163,16 @@ async function chooseHero(heroId) {
     return;
   }
   if (!currentStep.value || usedHeroIds.value.has(Number(heroId))) return;
+  const legalIds = new Set(
+    (result.value?.next_action_probabilities || []).map((row) => Number(row.hero_id))
+  );
+  if (!legalIds.has(Number(heroId))) return;
   const preSelectionState = coachDraftState.value;
+  clearCommentary();
   if (commentaryEnabled.value && preSelectionState) {
     const requestNumber = ++commentaryRequestNumber;
+    const controller = new AbortController();
+    commentaryAbortController = controller;
     commentaryLoading.value = true;
     fetchSelectionCommentary({
       league_id: leagueId.value,
@@ -1115,14 +1180,17 @@ async function chooseHero(heroId) {
       action: currentStep.value.action,
       side: currentStep.value.side,
       selected_hero_id: Number(heroId),
-    }).then((payload) => {
+    }, { signal: controller.signal }).then((payload) => {
       if (commentaryEnabled.value && requestNumber === commentaryRequestNumber) {
         commentary.value = payload;
       }
-    }).catch(() => {
-      if (requestNumber === commentaryRequestNumber) commentary.value = null;
+    }).catch((err) => {
+      if (err.name !== "AbortError" && requestNumber === commentaryRequestNumber) commentary.value = null;
     }).finally(() => {
-      if (requestNumber === commentaryRequestNumber) commentaryLoading.value = false;
+      if (requestNumber === commentaryRequestNumber) {
+        commentaryLoading.value = false;
+        commentaryAbortController = null;
+      }
     });
   }
   const field = `${currentStep.value.side}_${
@@ -1132,14 +1200,201 @@ async function chooseHero(heroId) {
   history.value.push({ field, heroId: Number(heroId), bpOrder: bpOrder.value });
   bpOrder.value += 1;
   search.value = "";
+  syncVersionTreeWithBoard();
   await forecast();
+}
+
+async function expandScenario(hero, parent = null) {
+  const state = parent?.result?.transition_state || coachDraftState.value;
+  if (!state || scenarioStale.value || scenarioNodes.value.length >= MAX_SCENARIO_NODES) return;
+  const node = nextScenarioNode(scenarioNodes.value, parent?.id || null, hero, state);
+  if (!node) return;
+  scenarioNodes.value = [...scenarioNodes.value, node];
+  scenarioAbortController?.abort();
+  const controller = new AbortController();
+  scenarioAbortController = controller;
+  const requestNumber = ++scenarioRequestNumber;
+  scenarioLoadingId.value = node.id;
+  scenarioError.value = "";
+  try {
+    const result = await simulateDraftScenario({ league_id: leagueId.value, ...node.state, forced_hero_id: Number(hero.hero_id) }, { signal: controller.signal });
+    if (requestNumber === scenarioRequestNumber && !scenarioStale.value) {
+      scenarioNodes.value = scenarioNodes.value.map((item) => item.id === node.id ? { ...item, result } : item);
+    }
+  } catch (err) {
+    if (err.name !== "AbortError" && requestNumber === scenarioRequestNumber) scenarioError.value = err.message || uiT("Could not complete this hypothetical branch.");
+  } finally {
+    if (scenarioLoadingId.value === node.id) scenarioLoadingId.value = "";
+  }
+}
+
+async function applyScenario(node) {
+  const state = node?.result?.transition_state;
+  if (scenarioStale.value || !state) return;
+  clearCommentary();
+  board.value = snapshotDraft({
+    blue_picks: state.blue_picks, red_picks: state.red_picks,
+    blue_bans: state.blue_bans, red_bans: state.red_bans,
+  });
+  bpOrder.value = state.bp_order;
+  globalUsed.value[teamsBySide.value.blue] = [...state.blue_used_previous_battles];
+  globalUsed.value[teamsBySide.value.red] = [...state.red_used_previous_battles];
+  history.value = [];
+  await forecast();
+}
+
+function clearVersionTree() {
+  versionTreeNodes.value = [];
+  versionActiveCheckpoint.value = "";
+  versionRecordingAnchorId.value = "";
+  versionAnchorLength.value = 0;
+  versionTreeMessage.value = "";
+  nextVersionSessionId = 1;
+  whatIfWorkspaceOpen.value = false;
+  whatIfBaseSnapshot.value = null;
+}
+
+function versionStateSnapshot() {
+  return snapshotVersionState({
+    board: board.value,
+    bpOrder: bpOrder.value,
+    history: history.value,
+    blueUsed: globalUsed.value[teamsBySide.value.blue],
+    redUsed: globalUsed.value[teamsBySide.value.red],
+  });
+}
+
+function rawVersionNodes() {
+  return toRaw(versionTreeNodes.value).map((node) => toRaw(node));
+}
+
+const versionRecordingActions = computed(() => {
+  const anchor = findVersionCheckpoint(rawVersionNodes(), versionRecordingAnchorId.value);
+  return actionsSinceCheckpoint(history.value, anchor);
+});
+
+function syncVersionTreeWithBoard() {
+  // Saved nodes are immutable. The live interval is derived only when the rail renders.
+  versionTreeMessage.value = "";
+  versionActiveCheckpoint.value = "";
+}
+
+function pinPracticeBoardToTree() {
+  if (isPeakDuel.value || liveHeroSelectionLocked.value || !history.value.length) return;
+  assistantTab.value = "tree";
+  const snapshot = versionStateSnapshot();
+  const parent = findVersionCheckpoint(rawVersionNodes(), versionRecordingAnchorId.value);
+  const actions = actionsSinceCheckpoint(snapshot.history, parent);
+  if (!actions.length) {
+    versionTreeMessage.value = uiT("No new BP actions to save.");
+    return;
+  }
+  const checkpoint = createVersionCheckpoint({
+    id: `checkpoint-${nextVersionSessionId++}`,
+    parentId: parent?.id || null,
+    actions,
+    state: snapshot,
+    createdOrder: nextVersionSessionId,
+  });
+  const next = appendVersionCheckpoint(rawVersionNodes(), checkpoint);
+  if (next.length === versionTreeNodes.value.length) {
+    versionTreeMessage.value = uiT("This board is already saved.");
+    return;
+  }
+  versionTreeNodes.value = next;
+  versionRecordingAnchorId.value = checkpoint.id;
+  versionActiveCheckpoint.value = checkpoint.id;
+  versionAnchorLength.value = snapshot.history.length;
+}
+
+function pinWhatIfSnapshot(payload) {
+  if (!payload?.sessionId || !payload.branch) return;
+  const branchHistory = payload.branch.state?.history || [];
+  const parent = findDeepestVersionPrefix(rawVersionNodes(), branchHistory);
+  const checkpoint = createVersionCheckpoint({
+    id: `checkpoint-${nextVersionSessionId++}`,
+    parentId: parent?.id || null,
+    actions: actionsSinceCheckpoint(branchHistory, parent),
+    state: payload.branch.state,
+    createdOrder: nextVersionSessionId,
+  });
+  const next = appendVersionCheckpoint(rawVersionNodes(), checkpoint);
+  if (next.length === versionTreeNodes.value.length) versionTreeMessage.value = uiT("This board is already saved.");
+  else versionTreeNodes.value = next;
+}
+
+function applyVersionState(state) {
+  const snapshot = snapshotVersionState(state);
+  board.value = snapshot.board;
+  bpOrder.value = snapshot.bpOrder;
+  history.value = snapshot.history;
+  globalUsed.value[teamsBySide.value.blue] = snapshot.blueUsed;
+  globalUsed.value[teamsBySide.value.red] = snapshot.redUsed;
+}
+
+async function restoreVersionCheckpoint(checkpoint) {
+  const restored = restoreVersionTree(rawVersionNodes(), checkpoint);
+  if (!restored?.state) return;
+  closeWhatIfWorkspace();
+  versionTreeNodes.value = restored.nodes;
+  applyVersionState(restored.state);
+  versionActiveCheckpoint.value = restored.activeCheckpoint;
+  versionRecordingAnchorId.value = restored.activeCheckpoint;
+  versionAnchorLength.value = restored.state.history.length;
+  versionTreeMessage.value = "";
+  await forecast();
+}
+
+function closeWhatIfWorkspace() {
+  whatIfWorkspaceOpen.value = false;
+  whatIfBaseSnapshot.value = null;
+}
+
+function openWhatIfWorkspace() {
+  if (!teamsReady.value || isPeakDuel.value || liveHeroSelectionLocked.value) return;
+  // A modal branch needs a durable parent so its compact action list is unambiguous.
+  if (versionRecordingActions.value.length) pinPracticeBoardToTree();
+  const versionSessionId = `what-if-${nextVersionSessionId++}`;
+  const baseState = versionStateSnapshot();
+  whatIfBaseSnapshot.value = snapshotDraft({
+    ...baseState,
+    startHistoryLength: history.value.length,
+    versionSessionId,
+    parentCheckpointId: versionRecordingAnchorId.value || null,
+  });
+  whatIfWorkspaceOpen.value = true;
+}
+
+async function applyWhatIfWorkspaceScenario(scenario) {
+  const sessionId = whatIfBaseSnapshot.value?.versionSessionId;
+  board.value = {
+    blue_picks: [...scenario.board.blue_picks],
+    red_picks: [...scenario.board.red_picks],
+    blue_bans: [...scenario.board.blue_bans],
+    red_bans: [...scenario.board.red_bans],
+  };
+  bpOrder.value = scenario.bpOrder;
+  history.value = scenario.history.map((entry) => ({ ...entry }));
+  whatIfWorkspaceOpen.value = false;
+  whatIfBaseSnapshot.value = null;
+  versionActiveCheckpoint.value = "";
+  const appliedCheckpoint = rawVersionNodes().find((node) => sameVersionHistory(node.state?.history, history.value));
+  versionRecordingAnchorId.value = appliedCheckpoint?.id || "";
+  versionAnchorLength.value = history.value.length;
+  await forecast();
+}
+
+function resetScenarioTree() {
+  scenarioAbortController?.abort();
+  scenarioRequestNumber += 1;
+  scenarioNodes.value = [];
+  scenarioError.value = "";
+  scenarioStale.value = false;
 }
 
 watch(commentaryEnabled, (enabled) => {
   if (enabled) return;
-  commentaryRequestNumber += 1;
-  commentaryLoading.value = false;
-  commentary.value = null;
+  clearCommentary();
 });
 
 async function undo() {
@@ -1149,6 +1404,8 @@ async function undo() {
   const index = board.value[event.field].lastIndexOf(event.heroId);
   if (index >= 0) board.value[event.field].splice(index, 1);
   bpOrder.value = event.bpOrder;
+  clearCommentary();
+  syncVersionTreeWithBoard();
   await forecast();
 }
 
@@ -1158,12 +1415,15 @@ async function reset() {
   history.value = [];
   bpOrder.value = 1;
   search.value = "";
-  commentary.value = null;
+  clearCommentary();
+  resetScenarioTree();
+  clearVersionTree();
   await forecast();
 }
 
 async function startGlobalBp() {
   if (!teamsReady.value) return;
+  clearCommentary();
   globalMode.value = "match";
   seriesGame.value = 1;
   resetSeriesTeams();
@@ -1171,11 +1431,13 @@ async function startGlobalBp() {
   history.value = [];
   bpOrder.value = 1;
   pickerTarget.value = "draft";
+  clearVersionTree();
   await forecast();
 }
 
 async function customizeGlobalBp() {
   if (!teamsReady.value) return;
+  clearCommentary();
   globalMode.value = "custom";
   seriesGame.value = 2;
   resetSeriesTeams();
@@ -1183,14 +1445,17 @@ async function customizeGlobalBp() {
   history.value = [];
   bpOrder.value = 1;
   pickerTarget.value = "global-blue";
+  clearVersionTree();
   await forecast();
 }
 
 async function clearGlobalBp() {
+  clearCommentary();
   globalMode.value = "single";
   seriesGame.value = 1;
   resetSeriesTeams();
   pickerTarget.value = "draft";
+  clearVersionTree();
   await forecast();
 }
 
@@ -1201,6 +1466,7 @@ async function startNextBattle() {
     !winnerSide.value ||
     !nextBlueTeam.value
   ) return;
+  clearCommentary();
   for (const side of ["blue", "red"]) {
     const team = teamsBySide.value[side];
     globalUsed.value[team] = [
@@ -1215,6 +1481,7 @@ async function startNextBattle() {
   seriesGame.value += 1;
   winnerSide.value = null;
   nextBlueTeam.value = null;
+  clearVersionTree();
   await forecast();
 }
 
@@ -1339,6 +1606,7 @@ watch(leagueId, loadModel);
 watch(
   selectedTeamIds,
   async () => {
+    clearCommentary();
     stopFollowingLiveMatch({ forget: false });
     stopLiveMatchPolling();
     liveMatch.value = null;
@@ -1357,6 +1625,8 @@ watch(
 );
 
 onBeforeUnmount(() => {
+  clearCommentary();
+  scenarioAbortController?.abort();
   stopLiveMatchPolling();
   stopLiveMatchCheckSchedule();
   stopLiveScheduleClock();
@@ -1643,6 +1913,7 @@ onBeforeUnmount(() => {
           </label>
         </div>
         <div class="simulator-actions">
+          <button type="button" :disabled="!teamsReady || isPeakDuel || liveHeroSelectionLocked" @click="openWhatIfWorkspace">打开 What-if 窗口</button>
           <button type="button" :disabled="isPeakDuel || !history.length || simulating || liveHeroSelectionLocked" @click="undo">撤销</button>
           <button type="button" :disabled="isPeakDuel || simulating || liveHeroSelectionLocked" @click="reset">重置</button>
         </div>
@@ -1713,6 +1984,21 @@ onBeforeUnmount(() => {
             </aside>
           </section>
 
+          <section v-if="!isPeakDuel" class="whatif-launcher">
+            <div>
+              <h2>版本树快照</h2>
+              <p>保存当前 BP 进度，之后可以从这个检查点继续推演或建立新的分支。</p>
+            </div>
+            <div class="whatif-launcher-actions">
+              <button
+                type="button"
+                class="tree-snapshot-action"
+                :disabled="!history.length || liveHeroSelectionLocked"
+                @click="pinPracticeBoardToTree"
+              >{{ uiT('Add snapshot to tree') }}</button>
+            </div>
+          </section>
+
           <section v-if="lineupComplete || lineupScoreLoading || lineupScoreError" class="lineup-score-panel">
             <header>
               <div>
@@ -1761,6 +2047,19 @@ onBeforeUnmount(() => {
               <small class="recommendation-warning">这是相对阵容排序分，不是比赛胜率；正贡献偏向蓝方，负贡献偏向红方。</small>
             </template>
           </section>
+
+          <WhatIfWorkspaceModal
+            v-if="whatIfWorkspaceOpen && whatIfBaseSnapshot"
+            :base="whatIfBaseSnapshot"
+            :heroes="heroes"
+            :draft-sequence="model?.draft_sequence || []"
+            :hero-asset="heroIcon"
+            :simulation-context="whatIfSimulationContext"
+            :initial-forecast="simulating ? null : result"
+            @close="closeWhatIfWorkspace"
+            @apply="applyWhatIfWorkspaceScenario"
+            @pin-snapshot="pinWhatIfSnapshot"
+          />
 
           <section v-if="!isPeakDuel" class="recommendation-panel">
             <header>
@@ -1839,13 +2138,28 @@ onBeforeUnmount(() => {
           <section v-if="!isPeakDuel && (commentary || commentaryLoading)" class="commentary-panel">
             <p class="simulator-eyebrow">BP 解说</p>
             <p v-if="commentaryLoading" class="commentary-loading">正在生成解说…</p>
-            <h2 v-else>{{ commentary.commentary }}</h2>
+            <template v-else>
+              <p class="commentary-context">
+                {{ commentary.selected_hero?.hero_name }} · {{ commentary.event?.team }}
+                <span>{{ commentary.commentary_source === 'kimi' ? 'Kimi 整理 · 本地证据约束' : '本地证据解说' }}</span>
+              </p>
+              <h2>{{ commentary.commentary }}</h2>
+              <details v-if="commentary.evidence?.length" class="commentary-evidence">
+                <summary>查看解说依据</summary>
+                <dl>
+                  <template v-for="claim in commentary.evidence" :key="claim.id">
+                    <dt>{{ claim.facet === 'hero' ? '英雄作用' : claim.facet === 'allies' ? '己方连接' : claim.facet === 'opponents' ? '敌方互动' : claim.kind }}</dt>
+                    <dd>{{ claim.detail }}</dd>
+                  </template>
+                </dl>
+              </details>
+            </template>
           </section>
 
           <section v-if="!isPeakDuel" class="hero-picker">
             <div class="picker-heading">
               <div>
-                <p class="simulator-eyebrow">{{ pickerTarget === 'draft' ? '添加下一步操作' : '全局 BP 设置' }}</p>
+                <p class="simulator-eyebrow">{{ pickerTarget === 'draft' ? bpT('Add the next action') : bpT('Global BP setup') }}</p>
                 <h2 data-i18n-ignore>{{ pickerTitle }}</h2>
               </div>
               <div class="picker-controls">
@@ -1892,14 +2206,46 @@ onBeforeUnmount(() => {
           aria-label="关闭 BP 教练"
           @click="coachOpen = false"
         ></button>
-        <aside class="coach-rail" :class="{ 'coach-open': coachOpen }" aria-label="BP 教练对话">
+        <aside class="coach-rail" :class="{ 'coach-open': coachOpen }" aria-label="BP 辅助工具">
           <button class="mobile-coach-close" type="button" aria-label="关闭 BP 教练" @click="coachOpen = false">×</button>
-          <DraftCoachPanel
-            :league-id="leagueId"
-            :season-name="selectedSeason?.league_name || leagueId"
-            :draft-state="coachDraftState"
-            :force-chinese="true"
-          />
+          <div class="assistant-rail-shell">
+            <div class="assistant-tabs" role="tablist" aria-label="BP 辅助工具">
+              <button
+                type="button"
+                role="tab"
+                :aria-selected="assistantTab === 'tree'"
+                :class="{ active: assistantTab === 'tree' }"
+                @click="assistantTab = 'tree'"
+              >版本树</button>
+              <button
+                type="button"
+                role="tab"
+                :aria-selected="assistantTab === 'coach'"
+                :class="{ active: assistantTab === 'coach' }"
+                @click="assistantTab = 'coach'"
+              >AI 教练</button>
+            </div>
+            <div v-show="assistantTab === 'tree'" class="assistant-view tree-view" role="tabpanel">
+              <DraftVersionTree
+                :nodes="versionTreeNodes"
+                :heroes="heroes"
+                :hero-asset="heroIcon"
+                :active-checkpoint="versionActiveCheckpoint"
+                :recording-actions="versionRecordingActions"
+                :recording-from="versionRecordingAnchorId"
+                :message="versionTreeMessage"
+                @restore-checkpoint="restoreVersionCheckpoint"
+              />
+            </div>
+            <div v-show="assistantTab === 'coach'" class="assistant-view coach-view" role="tabpanel">
+              <DraftCoachPanel
+                :league-id="leagueId"
+                :season-name="selectedSeason?.league_name || leagueId"
+                :draft-state="coachDraftState"
+                :force-chinese="true"
+              />
+            </div>
+          </div>
         </aside>
         <button
           class="mobile-coach-toggle"
@@ -1916,6 +2262,20 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.tree-snapshot-action { min-height:2.1rem; padding:.42rem .62rem; border:1px solid var(--accent-deep); background:var(--accent-deep); color:#fff; font:700 .6rem var(--mono); cursor:pointer; white-space:nowrap; }
+.tree-snapshot-action:hover:not(:disabled) { background:#084f42; }
+.tree-snapshot-action:focus-visible { outline:2px solid #28745d; outline-offset:3px; }
+.tree-snapshot-action:disabled { cursor:not-allowed; opacity:.45; }
+.whatif-launcher { display:flex; width:calc(100% - .75rem - clamp(250px,31%,320px)); box-sizing:border-box; align-items:center; justify-content:space-between; gap:1rem; margin-top:.75rem; padding:.85rem 1rem; border:1px solid #b8d8c9; background:#edf7f2; }
+.whatif-launcher h2 { margin:0; color:var(--accent-deep); font:700 .92rem var(--display); letter-spacing:-.02em; }
+.whatif-launcher p { max-width:62ch; margin:.2rem 0 0; color:#28745d; font-size:.63rem; line-height:1.45; }
+.whatif-launcher-actions { display:flex; flex:0 0 auto; flex-wrap:wrap; justify-content:flex-end; gap:.45rem; }
+.whatif-launcher button { min-height:2.35rem; padding:.48rem .7rem; border:1px solid var(--accent-deep); background:#fff; color:var(--accent-deep); font:700 .62rem var(--mono); cursor:pointer; white-space:nowrap; }
+.whatif-launcher .tree-snapshot-action { background:var(--accent-deep); color:#fff; }
+.whatif-launcher button:hover:not(:disabled) { background:#dff1e7; }
+.whatif-launcher .tree-snapshot-action:hover:not(:disabled) { background:#084f42; }
+.whatif-launcher button:focus-visible { outline:2px solid #28745d; outline-offset:3px; }
+.whatif-launcher button:disabled { cursor:not-allowed; opacity:.45; }
 .simulator-page { width: min(1560px, calc(100% - 2rem)); margin: 0 auto; padding: 2.25rem 0 5rem; }
 .simulator-hero, .simulator-status, .simulator-layout { display: flex; gap: 1.5rem; justify-content: space-between; }
 .simulator-hero { align-items: flex-end; }
@@ -1962,7 +2322,7 @@ onBeforeUnmount(() => {
 .upcoming-match-note { grid-column:1 / -1; margin:0; padding:.65rem .75rem; border-left:3px solid var(--accent); background:#edf8f3; color:var(--accent-deep); font-size:.68rem; line-height:1.45; }
 .live-match-panel { grid-column:1 / -1; display:flex; align-items:center; justify-content:space-between; gap:1rem; margin:0; padding:.75rem; border:1px solid #d9b663; background:#fff8e7; }.live-match-panel.active { border-color:var(--accent-deep); background:#edf8f3; }.live-match-panel strong { display:block; margin:.1rem 0; font:700 .8rem var(--mono); }.live-match-panel small { display:block; max-width:48rem; color:var(--ink-soft); font-size:.62rem; line-height:1.45; }.live-match-panel .live-refresh-note { margin-top:.25rem; color:var(--accent-deep); }.live-match-panel > div:last-child { display:flex; flex-wrap:wrap; gap:.35rem; }.live-match-panel button { min-height:32px; padding:.4rem .55rem; border:1px solid var(--accent-deep); background:var(--accent-deep); color:#fff; font:700 .61rem var(--mono); cursor:pointer; white-space:nowrap; }.live-match-panel button.quiet { border-color:var(--line); background:#fff; color:var(--ink-soft); }.live-match-panel button:disabled { cursor:not-allowed; opacity:.55; }
 .live-winner-prediction { grid-column:1 / -1; display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:.75rem; border:1px solid #9ab9cd; background:#f3f9fd; }.live-winner-prediction strong { display:block; margin:.1rem 0; font:700 .8rem var(--mono); }.live-winner-prediction small { display:block; color:var(--ink-soft); font-size:.62rem; line-height:1.45; }.live-winner-choices { display:flex; flex-wrap:wrap; gap:.4rem; }.live-winner-choices button { display:grid; gap:.1rem; min-width:7.5rem; min-height:38px; padding:.4rem .6rem; border:1px solid #9ab9cd; background:#fff; color:var(--ink); font:700 .64rem var(--mono); cursor:pointer; }.live-winner-choices button.active { border-color:var(--accent-deep); background:var(--ink); color:#fff; }.live-winner-choices button.active small { color:#fff; }.live-winner-choices button:disabled { cursor:not-allowed; opacity:.6; }
-.simulator-workspace { display:grid; grid-template-columns:minmax(0, 1fr) minmax(340px, 390px); gap:.85rem; align-items:start; margin-top:.75rem; }.simulator-main-column { min-width:0; }.coach-rail { position:sticky; top:1rem; min-width:0; }.simulator-layout { align-items: stretch; margin-top:0; gap:.75rem; }.draft-board { display: grid; flex: 1; min-width:0; grid-template-columns: repeat(2, minmax(0,1fr)); gap: .75rem; }
+.simulator-workspace { display:grid; grid-template-columns:minmax(0, 1fr) minmax(340px, 390px); gap:.85rem; align-items:start; margin-top:.75rem; }.simulator-main-column { min-width:0; }.coach-rail { position:sticky; top:1rem; min-width:0; }.assistant-rail-shell{display:grid;grid-template-rows:auto minmax(0,1fr);height:min(760px,calc(100vh - 2rem));min-height:580px}.assistant-tabs{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--accent-deep);border-bottom:0;background:#102a2e}.assistant-tabs button{min-height:44px;border:0;border-right:1px solid rgba(255,255,255,.14);background:transparent;color:rgba(255,255,255,.7);font:700 .66rem var(--mono);cursor:pointer}.assistant-tabs button:last-child{border-right:0}.assistant-tabs button.active{background:#084f42;color:#fff}.assistant-tabs button:focus-visible{position:relative;z-index:1;outline:2px solid #8fe0c8;outline-offset:-3px}.assistant-view{min-height:0;overflow:hidden}.coach-view :deep(.coach-panel){height:100%;min-height:0;border-top:0}.tree-view :deep(.version-tree){border-top:0}.simulator-layout { align-items: stretch; margin-top:0; gap:.75rem; }.draft-board { display: grid; flex: 1; min-width:0; grid-template-columns: repeat(2, minmax(0,1fr)); gap: .75rem; }
 .peak-duel-board { display:grid; min-height:20rem; flex:1; place-content:center; padding:2rem; border:1px dashed var(--line); background:rgba(255,255,255,.6); color:var(--ink-soft); text-align:center; }
 .peak-duel-board h2 { margin:0; color:var(--ink); font:700 clamp(1.8rem, 4vw, 3rem) var(--display); letter-spacing:-.04em; }
 .mobile-group-title { display:none; }
@@ -1977,9 +2337,10 @@ onBeforeUnmount(() => {
 .metric-help { box-sizing:border-box; min-width:.85rem; max-width:.85rem; min-height:.85rem; max-height:.85rem; aspect-ratio:1; appearance:none; border-radius:999px; }
 .recommendation-detail-toggle { display:none; }
 .recommendation-details > p { margin:.55rem 0 0; color:var(--ink-soft); font-size:.57rem; line-height:1.4; }
-.commentary-panel { margin-top:.75rem; padding:1rem 1.15rem; border:1px solid var(--accent-deep); background:linear-gradient(120deg, rgba(232,191,108,.18), rgba(255,255,255,.84)); }.commentary-panel h2 { max-width:70rem; margin:.25rem 0 0; font:700 1rem/1.55 var(--display); letter-spacing:-.015em; }.commentary-loading { margin:0; color:var(--ink-soft); font-size:.75rem; }
+.commentary-panel { margin-top:.75rem; padding:1rem 1.15rem; border:1px solid var(--accent-deep); background:linear-gradient(120deg, rgba(232,191,108,.18), rgba(255,255,255,.84)); }.commentary-panel h2 { max-width:70rem; margin:.25rem 0 0; font:700 1rem/1.55 var(--display); letter-spacing:-.015em; }.commentary-loading { margin:0; color:var(--ink-soft); font-size:.75rem; }.commentary-context { display:flex; flex-wrap:wrap; gap:.35rem; margin:.1rem 0 0; color:var(--ink-soft); font-size:.68rem; }.commentary-context span { color:var(--accent-deep); }.commentary-evidence { margin-top:.7rem; color:var(--ink-soft); font-size:.72rem; }.commentary-evidence summary { cursor:pointer; color:var(--ink); }.commentary-evidence dl { display:grid; grid-template-columns:auto 1fr; gap:.28rem .55rem; margin:.55rem 0 0; }.commentary-evidence dt { color:var(--accent-deep); font-weight:700; }.commentary-evidence dd { margin:0; }
 .hero-picker { margin-top: .75rem; padding: 1rem; }.picker-heading { display:flex; align-items:end; justify-content:space-between; gap:1rem; }.picker-heading h2 { font-size:1.4rem; }.picker-controls { display:flex; align-items:end; gap:.55rem; }.picker-controls input { width:min(100%, 260px); }.hero-lane-filter { display:grid; gap:.22rem; color:var(--ink-soft); font-size:.67rem; font-weight:700; letter-spacing:.04em; }.hero-lane-filter select { min-width:9.2rem; }.picker-targets { margin-top:.85rem; }.hero-options { display:grid; grid-template-columns:repeat(auto-fill, minmax(3.6rem, 1fr)); gap:.45rem; margin-top:1rem; max-height:360px; overflow:auto; }.hero-options button { position:relative; display:grid; place-items:center; aspect-ratio:1; padding:0; overflow:hidden; }.hero-options button img { width:100%; height:100%; object-fit:cover; }.hero-options button small { position:absolute; right:0; bottom:0; padding:.14rem .2rem; background:rgba(16,42,46,.84); color:#fff; font-size:.56rem; }.hero-options button:hover:not(:disabled), .draft-slots button:not(:disabled):hover { border-color: var(--accent); color: var(--accent-deep); }
-@media (max-width: 1000px) { .simulator-workspace { grid-template-columns:1fr; }.coach-rail { position:static; }.coach-rail { grid-row:1; }.simulator-main-column { grid-row:2; } }
+.scenario-mode { display:flex; align-items:center; gap:.28rem; color:var(--ink-soft); font-size:.61rem; white-space:nowrap; }.scenario-mode input { width:auto; accent-color:var(--accent-deep); }
+@media (max-width: 1000px) { .simulator-workspace { grid-template-columns:1fr; }.coach-rail { position:static; }.coach-rail { grid-row:1; }.assistant-rail-shell{height:auto;min-height:520px;max-height:700px}.simulator-main-column { grid-row:2; } }
 @media (max-width: 860px) { .simulator-hero, .simulator-status, .simulator-layout { flex-direction:column; align-items:stretch; }.simulator-header-controls { justify-content:stretch; }.simulator-season, .forecast-panel { width:100%; }.simulator-season { min-width:0; }.simulator-settings { align-self:flex-end; }.forecast-panel { min-width:0; }.simulator-actions { justify-content:space-between; }.side-assignment { position:static; width:100%; transform:none; }.side-assignment label { flex:1; }.draft-board { grid-template-columns:1fr; }.global-bp-panel { grid-template-columns:1fr; }.global-used { grid-template-columns:1fr; }.next-battle { justify-self:start; }.recommendation-list,.lineup-score-breakdown { grid-template-columns:1fr; } }
 @media (max-width:620px) {
   .settings-menu { left:0; right:auto; width:min(19rem, calc(100vw - 1rem)); }
@@ -2036,6 +2397,8 @@ onBeforeUnmount(() => {
   .draft-slots button, .draft-slots span { max-width:none; font-size:.55rem; }
   .draft-slots button { min-height:0; overflow:hidden; }
 }
-@media (max-width: 620px) { .simulator-page { width:calc(100% - 1rem); padding-top:1.25rem; }.simulator-status { gap:1rem; }.simulator-actions { flex-wrap:wrap; }.picker-heading { align-items:stretch; flex-direction:column; }.picker-controls { align-items:stretch; flex-direction:column; }.picker-controls input, .hero-lane-filter select { width:100%; }.hero-options { grid-template-columns:repeat(auto-fill, minmax(3.25rem, 1fr)); }.coach-rail{display:none}.coach-rail.coach-open{position:fixed;z-index:91;right:.75rem;bottom:calc(5.25rem + env(safe-area-inset-bottom));left:.75rem;display:block;overflow:hidden;border:1px solid var(--line);border-radius:.8rem;background:#fff;box-shadow:0 1rem 3rem rgba(16,42,46,.28)}.coach-rail.coach-open :deep(.coach-panel){height:auto;min-height:0;max-height:none;grid-template-rows:auto minmax(150px,auto) auto auto;border:0;box-shadow:none}.coach-rail.coach-open :deep(.coach-header){padding:.72rem 3.25rem .72rem .8rem}.coach-rail.coach-open :deep(.coach-thread){min-height:150px;max-height:42dvh;padding:.75rem}.coach-rail.coach-open :deep(.coach-form){padding:.65rem .7rem .45rem}.coach-rail.coach-open :deep(.coach-disclaimer){padding:0 .7rem .45rem}.coach-scrim{position:fixed;z-index:90;inset:0;display:block;width:100%;height:100%;border:0;background:rgba(16,42,46,.28)}.mobile-coach-toggle{position:fixed;z-index:80;right:1rem;bottom:calc(6rem + env(safe-area-inset-bottom));display:grid;width:3.5rem;height:3.5rem;place-items:center;border:1px solid rgba(255,255,255,.7);border-radius:50%;background:var(--ink);color:#fff;box-shadow:0 .6rem 1.4rem rgba(16,42,46,.28);font-family:var(--mono)}.mobile-coach-toggle span{position:absolute;top:.38rem;right:.5rem;color:#8fe0c8;font-size:.8rem}.mobile-coach-toggle strong{font-size:.7rem;letter-spacing:.08em}.coach-open~.mobile-coach-toggle{display:none}.mobile-coach-close{position:absolute;z-index:2;top:.65rem;right:.65rem;display:grid;width:1.85rem;height:1.85rem;min-height:1.85rem;place-items:center;margin:0;padding:0;border:1px solid rgba(255,255,255,.28);border-radius:.5rem;background:rgba(255,255,255,.12);color:#fff;box-shadow:none;font:400 1.15rem/1 var(--display)} }
+@media (max-width: 620px) { .simulator-page { width:calc(100% - 1rem); padding-top:1.25rem; }.simulator-status { gap:1rem; }.simulator-actions { flex-wrap:wrap; }.picker-heading { align-items:stretch; flex-direction:column; }.picker-controls { align-items:stretch; flex-direction:column; }.picker-controls input, .hero-lane-filter select { width:100%; }.hero-options { grid-template-columns:repeat(auto-fill, minmax(3.25rem, 1fr)); }.coach-rail{display:none}.coach-rail.coach-open{position:fixed;z-index:91;right:.75rem;bottom:calc(5.25rem + env(safe-area-inset-bottom));left:.75rem;display:block;overflow:hidden;border:1px solid var(--line);border-radius:.8rem;background:#fff;box-shadow:0 1rem 3rem rgba(16,42,46,.28)}.coach-rail.coach-open .assistant-rail-shell{height:100%;min-height:0;max-height:none}.coach-rail.coach-open :deep(.coach-panel){height:auto;min-height:0;max-height:none;grid-template-rows:auto minmax(150px,auto) auto auto;border:0;box-shadow:none}.coach-rail.coach-open :deep(.coach-header){padding:.72rem 3.25rem .72rem .8rem}.coach-rail.coach-open :deep(.coach-thread){min-height:150px;max-height:42dvh;padding:.75rem}.coach-rail.coach-open :deep(.coach-form){padding:.65rem .7rem .45rem}.coach-rail.coach-open :deep(.coach-disclaimer){padding:0 .7rem .45rem}.coach-scrim{position:fixed;z-index:90;inset:0;display:block;width:100%;height:100%;border:0;background:rgba(16,42,46,.28)}.mobile-coach-toggle{position:fixed;z-index:80;right:1rem;bottom:calc(6rem + env(safe-area-inset-bottom));display:grid;width:3.5rem;height:3.5rem;place-items:center;border:1px solid rgba(255,255,255,.7);border-radius:50%;background:var(--ink);color:#fff;box-shadow:0 .6rem 1.4rem rgba(16,42,46,.28);font-family:var(--mono)}.mobile-coach-toggle span{position:absolute;top:.38rem;right:.5rem;color:#8fe0c8;font-size:.8rem}.mobile-coach-toggle strong{font-size:.7rem;letter-spacing:.08em}.coach-open~.mobile-coach-toggle{display:none}.mobile-coach-close{position:absolute;z-index:3;top:.5rem;right:.55rem;display:grid;width:1.85rem;height:1.85rem;min-height:1.85rem;place-items:center;margin:0;padding:0;border:1px solid rgba(255,255,255,.28);border-radius:.5rem;background:rgba(255,255,255,.12);color:#fff;box-shadow:none;font:400 1.15rem/1 var(--display)} }
 @media (max-width: 620px) { .coach-rail.coach-open{top:auto;height:75dvh;max-height:75dvh;border-radius:1rem}.coach-rail.coach-open :deep(.coach-panel){height:100% !important;min-height:0 !important;max-height:none !important;grid-template-rows:auto minmax(0,1fr) auto auto !important}.coach-rail.coach-open :deep(.coach-thread){min-height:0 !important;max-height:none !important} }
+@media(max-width:860px){.whatif-launcher{width:100%}}
+@media(max-width:620px){.tree-snapshot-action{min-height:2.35rem}.whatif-launcher{align-items:stretch;flex-direction:column}.whatif-launcher-actions{display:grid;grid-template-columns:1fr 1fr}.whatif-launcher button{width:100%}}
 </style>

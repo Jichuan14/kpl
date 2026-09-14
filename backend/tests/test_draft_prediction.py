@@ -25,6 +25,7 @@ def model_fixture() -> dict:
             },
         ],
         "hero_names": {"101": "A", "102": "B", "103": "C"},
+        "hero_ids": [101, 102, 103],
         "_hero_role_masks": {101: 1, 102: 2, 103: 1},
     }
 
@@ -46,6 +47,24 @@ class PredictNextActionTest(unittest.TestCase):
 
         self.assertEqual(
             draft_simulator._legal_heroes(model, state, blue_ban),
+            [102, 104],
+        )
+
+    def test_pick_candidates_exclude_heroes_that_cannot_fill_an_open_role(self) -> None:
+        model = {
+            "hero_ids": [101, 102, 103, 104],
+            "_hero_role_masks": {101: 1, 102: 2, 103: 1, 104: 3},
+        }
+        state = {
+            "blue_picks": [101],
+            "red_picks": [],
+            "blue_bans": [],
+            "red_bans": [],
+        }
+        blue_pick = {"side": "blue", "action": "pick"}
+
+        self.assertEqual(
+            draft_simulator._legal_heroes(model, state, blue_pick),
             [102, 104],
         )
 
@@ -268,6 +287,40 @@ class PredictNextActionTest(unittest.TestCase):
         self.assertEqual(result["model_type"], "stats")
         predict.assert_called_once()
 
+    def test_serving_drops_role_infeasible_candidates_from_the_table(self) -> None:
+        model = model_fixture()
+        model["draft_sequence"] = [
+            {
+                "bp_order": 1,
+                "side": "blue",
+                "action": "pick",
+                "team_action_type_number": 1,
+            }
+        ]
+        model["hero_ids"] = [101, 102, 103]
+        model["_hero_role_masks"] = {101: 1, 102: 2, 103: 1}
+        state = {
+            "bp_order": 1,
+            "blue_picks": [101],
+            "red_picks": [],
+            "blue_bans": [],
+            "red_bans": [],
+        }
+        probabilities = [
+            {"hero_id": 103, "hero_name": "C", "probability": 0.7},
+            {"hero_id": 102, "hero_name": "B", "probability": 0.3},
+        ]
+
+        with (
+            patch.object(draft_simulator, "load_model", return_value=model),
+            patch.object(draft_simulator, "_predict", return_value=probabilities),
+        ):
+            result = draft_simulator.predict_next_action("league-1", state, limit=5)
+
+        self.assertEqual([row["hero_id"] for row in result["next_action_probabilities"]], [102])
+        self.assertAlmostEqual(result["next_action_probabilities"][0]["probability"], 1.0)
+        self.assertEqual(result["candidate_count"], 1)
+
     def test_rejects_global_bp_overlap_before_prediction(self) -> None:
         state = {
             "bp_order": 2,
@@ -401,6 +454,59 @@ class PredictNextActionTest(unittest.TestCase):
             self.assertTrue(completion["completed"])
             self.assertEqual(completion["state"]["blue_bans"], [101])
             self.assertEqual(completion["state"]["red_picks"], [102])
+
+
+class OfficialLaneEligibilityTest(unittest.TestCase):
+    def test_parses_majority_and_optional_secondary_roles(self) -> None:
+        self.assertEqual(draft_simulator.parse_official_lane_ids("1|5"), [6, 4])
+        self.assertEqual(draft_simulator.parse_official_lane_ids("4"), [7])
+        self.assertEqual(draft_simulator.parse_official_lane_ids(""), [])
+
+    def test_official_herolist_uses_roles_not_cold_lanes(self) -> None:
+        catalog = [
+            {"ename": 105, "cname": "廉颇", "roles": "1|5", "extra_cold_lane": ""},
+            {"ename": 171, "cname": "张飞", "roles": "5", "extra_cold_lane": ""},
+            {"ename": 107, "cname": "赵云", "roles": "2", "extra_cold_lane": "1"},
+            {"ename": 119, "cname": "扁鹊", "roles": "3", "extra_cold_lane": "4|5"},
+        ]
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = Path(temporary_directory) / "herolist.json"
+            path.write_text(json.dumps(catalog), encoding="utf-8")
+            mapping = draft_simulator.official_hero_positions(path)
+        self.assertEqual(mapping[105], [6, 4])
+        self.assertEqual(mapping[171], [4])
+        self.assertEqual(mapping[107], [5])
+        self.assertEqual(mapping[119], [2])
+
+    def test_table_eligibility_drops_incidental_observed_lanes(self) -> None:
+        model = {
+            "hero_names": {"171": "张飞", "169": "后羿", "524": "蒙犽"},
+            "hero_positions": {"171": [4, 7], "169": [7], "524": [7]},
+            "role_ids": [4, 7],
+        }
+        draft_simulator.apply_official_lane_eligibility(
+            model, {171: [4], 169: [7], 524: [7]}
+        )
+        self.assertEqual(model["hero_positions"]["171"], [4])
+        self.assertEqual(model["hero_positions"]["169"], [7])
+
+        masks = {
+            int(hero_id): sum(
+                (1 << index)
+                for index, role_id in enumerate(model["role_ids"])
+                if role_id in positions
+            )
+            for hero_id, positions in model["hero_positions"].items()
+        }
+        legal_model = {"hero_ids": [171, 169, 524], "_hero_role_masks": masks}
+        self.assertEqual(
+            draft_simulator._legal_heroes(
+                legal_model,
+                {"blue_picks": [169], "red_picks": [], "blue_bans": [], "red_bans": []},
+                {"side": "blue", "action": "pick"},
+            ),
+            [171],
+        )
 
 
 if __name__ == "__main__":

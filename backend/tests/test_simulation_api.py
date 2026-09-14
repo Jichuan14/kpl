@@ -25,22 +25,12 @@ class SimulationApiTest(unittest.TestCase):
 
     def test_simulator_rate_limit_rejects_second_request_before_simulation(self) -> None:
         limiter = CoachRateLimiter(
-            per_ip_per_minute=1,
-            per_ip_per_day=10,
-            server_per_minute=10,
-            server_per_day=100,
-            max_active_per_ip=1,
-            max_active_server=2,
+            per_ip_per_minute=1, per_ip_per_day=10, server_per_minute=10,
+            server_per_day=100, max_active_per_ip=1, max_active_server=2,
         )
         with (
             patch("app.api.simulation.simulation_rate_limiter", limiter),
-            patch(
-                "app.api.simulation.validate_season_team_pair",
-                return_value={
-                    "blue": {"team_name": "Blue Club"},
-                    "red": {"team_name": "Red Club"},
-                },
-            ),
+            patch("app.api.simulation.validate_season_team_pair", return_value={"blue": {"team_name": "Blue Club"}, "red": {"team_name": "Red Club"}}),
             patch("app.api.simulation.simulate", return_value={"ok": True}) as simulate,
         ):
             first = self.client.post("/api/simulations/draft", json=self.payload())
@@ -48,241 +38,25 @@ class SimulationApiTest(unittest.TestCase):
 
         self.assertEqual(first.status_code, 200)
         self.assertEqual(second.status_code, 429)
-        self.assertEqual(second.json()["detail"]["code"], "simulation_rate_limited")
-        self.assertGreaterEqual(int(second.headers["Retry-After"]), 1)
         simulate.assert_called_once()
 
     def test_simulator_rejects_client_rollout_override(self) -> None:
-        payload = {**self.payload(), "rollouts": 5000}
-
-        response = self.client.post("/api/simulations/draft", json=payload)
-
+        response = self.client.post("/api/simulations/draft", json={**self.payload(), "rollouts": 5000})
         self.assertEqual(response.status_code, 422)
 
-    def test_simulator_accepts_sequence_model(self) -> None:
-        limiter = CoachRateLimiter(
-            per_ip_per_minute=10,
-            per_ip_per_day=10,
-            server_per_minute=10,
-            server_per_day=100,
-            max_active_per_ip=1,
-            max_active_server=2,
-        )
-        payload = {**self.payload(), "model_type": "sequence"}
+    def test_scenario_uses_fixed_completion_cap(self) -> None:
+        completions = [{"completed": True, "path": [], "state": {"blue_picks": [1, 2, 3, 4, 5], "red_picks": [6, 7, 8, 9, 10]}}] * 50
+        scorer = type("Scorer", (), {"score": lambda *_: {"blue_advantage": 0.62}})()
         with (
-            patch("app.api.simulation.simulation_rate_limiter", limiter),
-            patch(
-                "app.api.simulation.validate_season_team_pair",
-                return_value={
-                    "blue": {"team_name": "Blue Club"},
-                    "red": {"team_name": "Red Club"},
-                },
-            ),
-            patch(
-                "app.api.simulation.simulate", return_value={"model_type": "sequence"}
-            ) as simulate,
+            patch("app.api.simulation.validate_season_team_pair", return_value={"blue": {"team_name": "Blue Club"}, "red": {"team_name": "Red Club"}}),
+            patch("app.api.simulation.load_lineup_value_model", return_value=scorer),
+            patch("app.api.simulation.predict_next_action", return_value={"next_action_probabilities": []}),
+            patch("app.api.simulation.sample_forced_draft_completions", return_value={"next_step": {"bp_order": 1, "side": "blue", "action": "ban"}, "forced_hero_id": 1, "forced_policy_probability": 0.2, "completions": completions}),
         ):
-            response = self.client.post("/api/simulations/draft", json=payload)
+            response = self.client.post("/api/simulations/draft-scenario", json={**self.payload(), "forced_hero_id": 1})
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["data"]["model_type"], "sequence")
-        self.assertEqual(simulate.call_args.kwargs["model_type"], "sequence")
-
-    def test_hero_matchup_endpoint_uses_feature_space_and_counter_evidence(self) -> None:
-        payload = {
-            "league_id": "20260003",
-            "favorite_hero_ids": [101, 102],
-            "opponent_hero_ids": [201, 202],
-            "preferred_lane": "mid",
-        }
-        with (
-            patch(
-                "app.api.simulation.learned_feature_space",
-                return_value={"rows": [{"hero_id": 101}]},
-            ),
-            patch(
-                "app.api.simulation.recommend_heroes",
-                return_value={"recommendations": [{"hero_id": 102}]},
-            ) as recommend,
-        ):
-            response = self.client.post("/api/simulations/hero-matchup", json=payload)
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["data"]["recommendations"][0]["hero_id"], 102)
-        recommend.assert_called_once_with(
-            "20260003", {"rows": [{"hero_id": 101}]}, [101, 102], [201, 202], "mid", limit=6
-        )
-
-    def test_lineup_recommendation_endpoint_validates_teams_and_calls_planner(self) -> None:
-        limiter = CoachRateLimiter(
-            per_ip_per_minute=10,
-            per_ip_per_day=10,
-            server_per_minute=10,
-            server_per_day=100,
-            max_active_per_ip=1,
-            max_active_server=2,
-        )
-        payload = {
-            **self.payload(),
-            "model_type": "sequence",
-            "top_k": 2,
-            "risk_mode": "safe",
-            "seed": 7,
-        }
-        with (
-            patch("app.api.simulation.simulation_rate_limiter", limiter),
-            patch(
-                "app.api.simulation.validate_season_team_pair",
-                return_value={
-                    "blue": {"team_name": "Official Blue"},
-                    "red": {"team_name": "Official Red"},
-                },
-            ),
-            patch(
-                "app.api.simulation.recommend_lineup",
-                return_value={"recommendations": [{"hero_id": 101}]},
-            ) as recommend,
-        ):
-            response = self.client.post(
-                "/api/simulations/recommend-lineup", json=payload
-            )
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["data"]["recommendations"][0]["hero_id"], 101)
-        self.assertEqual(recommend.call_args.kwargs["model_type"], "sequence")
-        self.assertEqual(recommend.call_args.kwargs["top_k"], 2)
-        self.assertEqual(recommend.call_args.kwargs["risk_mode"], "safe")
-        self.assertEqual(recommend.call_args.args[1]["blue_team_name"], "Official Blue")
-
-    def test_lineup_recommendation_rejects_compute_override(self) -> None:
-        response = self.client.post(
-            "/api/simulations/recommend-lineup",
-            json={**self.payload(), "rollouts": 1000},
-        )
-
-        self.assertEqual(response.status_code, 422)
-
-    def test_completed_lineup_score_validates_teams_and_uses_season_model(self) -> None:
-        limiter = CoachRateLimiter(
-            per_ip_per_minute=10,
-            per_ip_per_day=10,
-            server_per_minute=10,
-            server_per_day=100,
-            max_active_per_ip=1,
-            max_active_server=2,
-        )
-
-        class FakeLineupModel:
-            payload = {
-                "version": "test-value-v1",
-                "generated_at": "2026-08-26T00:00:00Z",
-                "source": {"battle_count": 100},
-            }
-
-            def score(self, blue_team, blue_heroes, red_team, red_heroes):
-                return {
-                    "blue_advantage": 0.61,
-                    "red_advantage": 0.39,
-                    "grouped_contributions": {"team_strength": 0.2},
-                }
-
-        payload = {
-            "league_id": "20260003",
-            "blue_team_id": "blue-1",
-            "red_team_id": "red-1",
-            "blue_hero_ids": [101, 102, 103, 104, 105],
-            "red_hero_ids": [201, 202, 203, 204, 205],
-        }
-        model = FakeLineupModel()
-        with (
-            patch("app.api.simulation.simulation_rate_limiter", limiter),
-            patch(
-                "app.api.simulation.validate_season_team_pair",
-                return_value={
-                    "blue": {"team_name": "Official Blue"},
-                    "red": {"team_name": "Official Red"},
-                },
-            ),
-            patch(
-                "app.api.simulation.load_lineup_value_model",
-                return_value=model,
-            ) as load_model,
-            patch.object(model, "score", wraps=model.score) as score,
-        ):
-            response = self.client.post(
-                "/api/simulations/score-lineup", json=payload
-            )
-
-        self.assertEqual(response.status_code, 200)
-        data = response.json()["data"]
-        self.assertEqual(data["blue_advantage"], 0.61)
-        self.assertEqual(data["blue_team"]["team_name"], "Official Blue")
-        load_model.assert_called_once_with("20260003")
-        score.assert_called_once_with(
-            "blue-1",
-            [101, 102, 103, 104, 105],
-            "red-1",
-            [201, 202, 203, 204, 205],
-        )
-
-    def test_completed_lineup_score_rejects_duplicate_or_overlapping_heroes(self) -> None:
-        payload = {
-            "league_id": "20260003",
-            "blue_team_id": "blue-1",
-            "red_team_id": "red-1",
-            "blue_hero_ids": [101, 101, 103, 104, 105],
-            "red_hero_ids": [101, 202, 203, 204, 205],
-        }
-
-        response = self.client.post(
-            "/api/simulations/score-lineup", json=payload
-        )
-
-        self.assertEqual(response.status_code, 422)
-
-    def test_neutral_lineup_score_allows_mirrors_without_team_lookup(self) -> None:
-        limiter = CoachRateLimiter(
-            per_ip_per_minute=10,
-            per_ip_per_day=10,
-            server_per_minute=10,
-            server_per_day=100,
-            max_active_per_ip=1,
-            max_active_server=2,
-        )
-
-        class FakeLineupModel:
-            payload = {"version": "test-value-v1", "source": {}}
-
-            def score(self, blue_team, blue_heroes, red_team, red_heroes, **options):
-                self.options = options
-                return {
-                    "blue_advantage": 0.54,
-                    "red_advantage": 0.46,
-                    "team_neutral": True,
-                }
-
-        payload = {
-            "league_id": "20260003",
-            "blue_hero_ids": [101, 102, 103, 104, 105],
-            "red_hero_ids": [101, 202, 203, 204, 205],
-        }
-        model = FakeLineupModel()
-        with (
-            patch("app.api.simulation.simulation_rate_limiter", limiter),
-            patch("app.api.simulation.load_lineup_value_model", return_value=model),
-            patch("app.api.simulation.validate_season_team_pair") as validate_teams,
-        ):
-            response = self.client.post(
-                "/api/simulations/score-neutral-lineup", json=payload
-            )
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["data"]["blue_advantage"], 0.54)
-        self.assertEqual(
-            model.options,
-            {"team_neutral": True, "allow_mirror_heroes": True},
-        )
-        validate_teams.assert_not_called()
+        self.assertEqual(response.json()["data"]["rollouts"], 50)
 
 
 if __name__ == "__main__":

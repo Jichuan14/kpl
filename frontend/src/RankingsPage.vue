@@ -1,14 +1,17 @@
 <script setup>
-import { computed, onMounted, ref, watch } from "vue";
-import { fetchPowerRankings, fetchVisualizationSeasons } from "./api";
+import { computed, onMounted, ref, shallowRef, watch } from "vue";
+import { fetchPowerRankings } from "./api";
+import { useLatestRequest } from "./composables/useLatestRequest";
+import { useSeasonCatalog } from "./composables/useSeasonCatalog";
 import { heroAsset } from "./heroAssets";
 import { language } from "./i18n";
 import { selectAvailableLeague, selectedLeagueId } from "./selectedLeague";
 import { finishStartupLoading } from "./startupLoader";
 
-const seasons = ref([]);
+const { seasons, loadSeasons } = useSeasonCatalog((season) => season.rankings_ready);
+const latestRequest = useLatestRequest();
 const leagueId = selectedLeagueId;
-const payload = ref(null);
+const payload = shallowRef(null);
 const loading = ref(false);
 const error = ref("");
 const board = ref("teams");
@@ -109,18 +112,14 @@ function selectHero(heroId) {
   playerSearch.value = "";
 }
 
-async function loadSeasons() {
-  const rows = (await fetchVisualizationSeasons()) || [];
-  seasons.value = rows.filter((season) => season.rankings_ready);
-  selectAvailableLeague(seasons.value);
-}
-
 async function loadRankings() {
   if (!leagueId.value) return;
   loading.value = true;
   error.value = "";
   try {
-    payload.value = await fetchPowerRankings(leagueId.value, { cache: false });
+    const next = await latestRequest((signal, current) => fetchPowerRankings(leagueId.value, { cache: false, signal }).then((value) => current() ? value : null));
+    if (!next) return;
+    payload.value = next;
     if (!heroes.value.some((hero) => hero.hero_id === selectedHeroId.value)) {
       selectedHeroId.value = filteredHeroes.value[0]?.hero_id || 0;
     }

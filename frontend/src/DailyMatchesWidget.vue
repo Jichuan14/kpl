@@ -14,6 +14,8 @@ const loading = ref(false);
 const error = ref("");
 const widgetRoot = ref(null);
 const hasAnyPrediction = computed(() => matches.value.some(hasPrediction));
+const dateRequests = new Map();
+let loadVersion = 0;
 
 function browserDate(value = new Date()) {
   const year = value.getFullYear();
@@ -48,6 +50,16 @@ function matchStart(match) {
   return new Date(`${match.start_time?.replace(" ", "T")}+08:00`);
 }
 
+function dailyPayload(date) {
+  if (!dateRequests.has(date)) {
+    // Keep fulfilled date payloads for this widget lifetime: a seven-day sweep
+    // shares adjacent China dates and therefore needs at most 17 distinct calls.
+    const request = fetchDailyMatches({ date });
+    dateRequests.set(date, request);
+  }
+  return dateRequests.get(date);
+}
+
 function hasPrediction(match) {
   // Make browser-storage updates from the prediction modal reactive here.
   void props.predictionRefresh;
@@ -80,7 +92,7 @@ async function matchesForLocalDate(date) {
   // three candidates, then filter after converting timestamps in-browser.
   const chinaDates = [shiftDate(date, -1), date, shiftDate(date, 1)];
   const payloads = await Promise.all(
-    chinaDates.map((chinaDate) => fetchDailyMatches({ date: chinaDate }))
+    chinaDates.map((chinaDate) => dailyPayload(chinaDate))
   );
   const uniqueMatches = new Map();
   payloads.flatMap((payload) => payload?.matches || []).forEach((match) => {
@@ -92,20 +104,24 @@ async function matchesForLocalDate(date) {
 }
 
 async function loadMatches(date = selectedDate.value || browserDate()) {
+  const version = ++loadVersion;
   loading.value = true;
   error.value = "";
   try {
-    matches.value = await matchesForLocalDate(date);
+    const rows = await matchesForLocalDate(date);
+    if (version !== loadVersion) return;
+    matches.value = rows;
     selectedDate.value = date;
   } catch {
     matches.value = [];
     error.value = "赛事暂时无法加载。";
   } finally {
-    loading.value = false;
+    if (version === loadVersion) loading.value = false;
   }
 }
 
 async function loadFirstAvailableDay(startDate = browserDate()) {
+  const version = ++loadVersion;
   const today = startDate;
   loading.value = true;
   error.value = "";
@@ -119,6 +135,7 @@ async function loadFirstAvailableDay(startDate = browserDate()) {
         ? rows.filter((match) => matchStart(match).getTime() >= Date.now())
         : rows;
       if (upcomingRows.length) {
+        if (version !== loadVersion) return;
         selectedDate.value = date;
         matches.value = upcomingRows;
         return;
@@ -128,17 +145,19 @@ async function loadFirstAvailableDay(startDate = browserDate()) {
       const date = shiftDate(today, -offset);
       const rows = await matchesForLocalDate(date);
       if (!rows.length) continue;
+      if (version !== loadVersion) return;
       selectedDate.value = date;
       matches.value = rows;
       return;
     }
+    if (version !== loadVersion) return;
     selectedDate.value = today;
     matches.value = [];
   } catch {
     matches.value = [];
     error.value = "赛事暂时无法加载。";
   } finally {
-    loading.value = false;
+    if (version === loadVersion) loading.value = false;
   }
 }
 

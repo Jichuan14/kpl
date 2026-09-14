@@ -1,10 +1,11 @@
 import { ref, watch } from "vue";
+import { getStored, setStored } from "./storage";
 
 const storageKey = "kpl-lab-language";
 
 // Chinese is intentionally the first-run default. Visitors can switch to English
 // and their choice is retained for subsequent visits.
-const savedLanguage = window.localStorage.getItem(storageKey);
+const savedLanguage = getStored(storageKey);
 export const language = ref(savedLanguage === "en" ? "en" : "zh-CN");
 
 export const messages = {
@@ -196,6 +197,61 @@ export const messages = {
     "Add Blue's earlier-game hero": "添加蓝方此前小局英雄",
     "Add Red's earlier-game hero": "添加红方此前小局英雄",
     "Draft complete": "BP 已完成",
+    "What-if branches": "What-if 分支",
+    "Open what-if workspace": "打开 What-if 工作区",
+    "What-if workspace": "What-if 工作区",
+    "Version tree": "版本树",
+    "Current-game paths. Consecutive steps without a what-if are grouped into one node.": "仅记录当前小局；连续且没有 What-if 的操作会合并为一个节点。",
+    "nodes": "个节点",
+    "Main path": "主线",
+    "Current path": "当前主线",
+    "actions": "步操作",
+    "What-if fork": "What-if 分支点",
+    "branches": "条分支",
+    "Branch": "分支",
+    "Applied": "已采用",
+    "Restore this checkpoint": "回到此检查点",
+    "Open a what-if workspace to create the first branch.": "打开 What-if 工作区后，第一条分支会显示在这里。",
+    "Each board starts from this exact draft snapshot. Continue a different BP line in every scenario.": "每个面板都从当前 BP 快照开始，你可以在每条分支中继续不同的 BP。",
+    "Add another what-if": "添加另一个 What-if",
+    "What-if": "What-if",
+    "Remove scenario": "移除分支",
+    "Close": "关闭",
+    "Choose a hero for": "为此操作选择英雄：",
+    "Hero probability ranking": "英雄概率排名",
+    "Hero ranking will appear here.": "英雄排名将显示在这里。",
+    "Search heroes": "搜索英雄",
+    "Updating…": "正在更新…",
+    "Could not update the hero ranking.": "无法更新英雄排名。",
+    "Updating probabilities…": "正在更新概率…",
+    "Could not update hero probabilities.": "无法更新英雄概率。",
+    "Pick": "选择",
+    "Ban": "禁用",
+    "Freeze the current snapshot and sample 50 legal draft completions after each branch. Policy likelihood, sample completion, and relative lineup advantage are separate signals—not win probability.": "固定当前快照。展开一手后抽样 50 个合法后续完整 BP；政策可能性、样本完成率和阵容相对优势分别展示，并非胜率。",
+    "Official match state changed. These branches are stale.": "官方赛况已更新，分支已过期。",
+    "{count}/200 branches": "{count}/200 个分支",
+    "Choose a predicted or listed hero to create a hypothetical branch.": "从右侧预测或英雄列表选择一手，即可建立假设分支。",
+    "Policy {left}% / {right}%": "政策 {left}% / {right}%",
+    "Blue relative lineup-advantage difference: {delta} points": "蓝方相对阵容优势差 {delta} 个百分点",
+    "Both branches need completed samples before their advantages can be compared.": "两条分支都需完成抽样后才能比较优势。",
+    "Policy likelihood {value}%": "政策可能性 {value}%",
+    "Completed {completed}/{rollouts} · sample completion {frequency}%": "完成 {completed}/{rollouts} · 样本完成率 {frequency}%",
+    "Blue relative lineup advantage {value}%": "蓝方相对阵容优势 {value}%",
+    "Apply to practice board": "应用到练习盘",
+    "Compare branch": "比较",
+    "{count} incomplete samples were excluded from the advantage average.": "{count} 个样本未能完成，未纳入优势平均值。",
+    "Next-action branches": "下一手分支",
+    "Could not complete this hypothetical branch.": "无法完成这条假设分支。",
+    "Add to what-if tree": "加入 what-if 树",
+    "Add snapshot to tree": "加入版本树",
+    "Snapshot added to tree": "已加入版本树",
+    "No new BP actions to save.": "没有新的 BP 操作可保存。",
+    "This board is already saved.": "当前 BP 面板已经保存。",
+    "Saved BP checkpoints and the live continuation from the current checkpoint.": "保存的 BP 检查点，以及从当前检查点延伸的实时推演。",
+    "Add a snapshot to create your first checkpoint.": "加入快照以创建第一个检查点。",
+    "Checkpoint": "检查点",
+    "Show actions": "查看操作",
+    "Recording": "正在记录",
     "Blue": "蓝方",
     "Red": "红方",
     "ban": "禁用",
@@ -1029,7 +1085,7 @@ export function setupPageLocalization() {
 }
 
 watch(language, (value) => {
-  window.localStorage.setItem(storageKey, value);
+  setStored(storageKey, value);
   document.documentElement.lang = value;
   document.title = value === "zh-CN" ? "Draft Atlas · 赛事 BP 数据学习工具" : "Draft Atlas · Draft learning tool";
   translateTree();

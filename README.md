@@ -1,5 +1,13 @@
 # Draft Atlas
 
+## Frontend architecture
+
+The Vue frontend uses history-mode Vue Router for page URLs and route-level lazy
+loading. Shared `useSeasonCatalog`, `useLatestRequest`, and `usePolling`
+composables keep season readiness filtering, cancellation, and monitor lifecycle
+consistent across views. Published JSON artifacts are cached with bounded
+freshness; publishing explicitly invalidates the affected season cache.
+
 Draft Atlas is a local-first exploration tool for **King Pro League (KPL)**
 ban/pick data. It downloads official match data into SQLite, turns completed
 seasons into analysis artifacts, and presents the results through an interactive
@@ -208,8 +216,15 @@ The returned `expected_advantage` is a relative ranking score, not a calibrated
 or guaranteed win probability. Tank, engage, hard-control, and mage counts are
 returned as explanations; they are not hard-coded automatic bonuses. The
 current production implementation optimizes the current game's completed
-lineup while enforcing prior-game Global-BP exclusions. Recursive BO5/BO7
-hero-pool opportunity cost remains a separate future model.
+lineup while enforcing prior-game Global-BP exclusions. A completed what-if
+sample can be promoted into a conditional BO5/BO7 timeline; the user supplies
+each assumed result and next-game side assignment, while validated transitions
+carry team-specific hero pools and lineup-value guidance across games. A
+bounded batch mode accepts a complete result/side schedule and samples up to
+five coherent remaining-series draft trajectories (50 total completions),
+stopping at the earliest series win or pausing for manual BO7 game-seven peak
+duel lineups. It does not forecast winners or optimize recursive series-level
+hero-pool opportunity cost.
 
 ## macOS visitor widget
 
