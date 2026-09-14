@@ -225,8 +225,6 @@ class LineupScoreRequest(BaseModel):
             raise ValueError("Blue lineup must contain five distinct heroes")
         if len(set(self.red_hero_ids)) != 5:
             raise ValueError("Red lineup must contain five distinct heroes")
-        if set(self.blue_hero_ids).intersection(self.red_hero_ids):
-            raise ValueError("A hero cannot appear on both sides")
         return self
 
 

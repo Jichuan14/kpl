@@ -370,6 +370,7 @@ def lineup_score(
             body.blue_hero_ids,
             body.red_team_id,
             body.red_hero_ids,
+            allow_mirror_heroes=True,
         )
         return ApiResponse(
             data={

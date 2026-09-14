@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from fastapi.testclient import TestClient
 
@@ -57,6 +57,55 @@ class SimulationApiTest(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["data"]["rollouts"], 50)
+
+    def test_lineup_score_allows_opposing_mirror_heroes(self) -> None:
+        scorer = Mock()
+        scorer.payload = {
+            "version": "lineup-value-model-v1",
+            "generated_at": "2026-09-14T00:00:00Z",
+            "source": {},
+        }
+        scorer.score.return_value = {
+            "blue_advantage": 0.5,
+            "red_advantage": 0.5,
+        }
+        payload = {
+            "league_id": "20260003",
+            "blue_team_id": "10001",
+            "red_team_id": "10017",
+            "blue_hero_ids": [140, 521, 107, 519, 194],
+            "red_hero_ids": [140, 106, 107, 519, 175],
+        }
+        limiter = CoachRateLimiter(
+            per_ip_per_minute=10,
+            per_ip_per_day=100,
+            server_per_minute=10,
+            server_per_day=100,
+            max_active_per_ip=1,
+            max_active_server=2,
+        )
+
+        with (
+            patch("app.api.simulation.simulation_rate_limiter", limiter),
+            patch(
+                "app.api.simulation.validate_season_team_pair",
+                return_value={
+                    "blue": {"team_name": "Blue Club"},
+                    "red": {"team_name": "Red Club"},
+                },
+            ),
+            patch("app.api.simulation.load_lineup_value_model", return_value=scorer),
+        ):
+            response = self.client.post("/api/simulations/score-lineup", json=payload)
+
+        self.assertEqual(response.status_code, 200)
+        scorer.score.assert_called_once_with(
+            payload["blue_team_id"],
+            payload["blue_hero_ids"],
+            payload["red_team_id"],
+            payload["red_hero_ids"],
+            allow_mirror_heroes=True,
+        )
 
 
 if __name__ == "__main__":
