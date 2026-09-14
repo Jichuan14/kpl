@@ -80,6 +80,28 @@ docker compose -f docker-compose.production.yml up -d --build
 docker image prune -f
 ```
 
+## Scheduled refresh
+
+Install the repository-managed refresh script so failed or stale analysis is
+retried even when the incremental download finds no additional matches:
+
+```bash
+sudo install -m 0755 deploy/kpl-refresh /usr/local/sbin/kpl-refresh
+```
+
+The script reads HTTP Basic credentials from `/etc/kpl-sync.netrc` by default.
+Its league, API URL, and credential path can be overridden with
+`KPL_LEAGUE_ID`, `KPL_API_URL`, and `KPL_AUTH_FILE`. A typical root crontab is:
+
+```cron
+CRON_TZ=Asia/Shanghai
+0 3 * * * /usr/bin/flock -n /var/lock/kpl-refresh.lock /usr/local/sbin/kpl-refresh >> /var/log/kpl-sync.log 2>&1
+```
+
+Keep only the final `2>&1`; an additional input redirection is invalid. The
+script logs API error response bodies, checks analysis freshness after every
+sync, and publishes only after successful analysis.
+
 For a consistent backup, stop the API first, copy the database and artifacts,
 then start it again:
 
