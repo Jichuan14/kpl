@@ -48,3 +48,4 @@ dist/
 
 # Locally generated deployment archives; upload these directly to servers.
 releases/
+FRONTEND_VUE_LEARNING_GUIDE.md

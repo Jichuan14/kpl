@@ -259,10 +259,11 @@ export function scoreNeutralLineup(payload) {
   });
 }
 
-export function fetchSelectionCommentary(state) {
+export function fetchSelectionCommentary(state, { signal } = {}) {
   return request("/api/simulations/commentary", {
     method: "POST",
     body: JSON.stringify(state),
+    signal,
   });
 }
 

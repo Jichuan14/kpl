@@ -156,7 +156,8 @@ _LLM_COMMENTARY_CACHE: dict[str, dict[str, Any]] = {}
 COMMENTATOR_SYSTEM_PROMPT = """你是王者荣耀职业赛事的BP解说，重点解释英雄在阵容中的实际分工、具体技能联动与克制关系。
 你只能使用给定 claims 中的事实，不能补充英雄技能、选手意图、版本结论或胜负预测。
 输出严格 JSON：{"commentary":"...","used_evidence_ids":["claim_1"]}。
-commentary 使用简洁自然的中文，最多三句、180个汉字；必须使用 required_evidence_ids 对应的事实，
+commentary 使用自然、连贯的中文，最多四句、240个汉字；第一句先说明这名英雄的实际作用，随后按可用证据
+依次说明与己方英雄的连接和对敌方英雄的机会或风险。没有己方或敌方英雄时，不要虚构该部分。必须使用 required_evidence_ids 对应的事实，
 但 claim ID 只能放进 used_evidence_ids，严禁在 commentary 正文中出现 claim、claim_1、证据编号或类似引用标记。
 必须说明“谁提供什么机制、谁如何受益或被限制”，不能只说
 “补控制”“补伤害”或“二者配合很好”。同时存在战队联动与机制证据时，要把实际使用倾向
@@ -171,13 +172,14 @@ commentary 使用简洁自然的中文，最多三句、180个汉字；必须使
 
 
 @lru_cache(maxsize=8)
-def _json(path_text: str) -> dict[str, Any]:
+def _json(path_text: str, mtime_ns: int, size: int) -> dict[str, Any]:
+    """Read a JSON artifact keyed by its on-disk identity, not just its path."""
     with Path(path_text).open(encoding="utf-8") as source:
         return json.load(source)
 
 
 @lru_cache(maxsize=32)
-def _jsonl(path_text: str) -> tuple[dict[str, Any], ...]:
+def _jsonl(path_text: str, mtime_ns: int, size: int) -> tuple[dict[str, Any], ...]:
     path = Path(path_text)
     if not path.is_file():
         return ()
@@ -185,8 +187,24 @@ def _jsonl(path_text: str) -> tuple[dict[str, Any], ...]:
         return tuple(json.loads(line) for line in source if line.strip())
 
 
+def _artifact_identity(path: Path) -> tuple[str, int, int]:
+    """Return a cache identity that changes when publishing replaces an artifact."""
+    stat = path.stat()
+    return str(path), stat.st_mtime_ns, stat.st_size
+
+
+def _read_json(path: Path) -> dict[str, Any]:
+    return _json(*_artifact_identity(path))
+
+
+def _read_jsonl(path: Path) -> tuple[dict[str, Any], ...]:
+    if not path.is_file():
+        return ()
+    return _jsonl(*_artifact_identity(path))
+
+
 def _mechanics_artifact() -> dict[str, Any]:
-    return _json(str(ANALYSIS_DIR / "hero_ability_mechanics.json"))
+    return _read_json(ANALYSIS_DIR / "hero_ability_mechanics.json")
 
 
 def _mechanics() -> dict[int, dict[str, Any]]:
@@ -198,7 +216,7 @@ def _mechanics() -> dict[int, dict[str, Any]]:
 
 
 def _tactical_artifact() -> dict[str, Any]:
-    return _json(str(ANALYSIS_DIR / "hero_tactical_roles.json"))
+    return _read_json(ANALYSIS_DIR / "hero_tactical_roles.json")
 
 
 def _tactics() -> dict[int, dict[str, Any]]:
@@ -227,6 +245,41 @@ def _has_any(values: set[str], expected: set[str]) -> bool:
 
 def _has_damage(tags: set[str]) -> bool:
     return _has(tags, "damage_")
+
+
+def _skill_fact(hero: dict[str, Any], mechanic_keys: list[str] | set[str]) -> dict[str, Any] | None:
+    """Return one named ability fact, only when the mechanics artifact supports it."""
+    requested = set(mechanic_keys)
+    labels = _mechanics_artifact()["taxonomy"]
+    for skill in hero.get("skills", []):
+        matching = [
+            key for key in TACTICAL_MECHANIC_DISPLAY_ORDER
+            if key in requested and key in set(skill.get("mechanics", []))
+        ]
+        if not matching:
+            matching = [key for key in skill.get("mechanics", []) if key in requested]
+        name = str(skill.get("skill_name") or "").strip()
+        if not name or not matching:
+            continue
+        conditions = [
+            key for key in skill.get("conditions", [])
+            if key in labels.get("conditions", {})
+        ][:1]
+        return {
+            "skill_name": name,
+            "mechanic_keys": matching[:2],
+            "condition_keys": conditions,
+            "detail": (
+                f"「{name}」提供{'、'.join(labels['mechanics'][key] for key in matching[:2])}"
+                + (f"，且带有{labels['conditions'][conditions[0]]}" if conditions else "")
+            ),
+        }
+    return None
+
+
+def _ability_phrase(hero: dict[str, Any], mechanic_keys: list[str] | set[str]) -> str | None:
+    fact = _skill_fact(hero, mechanic_keys)
+    return fact["detail"] if fact else None
 
 
 def _roles(hero: dict[str, Any]) -> set[str]:
@@ -314,12 +367,17 @@ def _mechanic_claim(selected: dict[str, Any], *, action: str, allies: list[dict[
         relevant = sorted(tags)[:2]
     labels = _mechanics_artifact()["taxonomy"]["mechanics"]
     relevant = relevant[:3]
+    skill_fact = _skill_fact(selected, relevant)
+    detail = " + ".join(labels[tag] for tag in relevant)
+    if skill_fact:
+        detail = skill_fact["detail"]
     return _claim(
         "技能机制",
-        " + ".join(labels[tag] for tag in relevant),
+        detail,
         confidence="high",
         priority=35,
         mechanic_keys=relevant,
+        ability=skill_fact,
         hero_id=selected["hero_id"],
     )
 
@@ -355,6 +413,8 @@ def _tactical_identity_claim(selected: dict[str, Any]) -> dict[str, Any] | None:
     detail = f"{selected['hero_name']}的战术分工偏向{'、'.join(labels)}"
     if keys:
         detail += f"，对应机制包括{'、'.join(mechanic_labels[key] for key in keys)}"
+        if ability := _ability_phrase(selected, keys):
+            detail += f"；例如{ability}"
     return _claim(
         "战术定位",
         detail,
@@ -503,35 +563,37 @@ def _tactical_interaction_claims(
 def _official_relationship_claims(
     selected: dict[str, Any], enemies: list[dict[str, Any]]
 ) -> list[dict[str, Any]]:
-    """Expose only exact opponent relationships from the Tencent sidecar."""
-    relationships = selected.get("tactical", {}).get("official_relationships", {})
-    enemies_by_id = {int(hero["hero_id"]): hero for hero in enemies}
+    """Expose exact Tencent relationships whichever hero was picked first."""
     claims: list[dict[str, Any]] = []
-    for relation_key, direction in (("suppresses", "压制"), ("suppressed_by", "被压制")):
-        for row in relationships.get(relation_key, []):
-            target_id = int(row.get("hero_id") or 0)
-            enemy = enemies_by_id.get(target_id)
-            if enemy is None:
-                continue
-            terms = [str(term) for term in row.get("matched_terms", []) if term][:2]
-            if direction == "压制":
-                detail = f"腾讯官方英雄关系资料将{selected['hero_name']}列为能够压制{enemy['hero_name']}的一方"
-                source_id, target_id_for_claim = int(selected["hero_id"]), target_id
-            else:
-                detail = f"腾讯官方英雄关系资料显示{selected['hero_name']}会受到{enemy['hero_name']}压制"
-                source_id, target_id_for_claim = target_id, int(selected["hero_id"])
-            if terms:
-                detail += f"，关系说明涉及{'、'.join(terms)}"
-            claims.append(_claim(
-                "官方克制",
-                detail,
-                confidence="high",
-                priority=109,
-                source_hero_id=source_id,
-                target_hero_id=target_id_for_claim,
-                matched_terms=terms,
-                rule=f"tencent_{relation_key}",
-            ))
+    seen: set[tuple[int, int]] = set()
+    pairs = [(selected, enemy) for enemy in enemies]
+    pairs.extend((enemy, selected) for enemy in enemies)
+    for owner, other in pairs:
+        relationships = owner.get("tactical", {}).get("official_relationships", {})
+        for relation_key, owner_suppresses in (("suppresses", True), ("suppressed_by", False)):
+            for row in relationships.get(relation_key, []):
+                if int(row.get("hero_id") or 0) != int(other["hero_id"]):
+                    continue
+                source = owner if owner_suppresses else other
+                target = other if owner_suppresses else owner
+                direction = (int(source["hero_id"]), int(target["hero_id"]))
+                if direction in seen:
+                    continue
+                seen.add(direction)
+                terms = [str(term) for term in row.get("matched_terms", []) if term][:2]
+                detail = f"腾讯官方英雄关系资料将{source['hero_name']}列为能够压制{target['hero_name']}的一方"
+                if terms:
+                    detail += f"，关系说明涉及{'、'.join(terms)}"
+                claims.append(_claim(
+                    "官方克制",
+                    detail,
+                    confidence="high",
+                    priority=109,
+                    source_hero_id=int(source["hero_id"]),
+                    target_hero_id=int(target["hero_id"]),
+                    matched_terms=terms,
+                    rule=f"tencent_{relation_key}",
+                ))
     return claims
 
 
@@ -793,16 +855,69 @@ def _composition_claim(selected: dict[str, Any], allies: list[dict[str, Any]]) -
     return None
 
 
+def _claim_facet(claim: dict[str, Any]) -> str:
+    """Classify a claim by the question it answers for a viewer."""
+    if claim["kind"] in {"战术定位", "技能机制"}:
+        return "hero"
+    if claim["kind"] in {"阵容联动", "战队联动", "阵容结构"}:
+        return "allies"
+    if claim["kind"] in {"克制关系", "官方克制", "历史应对"}:
+        return "opponents"
+    return "context"
+
+
+def _select_coverage_claims(evidence: list[dict[str, Any]], *, limit: int = 5) -> list[dict[str, Any]]:
+    """Keep the story balanced instead of letting one relationship type crowd it out."""
+    ordered = sorted(evidence, key=lambda row: row["priority"], reverse=True)
+    selected: list[dict[str, Any]] = []
+    for facet in ("hero", "allies", "opponents"):
+        claim = next((row for row in ordered if _claim_facet(row) == facet), None)
+        if claim is not None:
+            selected.append(claim)
+    for claim in ordered:
+        if len(selected) >= limit:
+            break
+        if claim not in selected:
+            selected.append(claim)
+    for claim in selected:
+        claim["facet"] = _claim_facet(claim)
+    return selected[:limit]
+
+
 def _required_claim_ids(evidence: list[dict[str, Any]]) -> list[str]:
-    if not evidence:
-        return []
-    contextual = next(
-        (claim for claim in evidence if claim["kind"] in {"克制关系", "官方克制", "阵容联动", "阵容结构", "战术定位"}),
-        None,
-    )
-    team = next((claim for claim in evidence if claim["kind"] == "战队联动"), None)
-    required = [claim["id"] for claim in (contextual, team) if claim is not None]
-    return list(dict.fromkeys(required)) or [evidence[0]["id"]]
+    """Require the best available evidence from each visible commentary facet."""
+    required: list[str] = []
+    for facet in ("hero", "allies", "opponents"):
+        claim = next((row for row in evidence if row.get("facet", _claim_facet(row)) == facet), None)
+        if claim is not None:
+            required.append(claim["id"])
+    team_usage = next((row for row in evidence if row["kind"] == "战队联动"), None)
+    if team_usage is not None:
+        required.append(team_usage["id"])
+    return list(dict.fromkeys(required)) or ([evidence[0]["id"]] if evidence else [])
+
+
+def _deterministic_commentary(
+    *, team_name: str, action: str, selected: dict[str, Any], evidence: list[dict[str, Any]]
+) -> str:
+    """A readable, grounded fallback when the optional narrator is unavailable."""
+    by_facet = {
+        facet: next((claim for claim in evidence if claim.get("facet") == facet), None)
+        for facet in ("hero", "allies", "opponents")
+    }
+    sentences = [f"{team_name}{ACTION_ZH[action]}{selected['hero_name']}。"]
+    if by_facet["hero"]:
+        sentences.append(f"这名英雄的作用是：{by_facet['hero']['detail']}。")
+    if by_facet["allies"]:
+        sentences.append(f"放进己方阵容时，{by_facet['allies']['detail']}。")
+    if by_facet["opponents"]:
+        sentences.append(f"面对对手，{by_facet['opponents']['detail']}。")
+    if len(sentences) == 1:
+        context = next((claim for claim in evidence if claim.get("facet") == "context"), None)
+        sentences.append(
+            f"{context['detail']}。" if context else "这一手的阵容连接还需要后续选人确认。"
+        )
+    return "".join(sentences)
 
 
 def _commentary_cache_key(brief: dict[str, Any]) -> str:
@@ -830,6 +945,10 @@ def _contains_visible_evidence_reference(text: str) -> bool:
         re.search(r"(?i)claim[\s_-]*\d+", text)
         or re.search(r"(?:证据|依据|论据)[\s_-]*(?:编号)?[\s_-]*\d+", text)
     )
+
+
+def _sentence_count(text: str) -> int:
+    return len([part for part in re.split(r"[。！？!?]+", text) if part.strip()])
 
 
 def _generate_llm_commentary(brief: dict[str, Any]) -> dict[str, Any] | None:
@@ -869,7 +988,8 @@ def _generate_llm_commentary(brief: dict[str, Any]) -> dict[str, Any] | None:
     required_ids = set(brief["instructions"]["required_evidence_ids"])
     if (
         not text
-        or len(text) > 180
+        or len(text) > 240
+        or _sentence_count(text) > 4
         or _contains_unsupported_inference(text)
         or _contains_visible_evidence_reference(text)
         or not required_ids.issubset(used_ids)
@@ -894,9 +1014,16 @@ def build_selection_commentary(*, league_id: str, state: dict[str, Any], selecte
     opponent_id, opponent_name = str(state[f"{opponent_side}_team_id"]), str(state[f"{opponent_side}_team_name"])
     own_ids = {int(hero_id) for hero_id in state.get(f"{side}_picks", [])}
     enemy_ids = {int(hero_id) for hero_id in state.get(f"{opponent_side}_picks", [])}
+    used_ids = {
+        int(hero_id)
+        for field in ("blue_picks", "red_picks", "blue_bans", "red_bans")
+        for hero_id in state.get(field, [])
+    }
+    if selected_hero_id in used_ids:
+        raise ValueError("Selected hero is already present on this draft board.")
     allies = [profiles_by_id[hero_id] for hero_id in own_ids if hero_id in profiles_by_id]
     enemies = [profiles_by_id[hero_id] for hero_id in enemy_ids if hero_id in profiles_by_id]
-    trend_rows = _jsonl(str(OUTPUT_ROOT / league_id / "team_recent_trends.jsonl"))
+    trend_rows = _read_jsonl(OUTPUT_ROOT / league_id / "team_recent_trends.jsonl")
     evidence: list[dict[str, Any]] = []
     own_trend = _trend_claim(trend_rows, team_id=team_id, team_name=team_name, hero_id=selected_hero_id, action=action, role="acting")
     if own_trend:
@@ -927,14 +1054,29 @@ def build_selection_commentary(*, league_id: str, state: dict[str, Any], selecte
                 in tactical_pairs
             )
         ]
+        # Evaluate the same grounded mechanic rules from the opponent's side,
+        # too. A later pick must surface a threat already present on the board,
+        # rather than only the selected hero's answers.
+        reverse_enemy_interactions = [
+            claim
+            for enemy in enemies
+            for claim in _interaction_claims(enemy, [], [selected])
+            if not any(
+                claim.get("rule") == existing.get("rule")
+                and claim.get("source_hero_id") == existing.get("source_hero_id")
+                and claim.get("target_hero_id") == existing.get("target_hero_id")
+                for existing in mechanic_interactions
+            )
+        ]
         evidence.extend(tactical_interactions)
         evidence.extend(mechanic_interactions)
+        evidence.extend(reverse_enemy_interactions)
         evidence.extend(_official_relationship_claims(selected, enemies))
-        pairing = _pairing_claim(_jsonl(str(OUTPUT_ROOT / league_id / "team_synergy_stats.jsonl")), team_id=team_id, team_name=team_name, selected_id=selected_hero_id, own_ids=own_ids)
+        pairing = _pairing_claim(_read_jsonl(OUTPUT_ROOT / league_id / "team_synergy_stats.jsonl"), team_id=team_id, team_name=team_name, selected_id=selected_hero_id, own_ids=own_ids)
         if pairing:
             evidence.append(pairing)
         historical_counter = _historical_counter_claim(
-            _jsonl(str(OUTPUT_ROOT / league_id / "counter_pick_stats.jsonl")),
+            _read_jsonl(OUTPUT_ROOT / league_id / "counter_pick_stats.jsonl"),
             selected=selected,
             enemies=enemies,
         )
@@ -943,14 +1085,15 @@ def build_selection_commentary(*, league_id: str, state: dict[str, Any], selecte
         composition = _composition_claim(selected, allies)
         if composition:
             evidence.append(composition)
-    if any(claim["kind"] in {"克制关系", "官方克制", "阵容联动", "阵容结构"} for claim in evidence):
-        evidence = [claim for claim in evidence if claim["kind"] != "技能机制"]
-    evidence.sort(key=lambda row: row["priority"], reverse=True)
-    evidence = evidence[:5]
+    # Keep the ability/mechanics claim even when stronger pair evidence exists:
+    # it is the only grounded answer to "what can this hero do?" for profiles
+    # without a tactical-role sidecar.
+    evidence = _select_coverage_claims(evidence)
     for index, claim in enumerate(evidence, start=1):
         claim["id"] = f"claim_{index}"
-    clauses = [claim["detail"] for claim in evidence[:2]]
-    commentary = f"{team_name}{ACTION_ZH[action]}{selected['hero_name']}。" + ("；".join(clauses) + "。" if clauses else "这一手的阵容意图还需要后续选人确认。")
+    commentary = _deterministic_commentary(
+        team_name=team_name, action=action, selected=selected, evidence=evidence
+    )
     result = {
         "selected_hero": {"hero_id": selected_hero_id, "hero_name": selected["hero_name"]},
         "event": {"action": action, "side": side, "bp_order": state.get("bp_order"), "team": team_name, "opponent": opponent_name},
@@ -961,8 +1104,8 @@ def build_selection_commentary(*, league_id: str, state: dict[str, Any], selecte
             "claims": evidence,
             "instructions": {
                 "language": "zh-CN",
-                "max_sentences": 3,
-                "max_characters": 180,
+                "max_sentences": 4,
+                "max_characters": 240,
                 "required_evidence_ids": _required_claim_ids(evidence),
                 "optional_evidence_ids": [
                     claim["id"]

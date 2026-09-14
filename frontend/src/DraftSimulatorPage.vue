@@ -43,6 +43,7 @@ const commentaryLoading = ref(false);
 const commentaryEnabled = ref(false);
 const settingsOpen = ref(false);
 let commentaryRequestNumber = 0;
+let commentaryAbortController = null;
 let recommendationRequestNumber = 0;
 let lineupScoreRequestNumber = 0;
 const loading = ref(false);
@@ -76,6 +77,14 @@ let liveMatchCheckTimer = null;
 let liveScheduleTimer = null;
 let liveMatchRequestNumber = 0;
 const selectedTeamIds = ref({ [TEAM_A]: "", [TEAM_B]: "" });
+
+function clearCommentary() {
+  commentaryRequestNumber += 1;
+  commentaryAbortController?.abort();
+  commentaryAbortController = null;
+  commentaryLoading.value = false;
+  commentary.value = null;
+}
 const teamsBySide = ref({ blue: TEAM_A, red: TEAM_B });
 const seriesWins = ref({ [TEAM_A]: 0, [TEAM_B]: 0 });
 const winnerSide = ref(null);
@@ -801,6 +810,7 @@ function isOfficialSeriesComplete(state) {
 
 async function applyLiveMatchState(state) {
   if (!state?.match || !teamsReady.value) return;
+  clearCommentary();
   globalMode.value = "match";
   if (Number(state.match.bo) > 0) bestOf.value = Number(state.match.bo);
   resetSeriesTeams();
@@ -863,7 +873,7 @@ async function moveToNextScheduledFixture() {
   bpOrder.value = 1;
   clearVersionTree();
   result.value = null;
-  commentary.value = null;
+  clearCommentary();
   liveMatch.value = null;
   liveFollowDismissed.value = false;
   selectedTeamIds.value = {
@@ -960,7 +970,7 @@ async function loadModel() {
   lineupScore.value = null;
   lineupScoreLoading.value = false;
   lineupScoreError.value = "";
-  commentary.value = null;
+  clearCommentary();
   model.value = null;
   seasonTeams.value = [];
   upcomingMatch.value = null;
@@ -1158,8 +1168,11 @@ async function chooseHero(heroId) {
   );
   if (!legalIds.has(Number(heroId))) return;
   const preSelectionState = coachDraftState.value;
+  clearCommentary();
   if (commentaryEnabled.value && preSelectionState) {
     const requestNumber = ++commentaryRequestNumber;
+    const controller = new AbortController();
+    commentaryAbortController = controller;
     commentaryLoading.value = true;
     fetchSelectionCommentary({
       league_id: leagueId.value,
@@ -1167,14 +1180,17 @@ async function chooseHero(heroId) {
       action: currentStep.value.action,
       side: currentStep.value.side,
       selected_hero_id: Number(heroId),
-    }).then((payload) => {
+    }, { signal: controller.signal }).then((payload) => {
       if (commentaryEnabled.value && requestNumber === commentaryRequestNumber) {
         commentary.value = payload;
       }
-    }).catch(() => {
-      if (requestNumber === commentaryRequestNumber) commentary.value = null;
+    }).catch((err) => {
+      if (err.name !== "AbortError" && requestNumber === commentaryRequestNumber) commentary.value = null;
     }).finally(() => {
-      if (requestNumber === commentaryRequestNumber) commentaryLoading.value = false;
+      if (requestNumber === commentaryRequestNumber) {
+        commentaryLoading.value = false;
+        commentaryAbortController = null;
+      }
     });
   }
   const field = `${currentStep.value.side}_${
@@ -1215,6 +1231,7 @@ async function expandScenario(hero, parent = null) {
 async function applyScenario(node) {
   const state = node?.result?.transition_state;
   if (scenarioStale.value || !state) return;
+  clearCommentary();
   board.value = snapshotDraft({
     blue_picks: state.blue_picks, red_picks: state.red_picks,
     blue_bans: state.blue_bans, red_bans: state.red_bans,
@@ -1377,9 +1394,7 @@ function resetScenarioTree() {
 
 watch(commentaryEnabled, (enabled) => {
   if (enabled) return;
-  commentaryRequestNumber += 1;
-  commentaryLoading.value = false;
-  commentary.value = null;
+  clearCommentary();
 });
 
 async function undo() {
@@ -1389,6 +1404,7 @@ async function undo() {
   const index = board.value[event.field].lastIndexOf(event.heroId);
   if (index >= 0) board.value[event.field].splice(index, 1);
   bpOrder.value = event.bpOrder;
+  clearCommentary();
   syncVersionTreeWithBoard();
   await forecast();
 }
@@ -1399,7 +1415,7 @@ async function reset() {
   history.value = [];
   bpOrder.value = 1;
   search.value = "";
-  commentary.value = null;
+  clearCommentary();
   resetScenarioTree();
   clearVersionTree();
   await forecast();
@@ -1407,6 +1423,7 @@ async function reset() {
 
 async function startGlobalBp() {
   if (!teamsReady.value) return;
+  clearCommentary();
   globalMode.value = "match";
   seriesGame.value = 1;
   resetSeriesTeams();
@@ -1420,6 +1437,7 @@ async function startGlobalBp() {
 
 async function customizeGlobalBp() {
   if (!teamsReady.value) return;
+  clearCommentary();
   globalMode.value = "custom";
   seriesGame.value = 2;
   resetSeriesTeams();
@@ -1432,6 +1450,7 @@ async function customizeGlobalBp() {
 }
 
 async function clearGlobalBp() {
+  clearCommentary();
   globalMode.value = "single";
   seriesGame.value = 1;
   resetSeriesTeams();
@@ -1447,6 +1466,7 @@ async function startNextBattle() {
     !winnerSide.value ||
     !nextBlueTeam.value
   ) return;
+  clearCommentary();
   for (const side of ["blue", "red"]) {
     const team = teamsBySide.value[side];
     globalUsed.value[team] = [
@@ -1586,6 +1606,7 @@ watch(leagueId, loadModel);
 watch(
   selectedTeamIds,
   async () => {
+    clearCommentary();
     stopFollowingLiveMatch({ forget: false });
     stopLiveMatchPolling();
     liveMatch.value = null;
@@ -1604,6 +1625,7 @@ watch(
 );
 
 onBeforeUnmount(() => {
+  clearCommentary();
   scenarioAbortController?.abort();
   stopLiveMatchPolling();
   stopLiveMatchCheckSchedule();
@@ -2116,7 +2138,22 @@ onBeforeUnmount(() => {
           <section v-if="!isPeakDuel && (commentary || commentaryLoading)" class="commentary-panel">
             <p class="simulator-eyebrow">BP 解说</p>
             <p v-if="commentaryLoading" class="commentary-loading">正在生成解说…</p>
-            <h2 v-else>{{ commentary.commentary }}</h2>
+            <template v-else>
+              <p class="commentary-context">
+                {{ commentary.selected_hero?.hero_name }} · {{ commentary.event?.team }}
+                <span>{{ commentary.commentary_source === 'kimi' ? 'Kimi 整理 · 本地证据约束' : '本地证据解说' }}</span>
+              </p>
+              <h2>{{ commentary.commentary }}</h2>
+              <details v-if="commentary.evidence?.length" class="commentary-evidence">
+                <summary>查看解说依据</summary>
+                <dl>
+                  <template v-for="claim in commentary.evidence" :key="claim.id">
+                    <dt>{{ claim.facet === 'hero' ? '英雄作用' : claim.facet === 'allies' ? '己方连接' : claim.facet === 'opponents' ? '敌方互动' : claim.kind }}</dt>
+                    <dd>{{ claim.detail }}</dd>
+                  </template>
+                </dl>
+              </details>
+            </template>
           </section>
 
           <section v-if="!isPeakDuel" class="hero-picker">
@@ -2300,7 +2337,7 @@ onBeforeUnmount(() => {
 .metric-help { box-sizing:border-box; min-width:.85rem; max-width:.85rem; min-height:.85rem; max-height:.85rem; aspect-ratio:1; appearance:none; border-radius:999px; }
 .recommendation-detail-toggle { display:none; }
 .recommendation-details > p { margin:.55rem 0 0; color:var(--ink-soft); font-size:.57rem; line-height:1.4; }
-.commentary-panel { margin-top:.75rem; padding:1rem 1.15rem; border:1px solid var(--accent-deep); background:linear-gradient(120deg, rgba(232,191,108,.18), rgba(255,255,255,.84)); }.commentary-panel h2 { max-width:70rem; margin:.25rem 0 0; font:700 1rem/1.55 var(--display); letter-spacing:-.015em; }.commentary-loading { margin:0; color:var(--ink-soft); font-size:.75rem; }
+.commentary-panel { margin-top:.75rem; padding:1rem 1.15rem; border:1px solid var(--accent-deep); background:linear-gradient(120deg, rgba(232,191,108,.18), rgba(255,255,255,.84)); }.commentary-panel h2 { max-width:70rem; margin:.25rem 0 0; font:700 1rem/1.55 var(--display); letter-spacing:-.015em; }.commentary-loading { margin:0; color:var(--ink-soft); font-size:.75rem; }.commentary-context { display:flex; flex-wrap:wrap; gap:.35rem; margin:.1rem 0 0; color:var(--ink-soft); font-size:.68rem; }.commentary-context span { color:var(--accent-deep); }.commentary-evidence { margin-top:.7rem; color:var(--ink-soft); font-size:.72rem; }.commentary-evidence summary { cursor:pointer; color:var(--ink); }.commentary-evidence dl { display:grid; grid-template-columns:auto 1fr; gap:.28rem .55rem; margin:.55rem 0 0; }.commentary-evidence dt { color:var(--accent-deep); font-weight:700; }.commentary-evidence dd { margin:0; }
 .hero-picker { margin-top: .75rem; padding: 1rem; }.picker-heading { display:flex; align-items:end; justify-content:space-between; gap:1rem; }.picker-heading h2 { font-size:1.4rem; }.picker-controls { display:flex; align-items:end; gap:.55rem; }.picker-controls input { width:min(100%, 260px); }.hero-lane-filter { display:grid; gap:.22rem; color:var(--ink-soft); font-size:.67rem; font-weight:700; letter-spacing:.04em; }.hero-lane-filter select { min-width:9.2rem; }.picker-targets { margin-top:.85rem; }.hero-options { display:grid; grid-template-columns:repeat(auto-fill, minmax(3.6rem, 1fr)); gap:.45rem; margin-top:1rem; max-height:360px; overflow:auto; }.hero-options button { position:relative; display:grid; place-items:center; aspect-ratio:1; padding:0; overflow:hidden; }.hero-options button img { width:100%; height:100%; object-fit:cover; }.hero-options button small { position:absolute; right:0; bottom:0; padding:.14rem .2rem; background:rgba(16,42,46,.84); color:#fff; font-size:.56rem; }.hero-options button:hover:not(:disabled), .draft-slots button:not(:disabled):hover { border-color: var(--accent); color: var(--accent-deep); }
 .scenario-mode { display:flex; align-items:center; gap:.28rem; color:var(--ink-soft); font-size:.61rem; white-space:nowrap; }.scenario-mode input { width:auto; accent-color:var(--accent-deep); }
 @media (max-width: 1000px) { .simulator-workspace { grid-template-columns:1fr; }.coach-rail { position:static; }.coach-rail { grid-row:1; }.assistant-rail-shell{height:auto;min-height:520px;max-height:700px}.simulator-main-column { grid-row:2; } }
