@@ -49,6 +49,8 @@ const actionSummary = computed(() => props.node.actions.map((action) => `${label
 .child-level>.tree-item:first-child::before,.child-level>.tree-item:last-child::after{border-top-color:transparent}
 .child-level>.tree-item:last-child::before{border-right:1px solid var(--ink);border-radius:0 .45rem 0 0}
 .child-level>.tree-item:first-child::after{border-radius:.45rem 0 0 0}
+/* The last branch's rounded ::before already draws its vertical connector. */
+.child-level>.tree-item:last-child:not(:only-child)::after{display:none}
 .child-level>.tree-item:only-child::before{display:none}
 .child-level>.tree-item:only-child::after{width:0;border-top:0}
 .child-level>.tree-item.on-trail::before,.child-level>.tree-item.on-trail::after{border-color:#6ba88e}
