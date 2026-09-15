@@ -15,7 +15,7 @@ const actionSummary = computed(() => props.node.actions.map((action) => `${label
 <template>
   <li class="tree-item" :class="{ 'on-trail': isOnTrail }">
     <button type="button" class="checkpoint-node" :class="{ active: isActive, ancestor: isOnTrail }" :aria-current="isActive ? 'step' : undefined" :aria-label="`${t('Checkpoint')} BP ${Math.max(0, Number(node.state?.bpOrder || 1) - 1)}, ${node.actions.length} ${t('actions')}`" :title="actionSummary" @click="emit('restore', node)">
-      <span class="node-step">{{ t('Checkpoint') }} · BP {{ Math.max(0, Number(node.state?.bpOrder || 1) - 1) }}</span><span class="node-count">{{ node.actions.length }} {{ t('actions') }}</span>
+      <span class="node-step">{{ t('Checkpoint') }}{{ $t("· BP") }}{{ Math.max(0, Number(node.state?.bpOrder || 1) - 1) }}</span><span class="node-count">{{ node.actions.length }} {{ t('actions') }}</span>
       <span class="hero-summary"><span v-for="action in node.actions.slice(-3)" :key="`${action.bpOrder}-${action.heroId}`" class="hero-dot" :class="side(action)" :title="`${label(action)} · ${name(action.heroId)}`"><img v-if="heroAsset(action.heroId)" :src="heroAsset(action.heroId)" :alt="name(action.heroId)" /><i v-else>{{ name(action.heroId).slice(0, 1) }}</i></span></span>
     </button>
     <ol v-if="children.length" class="tree-level child-level"><DraftVersionTreeNode v-for="child in children" :key="child.id" :node="child" :children-by-parent="childrenByParent" :heroes="heroes" :hero-asset="heroAsset" :active-checkpoint="activeCheckpoint" :current-trail="currentTrail" :depth="depth + 1" @restore="emit('restore', $event)" /></ol>

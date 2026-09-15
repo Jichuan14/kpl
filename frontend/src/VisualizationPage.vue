@@ -334,17 +334,14 @@ onBeforeUnmount(() => {
   <main class="visual-page">
     <section class="explorer-heading">
       <div>
-        <p class="visual-eyebrow">Personal analysis practice · Public match information</p>
-        <h1>Draft Pattern Explorer</h1>
-        <p>
-          Filter the season data to investigate specific counters, combinations,
-          and ban responses.
-        </p>
+        <p class="visual-eyebrow">{{ $t("Personal analysis practice · Public match information") }}</p>
+        <h1>{{ $t("Draft Pattern Explorer") }}</h1>
+        <p>{{ $t("Filter the season data to investigate specific counters, combinations, and ban responses.") }}</p>
       </div>
     </section>
 
     <p v-if="error" class="visual-message error">{{ error }}</p>
-    <p v-else-if="loading" class="visual-message">Loading season data…</p>
+    <p v-else-if="loading" class="visual-message">{{ $t("Loading season data…") }}</p>
 
     <template v-if="payload && !loading">
       <section
@@ -354,16 +351,13 @@ onBeforeUnmount(() => {
       >
         <div class="meta-heading">
           <div>
-            <p class="visual-eyebrow">Opening draft priority</p>
-            <h2>Season meta heroes</h2>
-            <p>
-              Heroes most often removed in the first four bans or secured with
-              Blue's first pick.
-            </p>
+            <p class="visual-eyebrow">{{ $t("Opening draft priority") }}</p>
+            <h2>{{ $t("Season meta heroes") }}</h2>
+            <p>{{ $t("Heroes most often removed in the first four bans or secured with Blue's first pick.") }}</p>
           </div>
           <div class="meta-legend">
-            <span><i class="ban-key"></i>Opening ban</span>
-            <span><i class="pick-key"></i>Blue first pick</span>
+            <span><i class="ban-key"></i>{{ $t("Opening ban") }}</span>
+            <span><i class="pick-key"></i>{{ $t("Blue first pick") }}</span>
           </div>
         </div>
 
@@ -397,9 +391,7 @@ onBeforeUnmount(() => {
             <div class="meta-copy">
               <strong>{{ hero.hero_name }}</strong>
               <small>
-                {{ hero.opening_ban_count }} bans ·
-                {{ hero.blue_first_pick_count }} Blue first picks
-              </small>
+                {{ hero.opening_ban_count }}{{ $t("bans ·") }}{{ hero.blue_first_pick_count }}{{ $t("Blue first picks") }}</small>
               <div class="meta-track">
                 <span
                   class="meta-ban"
@@ -413,7 +405,7 @@ onBeforeUnmount(() => {
             </div>
             <strong class="meta-rate">
               {{ percent(hero.early_priority_rate) }}
-              <small>priority</small>
+              <small>{{ $t("priority") }}</small>
             </strong>
           </article>
         </div>
@@ -431,20 +423,20 @@ onBeforeUnmount(() => {
       <section v-if="metaHeroOptions.length" class="meta-evolution">
         <div class="meta-evolution-heading">
           <div>
-            <p class="visual-eyebrow">Season comparison</p>
-            <h2>Meta evolution</h2>
-            <p>Track how opening-draft priority rises and falls between seasons.</p>
+            <p class="visual-eyebrow">{{ $t("Season comparison") }}</p>
+            <h2>{{ $t("Meta evolution") }}</h2>
+            <p>{{ $t("Track how opening-draft priority rises and falls between seasons.") }}</p>
           </div>
           <div class="meta-hero-controls">
             <label>
-              <span>Hero</span>
+              <span>{{ $t("Hero") }}</span>
               <select v-model="selectedMetaHeroId">
                 <option v-for="hero in metaHeroOptions" :key="hero.hero_id" :value="String(hero.hero_id)">
                   {{ hero.hero_name }}
                 </option>
               </select>
             </label>
-            <div class="current-meta-icons" aria-label="Current season meta heroes">
+            <div class="current-meta-icons" :aria-label="$t('Current season meta heroes')">
               <button
                 v-for="hero in currentSeasonMetaHeroes"
                 :key="hero.hero_id"
@@ -463,7 +455,7 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <div v-if="metaLoading" class="meta-evolution-message">Loading season history…</div>
+        <div v-if="metaLoading" class="meta-evolution-message">{{ $t("Loading season history…") }}</div>
         <template v-else>
           <div class="meta-selected-hero">
             <div class="meta-avatar">
@@ -475,7 +467,7 @@ onBeforeUnmount(() => {
             </div>
             <div>
               <strong>{{ selectedMetaHero?.hero_name }}</strong>
-              <small>Opening bans + Blue first picks, divided by eligible drafts.</small>
+              <small>{{ $t("Opening bans + Blue first picks, divided by eligible drafts.") }}</small>
             </div>
           </div>
           <div class="meta-chart-wrap" :aria-label="`${selectedMetaHero?.hero_name || 'Selected hero'} priority by season`">
@@ -509,7 +501,7 @@ onBeforeUnmount(() => {
                 top: `${(hoveredMetaPoint.y / 180) * 100}%`,
               }"
             >
-              <strong>{{ hoveredMetaPoint.year }} · S{{ hoveredMetaPoint.season }}</strong>
+              <strong>{{ hoveredMetaPoint.year }}{{ $t("· S") }}{{ hoveredMetaPoint.season }}</strong>
               <span>{{ percent(hoveredMetaPoint.rate) }} {{ t("priority") }}</span>
               <small>
                 {{ hoveredMetaPoint.rank ? `${t("Rank")} #${hoveredMetaPoint.rank}` : t("Not a priority hero") }}
@@ -520,12 +512,12 @@ onBeforeUnmount(() => {
               </small>
             </div>
             <div class="meta-chart-labels">
-              <span v-for="entry in metaSeries" :key="entry.league_id">{{ entry.year }} S{{ entry.season }}</span>
+              <span v-for="entry in metaSeries" :key="entry.league_id">{{ entry.year }}{{ $t("S") }}{{ entry.season }}</span>
             </div>
           </div>
           <div class="meta-season-values">
             <article v-for="entry in metaSeries" :key="entry.league_id">
-              <span>{{ entry.year }} · S{{ entry.season }}</span>
+              <span>{{ entry.year }}{{ $t("· S") }}{{ entry.season }}</span>
               <strong>{{ percent(entry.rate) }}</strong>
               <small>{{ entry.rank ? `${t("Rank")} #${entry.rank}` : t("Not a priority hero") }}</small>
             </article>
@@ -533,7 +525,7 @@ onBeforeUnmount(() => {
         </template>
       </section>
 
-    <section class="relation-tabs" aria-label="Relationship type">
+    <section class="relation-tabs" :aria-label="$t('Relationship type')">
       <button
         v-for="option in relationOptions"
         :key="option.value"
@@ -543,37 +535,36 @@ onBeforeUnmount(() => {
       >
         <span>{{ option.short }}</span>
         <small>
-          {{ number(payload?.source_counts?.[option.value]) }} patterns
-        </small>
+          {{ number(payload?.source_counts?.[option.value]) }}{{ $t("patterns") }}</small>
       </button>
     </section>
       <section class="filter-panel">
         <label v-if="relation === 'ban_response'">
-          <span>Follow-up group</span>
+          <span>{{ $t("Follow-up group") }}</span>
           <select v-model="responseScope">
-            <option value="all">All follow-ups</option>
-            <option value="opponent_next_ban">Opponent's next ban</option>
-            <option value="banning_team_later_pick">Banning team's picks</option>
-            <option value="opponent_later_pick">Opponent's picks</option>
+            <option value="all">{{ $t("All follow-ups") }}</option>
+            <option value="opponent_next_ban">{{ $t("Opponent's next ban") }}</option>
+            <option value="banning_team_later_pick">{{ $t("Banning team's picks") }}</option>
+            <option value="opponent_later_pick">{{ $t("Opponent's picks") }}</option>
           </select>
         </label>
         <label>
-          <span>Draft context</span>
+          <span>{{ $t("Draft context") }}</span>
           <select v-model="context">
-            <option value="overall">All sides and slots</option>
-            <option value="slot_context">Specific side and slot</option>
+            <option value="overall">{{ $t("All sides and slots") }}</option>
+            <option value="slot_context">{{ $t("Specific side and slot") }}</option>
           </select>
         </label>
         <label v-if="context === 'slot_context'">
-          <span>Responding side</span>
+          <span>{{ $t("Responding side") }}</span>
           <select v-model="side">
-            <option value="all">Blue and red</option>
-            <option value="blue">Blue</option>
-            <option value="red">Red</option>
+            <option value="all">{{ $t("Blue and red") }}</option>
+            <option value="blue">{{ $t("Blue") }}</option>
+            <option value="red">{{ $t("Red") }}</option>
           </select>
         </label>
         <label class="rank-by-filter">
-          <span>Rank by</span>
+          <span>{{ $t("Rank by") }}</span>
           <select v-model="metric">
             <option
               v-for="option in metricOptions"
@@ -585,22 +576,22 @@ onBeforeUnmount(() => {
           </select>
         </label>
         <label>
-          <span>Minimum times seen</span>
+          <span>{{ $t("Minimum times seen") }}</span>
           <input v-model.number="support" type="number" min="2" />
         </label>
         <label>
-          <span>Results</span>
+          <span>{{ $t("Results") }}</span>
           <select v-model="resultCount">
-            <option value="10">Top 10</option>
-            <option value="20">Top 20</option>
-            <option value="50">Top 50</option>
-            <option value="100">Top 100</option>
-            <option value="all">Show all (table: first 200)</option>
+            <option value="10">{{ $t("Top 10") }}</option>
+            <option value="20">{{ $t("Top 20") }}</option>
+            <option value="50">{{ $t("Top 50") }}</option>
+            <option value="100">{{ $t("Top 100") }}</option>
+            <option value="all">{{ $t("Show all (table: first 200)") }}</option>
           </select>
         </label>
         <label class="search-control">
-          <span>Find a hero</span>
-          <input v-model="search" type="search" placeholder="Search hero name…" />
+          <span>{{ $t("Find a hero") }}</span>
+          <input v-model="search" type="search" :placeholder="$t('Search hero name…')" />
         </label>
       </section>
 
@@ -608,12 +599,12 @@ onBeforeUnmount(() => {
         <article class="chart-card">
           <div class="card-heading">
             <div>
-              <p class="visual-eyebrow">Ranked patterns</p>
+              <p class="visual-eyebrow">{{ $t("Ranked patterns") }}</p>
               <h2>{{ currentRelation.label }}</h2>
             </div>
             <span class="desktop-rank-label">{{ metricOptions.find((item) => item.value === metric)?.label }}</span>
             <label class="mobile-rank-filter">
-              <select v-model="metric" aria-label="Rank hero pairs by">
+              <select v-model="metric" :aria-label="$t('Rank hero pairs by')">
                 <option
                   v-for="option in metricOptions"
                   :key="option.value"
@@ -655,9 +646,7 @@ onBeforeUnmount(() => {
                 <small>
                   {{ row.context_description }} · {{ row.selections }}/{{
                     row.opportunities
-                  }}
-                  legal chances
-                </small>
+                  }}{{ $t("legal chances") }}</small>
                 <div class="visual-track">
                   <span
                     :class="`relation-${row.relation}`"
@@ -668,60 +657,51 @@ onBeforeUnmount(() => {
               <strong class="bar-metric">{{ metricText(row) }}</strong>
             </div>
           </div>
-          <div v-else class="no-patterns">
-            No relationships match these filters.
-          </div>
+          <div v-else class="no-patterns">{{ $t("No relationships match these filters.") }}</div>
         </article>
 
         <aside class="method-card">
-          <p class="visual-eyebrow">How to read this</p>
-          <h2>Availability-adjusted</h2>
-          <p>
-            A hero enters the denominator only when it was legal at that exact
-            draft decision. This prevents already-used or banned heroes from
-            making selection rates look artificially low.
-          </p>
+          <p class="visual-eyebrow">{{ $t("How to read this") }}</p>
+          <h2>{{ $t("Availability-adjusted") }}</h2>
+          <p>{{ $t("A hero enters the denominator only when it was legal at that exact draft decision. This prevents already-used or banned heroes from making selection rates look artificially low.") }}</p>
           <dl>
             <div>
-              <dt>Chance</dt>
-              <dd>How often the pattern happened when the target was legal.</dd>
+              <dt>{{ $t("Chance") }}</dt>
+              <dd>{{ $t("How often the pattern happened when the target was legal.") }}</dd>
             </div>
             <div>
-              <dt>Lift</dt>
-              <dd>Pattern chance divided by the hero's usual legal chance.</dd>
+              <dt>{{ $t("Lift") }}</dt>
+              <dd>{{ $t("Pattern chance divided by the hero's usual legal chance.") }}</dd>
             </div>
             <div>
-              <dt>Likely range</dt>
-              <dd>95% Wilson interval; wider means less certainty.</dd>
+              <dt>{{ $t("Likely range") }}</dt>
+              <dd>{{ $t("95% Wilson interval; wider means less certainty.") }}</dd>
             </div>
           </dl>
-          <p class="method-note">
-            These are descriptive associations from past drafts, not proof that
-            one hero caused another choice or a win.
-          </p>
+          <p class="method-note">{{ $t("These are descriptive associations from past drafts, not proof that one hero caused another choice or a win.") }}</p>
         </aside>
       </section>
 
       <section class="details-card">
         <div class="card-heading">
           <div>
-            <p class="visual-eyebrow">Full detail</p>
-            <h2>Pattern evidence</h2>
+            <p class="visual-eyebrow">{{ $t("Full detail") }}</p>
+            <h2>{{ $t("Pattern evidence") }}</h2>
           </div>
-          <span>Generated {{ new Date(payload.generated_at).toLocaleDateString() }}</span>
+          <span>{{ $t("Generated") }}{{ new Date(payload.generated_at).toLocaleDateString() }}</span>
         </div>
         <div class="visual-table-wrap">
           <table>
             <thead>
               <tr>
-                <th>Pattern</th>
-                <th>Context</th>
-                <th>Chosen / legal</th>
-                <th>Chance</th>
-                <th>Usual</th>
-                <th>Lift</th>
-                <th>Win rate</th>
-                <th>Likely range</th>
+                <th>{{ $t("Pattern") }}</th>
+                <th>{{ $t("Context") }}</th>
+                <th>{{ $t("Chosen / legal") }}</th>
+                <th>{{ $t("Chance") }}</th>
+                <th>{{ $t("Usual") }}</th>
+                <th>{{ $t("Lift") }}</th>
+                <th>{{ $t("Win rate") }}</th>
+                <th>{{ $t("Likely range") }}</th>
               </tr>
             </thead>
             <tbody>
@@ -742,9 +722,7 @@ onBeforeUnmount(() => {
               </tr>
             </tbody>
           </table>
-          <p v-if="resultCount === 'all' && filteredRows.length > tableRows.length" class="table-limit-note">
-            Showing the first {{ number(tableRows.length) }} matching rows. Narrow the filters to inspect the rest.
-          </p>
+          <p v-if="resultCount === 'all' && filteredRows.length > tableRows.length" class="table-limit-note">{{ $t("Showing the first") }}{{ number(tableRows.length) }}{{ $t("matching rows. Narrow the filters to inspect the rest.") }}</p>
         </div>
       </section>
     </template>

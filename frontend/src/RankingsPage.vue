@@ -152,30 +152,26 @@ watch(leagueId, loadRankings);
   <main class="rankings-page">
     <header class="rankings-hero">
       <div>
-        <p class="rankings-eyebrow">Cross-season form · Decayed evidence</p>
-        <h1>Power Rankings</h1>
-        <p>
-          Current strength without pretending old results last forever. Compare
-          team Elo, compare players within each position, or open any hero to
-          see which active player performs best.
-        </p>
+        <p class="rankings-eyebrow">{{ $t("Cross-season form · Decayed evidence") }}</p>
+        <h1>{{ $t("Power Rankings") }}</h1>
+        <p>{{ $t("Current strength without pretending old results last forever. Compare team Elo, compare players within each position, or open any hero to see which active player performs best.") }}</p>
       </div>
       <label class="season-control">
-        <span>Competition</span>
+        <span>{{ $t("Competition") }}</span>
         <select v-model="leagueId">
-          <option v-if="!seasons.length" value="">No ranking data yet</option>
+          <option v-if="!seasons.length" value="">{{ $t("No ranking data yet") }}</option>
           <option v-for="season in seasons" :key="season.league_id" :value="season.league_id">
-            {{ season.year }} · {{ season.league_name }} · S{{ season.season }}
+            {{ season.year }} · {{ season.league_name }}{{ $t("· S") }}{{ season.season }}
           </option>
         </select>
       </label>
     </header>
 
     <p v-if="error" class="rankings-message error">{{ error }}</p>
-    <p v-else-if="loading" class="rankings-message">Calculating the form table…</p>
+    <p v-else-if="loading" class="rankings-message">{{ $t("Calculating the form table…") }}</p>
 
     <template v-if="payload && !loading">
-      <div class="board-switch" role="tablist" aria-label="Ranking board">
+      <div class="board-switch" role="tablist" :aria-label="$t('Ranking board')">
         <button
           type="button"
           role="tab"
@@ -184,8 +180,8 @@ watch(leagueId, loadRankings);
           @click="board = 'teams'"
         >
           <span>01</span>
-          <strong>Team strength</strong>
-          <small>Opponent-adjusted Elo + recent wins</small>
+          <strong>{{ $t("Team strength") }}</strong>
+          <small>{{ $t("Opponent-adjusted Elo + recent wins") }}</small>
         </button>
         <button
           type="button"
@@ -195,8 +191,8 @@ watch(leagueId, loadRankings);
           @click="board = 'heroes'"
         >
           <span>02</span>
-          <strong>Best on hero</strong>
-          <small>Role-normalized performance by hero</small>
+          <strong>{{ $t("Best on hero") }}</strong>
+          <small>{{ $t("Role-normalized performance by hero") }}</small>
         </button>
         <button
           type="button"
@@ -206,18 +202,18 @@ watch(leagueId, loadRankings);
           @click="board = 'positions'; playerSearch = ''"
         >
           <span>03</span>
-          <strong>Best by position</strong>
-          <small>All-hero performance within each role</small>
+          <strong>{{ $t("Best by position") }}</strong>
+          <small>{{ $t("All-hero performance within each role") }}</small>
         </button>
       </div>
 
       <section v-if="board === 'teams'" class="team-board">
         <div class="section-heading">
           <div>
-            <p class="rankings-eyebrow">Selected-season field</p>
-            <h2>Team power table</h2>
+            <p class="rankings-eyebrow">{{ $t("Selected-season field") }}</p>
+            <h2>{{ $t("Team power table") }}</h2>
           </div>
-          <p data-i18n-ignore>
+          <p>
             {{ language === "zh-CN"
               ? "72% 时间衰减 Elo · 28% 贝叶斯衰减胜率"
               : "72% decayed Elo · 28% Bayesian decayed win rate" }}
@@ -230,7 +226,7 @@ watch(leagueId, loadRankings);
             <div class="team-monogram">{{ team.team_name.slice(0, 2) }}</div>
             <h3>{{ team.team_name }}</h3>
             <strong>{{ number(team.hybrid_score, 1) }}</strong>
-            <small data-i18n-ignore>
+            <small>
               {{ number(team.elo) }} {{ language === "zh-CN" ? "Elo 分" : "Elo" }}
             </small>
           </article>
@@ -241,13 +237,13 @@ watch(leagueId, loadRankings);
             <table>
               <thead>
                 <tr>
-                  <th>Rank</th>
-                  <th>Team</th>
-                  <th>Power score</th>
-                  <th data-i18n-ignore>{{ language === "zh-CN" ? "Elo 分" : "Elo" }}</th>
-                  <th>Current-form win rate</th>
-                  <th>Recent evidence</th>
-                  <th>Recent 10</th>
+                  <th>{{ $t("Rank") }}</th>
+                  <th>{{ $t("Team") }}</th>
+                  <th>{{ $t("Power score") }}</th>
+                  <th>{{ language === "zh-CN" ? "Elo 分" : "Elo" }}</th>
+                  <th>{{ $t("Current-form win rate") }}</th>
+                  <th>{{ $t("Recent evidence") }}</th>
+                  <th>{{ $t("Recent 10") }}</th>
                 </tr>
               </thead>
               <tbody>
@@ -273,8 +269,8 @@ watch(leagueId, loadRankings);
         <aside class="hero-directory">
           <div class="directory-head">
             <div>
-              <p class="rankings-eyebrow">Hero directory</p>
-              <h2 data-i18n-ignore>
+              <p class="rankings-eyebrow">{{ $t("Hero directory") }}</p>
+              <h2>
                 {{ heroes.length }}{{ language === "zh-CN" ? " 个英雄榜" : " boards" }}
               </h2>
             </div>
@@ -288,8 +284,8 @@ watch(leagueId, loadRankings);
             </button>
           </div>
           <label class="hero-search">
-            <span>Find a hero</span>
-            <input v-model="heroSearch" type="search" placeholder="Search…" />
+            <span>{{ $t("Find a hero") }}</span>
+            <input v-model="heroSearch" type="search" :placeholder="$t('Search…')" />
           </label>
           <div class="hero-list" :class="{ open: heroDirectoryOpen }">
             <button
@@ -303,7 +299,7 @@ watch(leagueId, loadRankings);
               <span v-else>{{ hero.hero_name.slice(0, 1) }}</span>
               <div>
                 <strong>{{ hero.hero_name }}</strong>
-                <small data-i18n-ignore>
+                <small>
                   {{ heroUsage(hero) }}{{ language === "zh-CN" ? " 场使用" : " games" }} ·
                   {{ hero.player_count }}{{ language === "zh-CN" ? " 名选手" : " players" }}
                 </small>
@@ -319,9 +315,9 @@ watch(leagueId, loadRankings);
               <span v-else>{{ selectedHero.hero_name.slice(0, 1) }}</span>
             </div>
             <div>
-              <p class="rankings-eyebrow">Who plays this hero best?</p>
+              <p class="rankings-eyebrow">{{ $t("Who plays this hero best?") }}</p>
               <h2>{{ selectedHero.hero_name }}</h2>
-              <span data-i18n-ignore>
+              <span>
                 {{ selectedHero.player_count }}{{ language === "zh-CN" ? " 名当前选手" : " active player profiles" }}
               </span>
             </div>
@@ -329,29 +325,29 @@ watch(leagueId, loadRankings);
 
           <section class="hero-filters">
             <label>
-              <span>Current-season games</span>
+              <span>{{ $t("Current-season games") }}</span>
               <select v-model.number="minimumGames">
-                <option :value="1">At least 1</option>
-                <option :value="2">At least 2</option>
-                <option :value="3">At least 3</option>
-                <option :value="5">At least 5</option>
+                <option :value="1">{{ $t("At least 1") }}</option>
+                <option :value="2">{{ $t("At least 2") }}</option>
+                <option :value="3">{{ $t("At least 3") }}</option>
+                <option :value="5">{{ $t("At least 5") }}</option>
               </select>
             </label>
             <label>
-              <span>Find player or team</span>
-              <input v-model="playerSearch" type="search" placeholder="Search…" />
+              <span>{{ $t("Find player or team") }}</span>
+              <input v-model="playerSearch" type="search" :placeholder="$t('Search…')" />
             </label>
           </section>
 
           <div class="player-board-card">
             <div class="player-board-head">
               <div>
-                <p class="rankings-eyebrow">Hybrid performance</p>
-                <h3 data-i18n-ignore>
+                <p class="rankings-eyebrow">{{ $t("Hybrid performance") }}</p>
+                <h3>
                   {{ shownPlayers.length }}{{ language === "zh-CN" ? " 名符合条件的选手" : " qualifying players" }}
                 </h3>
               </div>
-              <span data-i18n-ignore>
+              <span>
                 {{ language === "zh-CN" ? "40% KDA · 按位置标准化" : "40% KDA · role normalized" }}
               </span>
             </div>
@@ -368,31 +364,31 @@ watch(leagueId, loadRankings);
               </div>
               <div class="player-stat primary">
                 <strong>{{ number(player.hybrid_score, 1) }}</strong>
-                <span>score</span>
+                <span>{{ $t("score") }}</span>
               </div>
               <div class="player-stat">
                 <strong>{{ number(player.decayed_kda, 2) }}</strong>
-                <span>decayed KDA</span>
+                <span>{{ $t("decayed KDA") }}</span>
               </div>
               <div class="player-stat">
                 <strong>{{ percent(player.decayed_win_rate) }}</strong>
-                <span>Current-form win rate</span>
+                <span>{{ $t("Current-form win rate") }}</span>
               </div>
               <div class="player-stat">
                 <strong>{{ player.games }}</strong>
-                <span>career games</span>
+                <span>{{ $t("career games") }}</span>
               </div>
               <div class="player-stat confidence">
                 <strong>{{ percent(player.confidence) }}</strong>
-                <span>confidence</span>
+                <span>{{ $t("confidence") }}</span>
               </div>
             </article>
-            <p v-if="!shownPlayers.length" class="empty-board">No players match these filters.</p>
+            <p v-if="!shownPlayers.length" class="empty-board">{{ $t("No players match these filters.") }}</p>
           </div>
 
           <aside class="formula-note">
-            <strong>How the player score works</strong>
-            <p data-i18n-ignore>
+            <strong>{{ $t("How the player score works") }}</strong>
+            <p>
               {{ language === "zh-CN"
                 ? "每局表现会与同位置、同赛事的选手进行比较：KDA 占 40%、官方 MVP 评分占 18%、参团率占 12%、英雄伤害占比占 10%、每分钟经济占 8%、对局结果占 12%。旧比赛会随时间衰减，小样本会加入相当于四局有效比赛的中性先验。"
                 : "Each game is compared with players in the same role and competition: KDA 40%, official MVP score 18%, participation 12%, hero damage share 10%, gold pace 8%, and the battle result 12%. Older games decay and small samples receive a four-effective-game neutral prior." }}
@@ -404,13 +400,13 @@ watch(leagueId, loadRankings);
       <section v-else class="position-board">
         <div class="section-heading position-heading">
           <div>
-            <p class="rankings-eyebrow">Active players · All heroes</p>
-            <h2>Player rankings by position</h2>
+            <p class="rankings-eyebrow">{{ $t("Active players · All heroes") }}</p>
+            <h2>{{ $t("Player rankings by position") }}</h2>
           </div>
-          <p>Compare players only with peers who play the same role.</p>
+          <p>{{ $t("Compare players only with peers who play the same role.") }}</p>
         </div>
 
-        <div class="position-tabs" role="tablist" aria-label="Player position">
+        <div class="position-tabs" role="tablist" :aria-label="$t('Player position')">
           <button
             v-for="position in positions"
             :key="position.position"
@@ -421,7 +417,7 @@ watch(leagueId, loadRankings);
             @click="selectedPositionId = position.position; playerSearch = ''"
           >
             <strong>{{ positionLabel(position) }}</strong>
-            <small data-i18n-ignore>
+            <small>
               {{ position.player_count }}{{ language === "zh-CN" ? " 名选手" : " players" }}
             </small>
           </button>
@@ -430,17 +426,17 @@ watch(leagueId, loadRankings);
         <template v-if="selectedPosition">
           <section class="hero-filters position-filters">
             <label>
-              <span>Current-season games</span>
+              <span>{{ $t("Current-season games") }}</span>
               <select v-model.number="minimumGames">
-                <option :value="1">At least 1</option>
-                <option :value="2">At least 2</option>
-                <option :value="3">At least 3</option>
-                <option :value="5">At least 5</option>
+                <option :value="1">{{ $t("At least 1") }}</option>
+                <option :value="2">{{ $t("At least 2") }}</option>
+                <option :value="3">{{ $t("At least 3") }}</option>
+                <option :value="5">{{ $t("At least 5") }}</option>
               </select>
             </label>
             <label>
-              <span>Find player or team</span>
-              <input v-model="playerSearch" type="search" placeholder="Search…" />
+              <span>{{ $t("Find player or team") }}</span>
+              <input v-model="playerSearch" type="search" :placeholder="$t('Search…')" />
             </label>
           </section>
 
@@ -448,11 +444,11 @@ watch(leagueId, loadRankings);
             <div class="player-board-head">
               <div>
                 <p class="rankings-eyebrow">{{ positionLabel(selectedPosition) }}</p>
-                <h3 data-i18n-ignore>
+                <h3>
                   {{ shownPositionPlayers.length }}{{ language === "zh-CN" ? " 名符合条件的选手" : " qualifying players" }}
                 </h3>
               </div>
-              <span data-i18n-ignore>
+              <span>
                 {{ language === "zh-CN" ? "跨英雄汇总 · 按位置标准化" : "All heroes · role normalized" }}
               </span>
             </div>
@@ -464,7 +460,7 @@ watch(leagueId, loadRankings);
               <span class="player-rank">{{ String(index + 1).padStart(2, "0") }}</span>
               <div class="player-identity">
                 <strong>{{ player.player_name }}</strong>
-                <small data-i18n-ignore>
+                <small>
                   {{ player.current_team_name }} ·
                   {{ player.hero_count }}{{ language === "zh-CN" ? " 个英雄" : " heroes" }}
                 </small>
@@ -472,31 +468,31 @@ watch(leagueId, loadRankings);
               </div>
               <div class="player-stat primary">
                 <strong>{{ number(player.hybrid_score, 1) }}</strong>
-                <span>score</span>
+                <span>{{ $t("score") }}</span>
               </div>
               <div class="player-stat">
                 <strong>{{ number(player.decayed_kda, 2) }}</strong>
-                <span>decayed KDA</span>
+                <span>{{ $t("decayed KDA") }}</span>
               </div>
               <div class="player-stat">
                 <strong>{{ percent(player.decayed_win_rate) }}</strong>
-                <span>Current-form win rate</span>
+                <span>{{ $t("Current-form win rate") }}</span>
               </div>
               <div class="player-stat">
                 <strong>{{ player.games }}</strong>
-                <span>career games</span>
+                <span>{{ $t("career games") }}</span>
               </div>
               <div class="player-stat confidence">
                 <strong>{{ percent(player.confidence) }}</strong>
-                <span>confidence</span>
+                <span>{{ $t("confidence") }}</span>
               </div>
             </article>
-            <p v-if="!shownPositionPlayers.length" class="empty-board">No players match these filters.</p>
+            <p v-if="!shownPositionPlayers.length" class="empty-board">{{ $t("No players match these filters.") }}</p>
           </div>
 
           <aside class="formula-note">
-            <strong>How position rankings work</strong>
-            <p data-i18n-ignore>
+            <strong>{{ $t("How position rankings work") }}</strong>
+            <p>
               {{ language === "zh-CN"
                 ? "榜单汇总选手在该位置使用所有英雄的单局表现。每局仍只与同赛事、同位置的选手比较；旧比赛会随时间衰减，并加入四局中性先验。至少 5 局的默认筛选可避免当前赛季极小样本占据榜首。"
                 : "The board aggregates every hero a player used in this position. Each game is still compared only with the same role and competition; older games decay and four neutral games protect against small samples. The default five-game filter keeps tiny current-season samples from leading the visible board." }}

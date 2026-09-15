@@ -535,13 +535,13 @@ watch(() => route.path, () => {
       class="startup-loader"
       role="status"
       aria-live="polite"
-      aria-label="Loading Draft Atlas"
+      :aria-label="$t('Loading Draft Atlas')"
     >
       <div class="startup-loader-card">
-        <span class="startup-mark" aria-hidden="true">DA</span>
+        <span class="startup-mark" aria-hidden="true">{{ $t("DA") }}</span>
         <div class="startup-copy">
-          <span>Loading Draft Atlas</span>
-          <span>Preparing the analysis workspace…</span>
+          <span>{{ $t("Loading Draft Atlas") }}</span>
+          <span>{{ $t("Preparing the analysis workspace…") }}</span>
         </div>
         <div class="startup-progress" aria-hidden="true"><span></span></div>
       </div>
@@ -558,7 +558,7 @@ watch(() => route.path, () => {
   <nav class="site-navigation">
     <a class="site-brand" href="/" @click.prevent="navigate('/')">
       <img src="/assets/brand/draft-atlas-icon.png" alt="" aria-hidden="true" />
-      <span class="site-brand-name">Draft <b>Atlas</b></span>
+      <span class="site-brand-name">{{ $t("Draft") }}<b>{{ $t("Atlas") }}</b></span>
     </a>
     <DailyMatchesWidget
       v-if="!isManagement"
@@ -566,70 +566,70 @@ watch(() => route.path, () => {
       @predict="openMatchPrediction"
     />
     <div class="navigation-links">
-      <div class="primary-tabs" aria-label="Analysis views">
+      <div class="primary-tabs" :aria-label="$t('Analysis views')">
         <a
           href="/"
           :class="{ active: isFeatureSpace }"
           @click.prevent="navigate('/')"
         >
-          <span>Plan</span>
-          <strong>Hero matchups</strong>
+          <span>{{ $t("Plan") }}</span>
+          <strong>{{ $t("Hero matchups") }}</strong>
         </a>
         <a
           href="/rankings"
           :class="{ active: isRankings }"
           @click.prevent="navigate('/rankings')"
         >
-          <span>Rank</span>
-          <strong>Power board</strong>
+          <span>{{ $t("Rank") }}</span>
+          <strong>{{ $t("Power board") }}</strong>
         </a>
         <a
           href="/simulator"
           :class="{ active: isSimulator }"
           @click.prevent="navigate('/simulator')"
         >
-          <span>Simulate</span>
-          <strong>BP draft</strong>
+          <span>{{ $t("Simulate") }}</span>
+          <strong>{{ $t("BP draft") }}</strong>
         </a>
         <a
           href="/bp-data"
           :class="{ active: isBpData }"
           @click.prevent="navigate('/bp-data')"
         >
-          <span>Explore</span>
-          <strong>BP data</strong>
+          <span>{{ $t("Explore") }}</span>
+          <strong>{{ $t("BP data") }}</strong>
         </a>
         <a
           href="/teams"
           :class="{ active: isTeams }"
           @click.prevent="navigate('/teams')"
         >
-          <span>Compare</span>
-          <strong>Teams</strong>
+          <span>{{ $t("Compare") }}</span>
+          <strong>{{ $t("Teams") }}</strong>
         </a>
       </div>
       <details ref="utilityMenu" class="utility-menu">
-        <summary>More</summary>
+        <summary>{{ $t("More") }}</summary>
         <div id="site-navigation-links" class="utility-links">
-          <p class="utility-menu-title">Workspace options</p>
+          <p class="utility-menu-title">{{ $t("Workspace options") }}</p>
           <label class="utility-control season-switcher">
-            <span>Season</span>
-            <select v-model="leagueId" aria-label="Season" :disabled="!availableSeasons.length">
-              <option v-if="!availableSeasons.length" value="">Loading analyzed seasons…</option>
+            <span>{{ $t("Season") }}</span>
+            <select v-model="leagueId" :aria-label="$t('Season')" :disabled="!availableSeasons.length">
+              <option v-if="!availableSeasons.length" value="">{{ $t("Loading analyzed seasons…") }}</option>
               <option
                 v-for="league in availableSeasons"
                 :key="league.league_id"
                 :value="league.league_id"
               >
-                {{ league.year }} · {{ league.league_name }} · S{{ league.season }}
+                {{ league.year }} · {{ league.league_name }}{{ $t("· S") }}{{ league.season }}
               </option>
             </select>
           </label>
           <label class="utility-control language-switcher">
-            <span>Language</span>
-            <select v-model="language" aria-label="Language">
-              <option value="zh-CN" data-i18n-ignore>{{ language === "en" ? "Chinese" : "中文" }}</option>
-              <option value="en">English</option>
+            <span>{{ $t("Language") }}</span>
+            <select v-model="language" :aria-label="$t('Language')">
+              <option value="zh-CN">{{ language === "en" ? "Chinese" : "中文" }}</option>
+              <option value="en">{{ $t("English") }}</option>
             </select>
           </label>
           <a
@@ -637,8 +637,7 @@ watch(() => route.path, () => {
             href="/methodology"
             :class="{ active: isMethodology }"
             @click.prevent="navigate('/methodology')"
-          >
-            How it works <span aria-hidden="true">→</span>
+          >{{ $t("How it works") }}<span aria-hidden="true">→</span>
           </a>
         </div>
       </details>
@@ -649,45 +648,45 @@ watch(() => route.path, () => {
 
   <footer class="site-footnote">
     <div>
-      <strong>赛事 BP 数据学习工具 · 基于公开赛事信息的个人数据分析实践</strong>
-      <span>本站为非官方个人学习与研究项目，仅展示基于赛事信息生成的统计与分析结果，不提供赛事内容、视频、图片或原始数据下载。本站与腾讯、王者荣耀及 KPL 联赛不存在隶属、合作、赞助或认可关系。如权利人认为本站内容涉及其合法权益，请通过 {{ rightsContactEmail }} 联系，我会及时核查和处理。</span>
+      <strong>{{ $t("赛事 BP 数据学习工具 · 基于公开赛事信息的个人数据分析实践") }}</strong>
+      <span>{{ $t("本站为非官方个人学习与研究项目，仅展示基于赛事信息生成的统计与分析结果，不提供赛事内容、视频、图片或原始数据下载。本站与腾讯、王者荣耀及 KPL 联赛不存在隶属、合作、赞助或认可关系。如权利人认为本站内容涉及其合法权益，请通过") }}{{ rightsContactEmail }} 联系，我会及时核查和处理。</span>
       <a
         class="icp-filing-link"
         href="https://beian.miit.gov.cn/"
         target="_blank"
         rel="noopener noreferrer"
-        aria-label="沪ICP备2026038369号，在工业和信息化部备案系统中查看"
+        :aria-label="$t('沪ICP备2026038369号，在工业和信息化部备案系统中查看')"
       >
         <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false">
           <path d="M7 3.5h7l3 3V20.5H7z" />
           <path d="M14 3.5v4h4M9.5 12h5M9.5 15.5h5" />
         </svg>
-        <span>沪ICP备2026038369号</span>
+        <span>{{ $t("沪ICP备2026038369号") }}</span>
       </a>
       <a
         class="github-link"
         href="https://github.com/Jichuan14/kpl"
         target="_blank"
         rel="noopener noreferrer"
-        aria-label="View this project's source code on GitHub"
+        :aria-label="$t('View this project\'s source code on GitHub')"
       >
         <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false">
           <path d="M12 2.5a9.5 9.5 0 0 0-3 18.51c.48.09.65-.21.65-.46v-1.68c-2.65.58-3.21-1.13-3.21-1.13-.43-1.1-1.06-1.4-1.06-1.4-.87-.6.07-.59.07-.59.96.07 1.47.99 1.47.99.86 1.46 2.24 1.04 2.79.79.08-.62.34-1.04.61-1.28-2.12-.24-4.35-1.06-4.35-4.72 0-1.04.37-1.89.98-2.56-.1-.24-.43-1.21.09-2.52 0 0 .8-.26 2.61.98A9.1 9.1 0 0 1 12 7.1c.81 0 1.63.11 2.39.32 1.82-1.24 2.61-.98 2.61-.98.52 1.31.19 2.28.1 2.52.61.67.97 1.52.97 2.56 0 3.67-2.24 4.48-4.37 4.71.35.3.65.88.65 1.77v2.63c0 .26.17.56.66.46A9.5 9.5 0 0 0 12 2.5Z" />
         </svg>
-        <span>GitHub · Jichuan14/kpl</span>
+        <span>{{ $t("GitHub · Jichuan14/kpl") }}</span>
       </a>
       <a
         class="personal-site-link"
         href="https://jichuan14.github.io/"
         target="_blank"
         rel="noopener noreferrer"
-        aria-label="Visit Jichuan's personal website"
+        :aria-label="$t('Visit Jichuan\'s personal website')"
       >
         <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false">
           <circle cx="12" cy="12" r="8.5" />
           <path d="M3.5 12h17M12 3.5c2.15 2.33 3.2 5.16 3.2 8.5S14.15 18.17 12 20.5C9.85 18.17 8.8 15.34 8.8 12S9.85 5.83 12 3.5Z" />
         </svg>
-        <span>jichuan14.github.io</span>
+        <span>{{ $t("jichuan14.github.io") }}</span>
       </a>
     </div>
   </footer>
@@ -701,10 +700,10 @@ watch(() => route.path, () => {
       aria-labelledby="project-notice-title"
     >
       <div class="project-notice-card">
-        <p class="eyebrow">Draft Atlas</p>
-        <h2 id="project-notice-title">赛事 BP 数据学习工具</h2>
+        <p class="eyebrow">{{ $t("Draft Atlas") }}</p>
+        <h2 id="project-notice-title">{{ $t("赛事 BP 数据学习工具") }}</h2>
         <p>基于公开赛事信息的个人数据分析实践。</p>
-        <p>本站为独立个人学习项目，与腾讯、王者荣耀及 KPL 联赛不存在隶属、合作、赞助或认可关系。</p>
+        <p>{{ $t("本站为独立个人学习项目，与腾讯、王者荣耀及 KPL 联赛不存在隶属、合作、赞助或认可关系。") }}</p>
         <button type="button" @click="dismissProjectNotice">我已了解</button>
       </div>
     </section>

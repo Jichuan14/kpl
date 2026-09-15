@@ -284,16 +284,16 @@ onMounted(() => {
     <section class="daily-prediction-modal" role="dialog" aria-modal="true" aria-labelledby="daily-prediction-title">
       <header>
         <div>
-          <p>今日 KPL 赛事 · {{ date }}</p>
+          <p>{{ $t("今日 KPL 赛事 ·") }}{{ date }}</p>
           <h2 id="daily-prediction-title">预测比赛赢家和比分</h2>
-          <small>选择一个符合 BO 赛制的最终比分；每场比赛只能提交一次。</small>
+          <small>{{ $t("选择一个符合 BO 赛制的最终比分；每场比赛只能提交一次。") }}</small>
         </div>
         <button type="button" aria-label="关闭今日赛事预测" @click="emit('close')">×</button>
       </header>
       <div class="daily-match-list">
         <article v-for="match in matches" :key="match.match_id" class="daily-match-card">
-          <small>{{ match.league_name }} · {{ match.start_time }} · BO{{ match.bo || '?' }}</small>
-          <h3>{{ match.teams[0].team_name }} <span>vs</span> {{ match.teams[1].team_name }}</h3>
+          <small>{{ match.league_name }} · {{ match.start_time }}{{ $t("· BO") }}{{ match.bo || '?' }}</small>
+          <h3>{{ match.teams[0].team_name }} <span>{{ $t("vs") }}</span> {{ match.teams[1].team_name }}</h3>
           <div class="daily-team-choices">
             <div
               v-for="(team, teamIndex) in match.teams"
@@ -330,9 +330,7 @@ onMounted(() => {
               </div>
             </div>
           </div>
-          <p v-if="!scoreOptions(match, 0).length" class="invalid-best-of">
-            暂不支持此比赛的 BO 类型。
-          </p>
+          <p v-if="!scoreOptions(match, 0).length" class="invalid-best-of">{{ $t("暂不支持此比赛的 BO 类型。") }}</p>
           <footer v-if="selections[match.match_id]">
             {{ scoreSelections[match.match_id] ? '已预测' : '已选择赢家，请补充精确比分' }}
             <template v-if="scoreSelections[match.match_id]">

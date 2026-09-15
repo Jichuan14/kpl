@@ -500,13 +500,12 @@ watch(messages, (value) => persistSessionHistory(value), { deep: true });
   <section class="coach-panel" aria-labelledby="draft-coach-title">
     <header class="coach-header">
       <div>
-        <p class="coach-eyebrow"><i></i> AI · 证据支持</p>
-        <h2 id="draft-coach-title">BP 教练</h2>
+        <p class="coach-eyebrow"><i></i>{{ $t("AI · 证据支持") }}</p>
+        <h2 id="draft-coach-title">{{ $t("BP 教练") }}</h2>
       </div>
       <div class="coach-context" :class="{ active: hasBoardContext }">
         <span>{{ contextLabel }}</span>
-        <small v-if="draftState" data-i18n-ignore>
-          BP {{ draftState.bp_order }} · {{ draftState.model_type }}
+        <small v-if="draftState">{{ $t("BP") }}{{ draftState.bp_order }} · {{ draftState.model_type }}
         </small>
       </div>
       <button
@@ -522,7 +521,7 @@ watch(messages, (value) => persistSessionHistory(value), { deep: true });
 
     <div ref="thread" class="coach-thread" aria-live="polite">
       <div v-if="!messages.length && !loading" class="coach-welcome">
-        <span class="coach-mark">AI</span>
+        <span class="coach-mark">{{ $t("AI") }}</span>
         <h3>{{ welcomeTitle }}</h3>
         <p>{{ welcomeCopy }}</p>
         <div class="coach-suggestions" aria-label="推荐问题">
@@ -532,7 +531,7 @@ watch(messages, (value) => persistSessionHistory(value), { deep: true });
             type="button"
             :class="{ 'scout-suggestion': suggestion.kind === 'scout' }"
             :disabled="loading"
-            data-i18n-ignore
+
             @click="useSuggestion(suggestion)"
           >
             {{ suggestion.text }}
@@ -547,14 +546,14 @@ watch(messages, (value) => persistSessionHistory(value), { deep: true });
       >
         <div class="coach-message user-message">
           <span>你</span>
-          <p data-i18n-ignore>{{ message.question }}</p>
+          <p>{{ message.question }}</p>
         </div>
 
         <div
           v-if="message.loading"
           class="coach-message assistant-message loading-message"
         >
-          <span>BP 教练</span>
+          <span>{{ $t("BP 教练") }}</span>
           <p>{{ streamProgress || loadingCopy(message) }}</p>
           <i><b></b><b></b><b></b></i>
           <button type="button" class="turn-action" @click="stopWaiting">
@@ -580,10 +579,10 @@ watch(messages, (value) => persistSessionHistory(value), { deep: true });
           :class="{ stale: isContextStale(message) }"
         >
           <header>
-            <div><span>BP 教练</span></div>
+            <div><span>{{ $t("BP 教练") }}</span></div>
             <div class="response-badges">
               <span v-if="message.scoutReport" class="report-label">{{ scoutReportBadge }}</span>
-              <span v-if="isContextStale(message)" class="stale-label">BP 面板已变化</span>
+              <span v-if="isContextStale(message)" class="stale-label">{{ $t("BP 面板已变化") }}</span>
             </div>
           </header>
           <textarea
@@ -592,7 +591,6 @@ watch(messages, (value) => persistSessionHistory(value), { deep: true });
             :rows="answerRows(message.response.answer)"
             :aria-label="isChinese ? 'BP 教练回答' : 'Draft Coach answer'"
             readonly
-            data-i18n-ignore
           ></textarea>
 
           <div v-if="message.response.follow_up_actions?.length" class="follow-up-actions">
@@ -641,7 +639,7 @@ watch(messages, (value) => persistSessionHistory(value), { deep: true });
         :disabled="loading"
         @keydown="handleComposerKeydown"
       ></textarea>
-      <button type="submit" :disabled="loading || !question.trim() || !leagueId" aria-label="询问 BP 教练">
+      <button type="submit" :disabled="loading || !question.trim() || !leagueId" :aria-label="$t('询问 BP 教练')">
         <span>{{ loading ? "…" : "↑" }}</span>
       </button>
     </form>

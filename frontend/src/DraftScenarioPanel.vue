@@ -37,7 +37,7 @@ function tr(key, values = {}) { return Object.entries(values).reduce((text, [nam
       <DraftScenarioNode v-for="node in roots" :key="node.id" :node="node" :nodes="nodes" :loading-id="loadingId" :stale="stale" :compared="compared" @branch="emit('branch', $event)" @apply="emit('apply', $event)" @promote="emit('promote', $event)" @compare="toggleCompare" />
     </ol>
     <div v-if="comparison" class="scenario-compare">
-      <strong>{{ label(comparison.left) }} vs {{ label(comparison.right) }}</strong>
+      <strong>{{ label(comparison.left) }}{{ $t("vs") }}{{ label(comparison.right) }}</strong>
       <span>{{ tr('Policy {left}% / {right}%', { left: (comparison.left.result?.policy_likelihood * 100 || 0).toFixed(1), right: (comparison.right.result?.policy_likelihood * 100 || 0).toFixed(1) }) }}</span>
       <span v-if="comparison.delta != null">{{ tr('Blue relative lineup-advantage difference: {delta} points', { delta: (comparison.delta * 100).toFixed(1) }) }}</span>
       <span v-else>{{ t('Both branches need completed samples before their advantages can be compared.') }}</span>

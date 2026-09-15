@@ -222,7 +222,7 @@ onBeforeUnmount(() => {
 <template>
   <div class="whatif-backdrop" @click.self="emit('close')">
     <section class="whatif-modal" role="dialog" aria-modal="true" :aria-label="t('What-if workspace')">
-      <header class="modal-header"><div><h2>{{ t('What-if workspace') }}</h2><p>{{ t('Each board starts from this exact draft snapshot. Continue a different BP line in every scenario.') }}</p></div><div><span>{{ scenarios.length }}/4</span><button type="button" :disabled="scenarios.length >= 4" @click="add">{{ t('Add another what-if') }}</button><button type="button" aria-label="Close" @click="emit('close')">×</button></div></header>
+      <header class="modal-header"><div><h2>{{ t('What-if workspace') }}</h2><p>{{ t('Each board starts from this exact draft snapshot. Continue a different BP line in every scenario.') }}</p></div><div><span>{{ scenarios.length }}/4</span><button type="button" :disabled="scenarios.length >= 4" @click="add">{{ t('Add another what-if') }}</button><button type="button" :aria-label="$t('Close')" @click="emit('close')">×</button></div></header>
       <div class="scenario-grid" :class="columns">
         <article v-for="(scenario, index) in scenarios" :key="scenario.id">
           <header><strong>{{ t('What-if') }} {{ index + 1 }}</strong><button v-if="scenarios.length > 1" type="button" :aria-label="t('Remove scenario')" @click="remove(scenario.id)">×</button></header>

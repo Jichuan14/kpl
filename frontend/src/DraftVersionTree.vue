@@ -36,7 +36,7 @@ function restore(node) { emit("restore-checkpoint", { nodeId: node.id }); }
     </header>
     <p v-if="message" class="tree-message" role="status">{{ message }}</p>
     <section v-if="recordingActions.length" class="recording-status" aria-live="polite">
-      <span>{{ t('Recording') }} · BP {{ recordingAnchorStep }} → {{ recordingActions.length }} {{ t('actions') }}</span>
+      <span>{{ t('Recording') }}{{ $t("· BP") }}{{ recordingAnchorStep }} → {{ recordingActions.length }} {{ t('actions') }}</span>
       <div>
         <b v-for="action in recordingActions" :key="`${action.bpOrder}-${action.field}-${action.heroId}`" :class="side(action)">{{ label(action) }} {{ name(action.heroId) }}</b>
       </div>

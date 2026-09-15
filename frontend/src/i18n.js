@@ -1,4 +1,5 @@
-import { ref, watch } from "vue";
+import { watch } from "vue";
+import { createI18n } from "vue-i18n";
 import { getStored, setStored } from "./storage";
 
 const storageKey = "kpl-lab-language";
@@ -6,7 +7,6 @@ const storageKey = "kpl-lab-language";
 // Chinese is intentionally the first-run default. Visitors can switch to English
 // and their choice is retained for subsequent visits.
 const savedLanguage = getStored(storageKey);
-export const language = ref(savedLanguage === "en" ? "en" : "zh-CN");
 
 export const messages = {
   "zh-CN": {
@@ -1018,75 +1018,33 @@ export const messages = {
   },
 };
 
-function normalize(text) {
-  return text.replace(/\s+/g, " ").trim();
-}
+const i18n = createI18n({
+  legacy: false,
+  globalInjection: true,
+  locale: savedLanguage === "en" ? "en" : "zh-CN",
+  fallbackLocale: "en",
+  fallbackFormat: true,
+  missingWarn: false,
+  fallbackWarn: false,
+  // Existing English source text remains the fallback for any untranslated UI.
+  messageResolver: (catalog, key) => catalog[key],
+  messages: { en: {}, "zh-CN": messages["zh-CN"] },
+});
 
-export function t(text) {
-  if (language.value === "en") return text;
-  return messages["zh-CN"][text] || text;
-}
-
-function translateTextNode(node) {
-  if (
-    !node.parentElement ||
-    ["SCRIPT", "STYLE"].includes(node.parentElement.tagName) ||
-    node.parentElement.closest("[data-i18n-ignore]")
-  ) return;
-  const source = node.__kplSourceText ?? normalize(node.textContent || "");
-  if (!source) return;
-  node.__kplSourceText = source;
-  const translated = t(source);
-  if (node.textContent !== translated) node.textContent = translated;
-}
-
-function translateAttributes(element) {
-  if (element.closest("[data-i18n-ignore]")) return;
-  for (const attribute of ["aria-label", "placeholder", "title"]) {
-    if (!element.hasAttribute(attribute)) continue;
-    const sources = element.__kplSourceAttributes || (element.__kplSourceAttributes = {});
-    const source = sources[attribute] ?? element.getAttribute(attribute);
-    if (!source) continue;
-    sources[attribute] = source;
-    const translated = t(source);
-    if (element.getAttribute(attribute) !== translated) element.setAttribute(attribute, translated);
+export const language = i18n.global.locale;
+// Some existing callers deliberately translate a template first and substitute
+// its placeholders afterward. Preserve those placeholders until the caller has
+// supplied values; Vue I18n otherwise renders an absent named value as empty.
+export function t(key, values) {
+  if (values === undefined) {
+    return language.value === "zh-CN" ? messages["zh-CN"][key] || key : key;
   }
+  return i18n.global.t(key, values);
 }
-
-function translateTree(root = document.body) {
-  if (!root) return;
-  if (root.nodeType === Node.ELEMENT_NODE) translateAttributes(root);
-  root.querySelectorAll?.("*").forEach(translateAttributes);
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-  let node;
-  while ((node = walker.nextNode())) translateTextNode(node);
-}
-
-let observer;
-export function setupPageLocalization() {
-  if (observer) return;
-  observer = new MutationObserver((mutations) => {
-    for (const mutation of mutations) {
-      if (mutation.type === "characterData") translateTextNode(mutation.target);
-      for (const added of mutation.addedNodes) {
-        if (added.nodeType === Node.TEXT_NODE) translateTextNode(added);
-        else if (added.nodeType === Node.ELEMENT_NODE) translateTree(added);
-      }
-    }
-  });
-  observer.observe(document.body, {
-    attributes: true,
-    attributeFilter: ["aria-label", "placeholder", "title"],
-    childList: true,
-    characterData: true,
-    subtree: true,
-  });
-  translateTree();
-}
+export default i18n;
 
 watch(language, (value) => {
   setStored(storageKey, value);
   document.documentElement.lang = value;
   document.title = value === "zh-CN" ? "Draft Atlas · 赛事 BP 数据学习工具" : "Draft Atlas · Draft learning tool";
-  translateTree();
 }, { immediate: true });

@@ -155,38 +155,35 @@ watch(leagueId, loadTeamSynergies);
   <main class="teams-page">
     <header class="teams-hero">
       <div>
-        <p class="teams-eyebrow">Team identity · Draft combinations</p>
-        <h1>Team Synergy Lab</h1>
-        <p>
-          Browse each team’s preferred hero pairs—ranked by how often they
-          complete a combination when the second hero is still legal.
-        </p>
+        <p class="teams-eyebrow">{{ $t("Team identity · Draft combinations") }}</p>
+        <h1>{{ $t("Team Synergy Lab") }}</h1>
+        <p>{{ $t("Browse each team’s preferred hero pairs—ranked by how often they complete a combination when the second hero is still legal.") }}</p>
       </div>
       <label class="season-control">
-        <span>Competition</span>
+        <span>{{ $t("Competition") }}</span>
         <select v-model="leagueId">
-          <option v-if="!seasons.length" value="">No team data yet</option>
+          <option v-if="!seasons.length" value="">{{ $t("No team data yet") }}</option>
           <option
             v-for="season in seasons"
             :key="season.league_id"
             :value="season.league_id"
           >
-            {{ season.year }} · {{ season.league_name }} · S{{ season.season }}
+            {{ season.year }} · {{ season.league_name }}{{ $t("· S") }}{{ season.season }}
           </option>
         </select>
       </label>
     </header>
 
     <p v-if="error" class="teams-message error">{{ error }}</p>
-    <p v-else-if="loading" class="teams-message">Loading team combinations…</p>
+    <p v-else-if="loading" class="teams-message">{{ $t("Loading team combinations…") }}</p>
 
     <template v-if="payload && selectedTeam && !loading">
       <section class="teams-workspace">
         <aside class="team-directory">
           <div class="team-directory-heading">
             <div>
-              <p class="teams-eyebrow">Browse by team</p>
-              <h2>{{ teams.length }} teams</h2>
+              <p class="teams-eyebrow">{{ $t("Browse by team") }}</p>
+              <h2>{{ teams.length }}{{ $t("teams") }}</h2>
             </div>
             <button
               class="team-directory-toggle"
@@ -210,8 +207,7 @@ watch(leagueId, loadTeamSynergies);
             >
               <strong>{{ team.team_name }}</strong>
               <small>
-                {{ team.battle_count }} battles · {{ team.pair_count }} pairs
-              </small>
+                {{ team.battle_count }}{{ $t("battles ·") }}{{ team.pair_count }}{{ $t("pairs") }}</small>
             </button>
           </div>
         </aside>
@@ -219,28 +215,27 @@ watch(leagueId, loadTeamSynergies);
         <div class="team-detail">
           <section class="team-banner">
             <div>
-              <p class="teams-eyebrow">Selected team</p>
+              <p class="teams-eyebrow">{{ $t("Selected team") }}</p>
               <h2>{{ selectedTeam.team_name }}</h2>
               <span>
                 {{ payload.league.league_name }} ·
-                {{ selectedTeam.battle_count }} battles
-              </span>
+                {{ selectedTeam.battle_count }}{{ $t("battles") }}</span>
             </div>
             <div class="team-banner-stats">
               <div>
                 <strong>{{ number(selectedTeam.pair_count) }}</strong>
-                <span>eligible pairs</span>
+                <span>{{ $t("eligible pairs") }}</span>
               </div>
               <div>
                 <strong>{{ number(selectedTeam.total_pair_selections) }}</strong>
-                <span>pair uses</span>
+                <span>{{ $t("pair uses") }}</span>
               </div>
             </div>
           </section>
 
           <section class="teams-filters">
             <label>
-              <span>Rank by</span>
+              <span>{{ $t("Rank by") }}</span>
               <select v-model="metric">
                 <option
                   v-for="option in metricOptions"
@@ -252,25 +247,25 @@ watch(leagueId, loadTeamSynergies);
               </select>
             </label>
             <label>
-              <span>Used at least</span>
+              <span>{{ $t("Used at least") }}</span>
               <input v-model.number="support" type="number" min="2" />
             </label>
             <label>
-              <span>Results</span>
+              <span>{{ $t("Results") }}</span>
               <select v-model="resultCount">
-                <option value="10">Top 10</option>
-                <option value="20">Top 20</option>
-                <option value="50">Top 50</option>
-                <option value="100">Top 100</option>
-                <option value="all">Show all</option>
+                <option value="10">{{ $t("Top 10") }}</option>
+                <option value="20">{{ $t("Top 20") }}</option>
+                <option value="50">{{ $t("Top 50") }}</option>
+                <option value="100">{{ $t("Top 100") }}</option>
+                <option value="all">{{ $t("Show all") }}</option>
               </select>
             </label>
             <label class="team-search">
-              <span>Find a hero</span>
+              <span>{{ $t("Find a hero") }}</span>
               <input
                 v-model="search"
                 type="search"
-                placeholder="Search hero name…"
+                :placeholder="$t('Search hero name…')"
               />
             </label>
           </section>
@@ -279,8 +274,8 @@ watch(leagueId, loadTeamSynergies);
             <article class="pair-rankings">
               <div class="teams-heading">
                 <div>
-                  <p class="teams-eyebrow">Pair rankings</p>
-                  <h2>{{ selectedTeam.team_name }} combinations</h2>
+                  <p class="teams-eyebrow">{{ $t("Pair rankings") }}</p>
+                  <h2>{{ selectedTeam.team_name }}{{ $t("combinations") }}</h2>
                 </div>
                 <span>
                   {{
@@ -316,11 +311,7 @@ watch(leagueId, loadTeamSynergies);
                   </div>
                   <div class="pair-copy">
                     <strong>{{ row.pair_name }}</strong>
-                    <small>
-                      Used {{ row.selection_count }} times ·
-                      {{ row.legal_completion_opportunity_count }} legal
-                      completion chances
-                    </small>
+                    <small>{{ $t("Used") }}{{ row.selection_count }}{{ $t("times ·") }}{{ row.legal_completion_opportunity_count }}{{ $t("legal completion chances") }}</small>
                     <div class="pair-track">
                       <span :style="{ width: barWidth(row) }"></span>
                     </div>
@@ -328,65 +319,52 @@ watch(leagueId, loadTeamSynergies);
                   <strong class="pair-metric">{{ metricText(row) }}</strong>
                 </article>
               </div>
-              <div v-else class="pairs-empty">No pairs match these filters.</div>
+              <div v-else class="pairs-empty">{{ $t("No pairs match these filters.") }}</div>
             </article>
 
             <aside class="team-method">
-              <p class="teams-eyebrow">Reading the results</p>
-              <h2>What does “team synergy” mean?</h2>
-              <p>
-                Once one member of a pair is visible, each later pick decision is
-                a completion opportunity only when the other hero remains legal.
-              </p>
+              <p class="teams-eyebrow">{{ $t("Reading the results") }}</p>
+              <h2>{{ $t("What does “team synergy” mean?") }}</h2>
+              <p>{{ $t("Once one member of a pair is visible, each later pick decision is a completion opportunity only when the other hero remains legal.") }}</p>
               <dl>
                 <div>
-                  <dt>Pair uses</dt>
-                  <dd>How many drafts included both heroes for this team.</dd>
+                  <dt>{{ $t("Pair uses") }}</dt>
+                  <dd>{{ $t("How many drafts included both heroes for this team.") }}</dd>
                 </div>
                 <div>
-                  <dt>Completion chance</dt>
-                  <dd>
-                    How often the team completed the pair when it legally could.
-                  </dd>
+                  <dt>{{ $t("Completion chance") }}</dt>
+                  <dd>{{ $t("How often the team completed the pair when it legally could.") }}</dd>
                 </div>
                 <div>
-                  <dt>Lift</dt>
-                  <dd>
-                    Completion chance compared with this team’s normal candidate
-                    pick rate.
-                  </dd>
+                  <dt>{{ $t("Lift") }}</dt>
+                  <dd>{{ $t("Completion chance compared with this team’s normal candidate pick rate.") }}</dd>
                 </div>
               </dl>
-              <p class="method-warning">
-                A→B and B→A are merged into one pair. Results describe
-                preference, not whether the pairing caused a win.
-              </p>
+              <p class="method-warning">{{ $t("A→B and B→A are merged into one pair. Results describe preference, not whether the pairing caused a win.") }}</p>
             </aside>
           </section>
 
           <section class="team-table-card">
             <div class="teams-heading">
               <div>
-                <p class="teams-eyebrow">Evidence</p>
-                <h2>All shown pairs</h2>
+                <p class="teams-eyebrow">{{ $t("Evidence") }}</p>
+                <h2>{{ $t("All shown pairs") }}</h2>
               </div>
-              <span>
-                Generated
-                {{ new Date(payload.generated_at).toLocaleDateString() }}
+              <span>{{ $t("Generated") }}{{ new Date(payload.generated_at).toLocaleDateString() }}
               </span>
             </div>
             <div class="team-table-wrap">
               <table>
                 <thead>
                   <tr>
-                    <th>Hero pair</th>
-                    <th>Used</th>
-                    <th>Legal chances</th>
-                    <th>Completion chance</th>
-                    <th>Team baseline</th>
-                    <th>Lift</th>
-                    <th>Win rate</th>
-                    <th>Likely range</th>
+                    <th>{{ $t("Hero pair") }}</th>
+                    <th>{{ $t("Used") }}</th>
+                    <th>{{ $t("Legal chances") }}</th>
+                    <th>{{ $t("Completion chance") }}</th>
+                    <th>{{ $t("Team baseline") }}</th>
+                    <th>{{ $t("Lift") }}</th>
+                    <th>{{ $t("Win rate") }}</th>
+                    <th>{{ $t("Likely range") }}</th>
                   </tr>
                 </thead>
                 <tbody>

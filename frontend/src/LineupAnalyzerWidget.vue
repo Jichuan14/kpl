@@ -658,7 +658,7 @@ function liftLabel(row) {
             <span class="blue-box">
               <img v-for="hero in selectedHistoricalLineup.blue" :key="`selected-blue-${hero.hero_id}`" :src="heroAsset(hero.hero_id)" alt="" />
             </span>
-            <b>VS</b>
+            <b>{{ $t("VS") }}</b>
             <span class="red-box">
               <img v-for="hero in selectedHistoricalLineup.red" :key="`selected-red-${hero.hero_id}`" :src="heroAsset(hero.hero_id)" alt="" />
             </span>
@@ -676,7 +676,7 @@ function liftLabel(row) {
           >
             <span class="historical-match-row">
               <strong class="blue-name">{{ battle.blue_team_name }}</strong>
-              <b>VS</b>
+              <b>{{ $t("VS") }}</b>
               <strong class="red-name">{{ battle.red_team_name }}</strong>
               <small>{{ String(battle.start_time || '').slice(0, 10) }} · {{ battleSequenceLabel(battle.battle_seq) }}</small>
             </span>
@@ -686,7 +686,7 @@ function liftLabel(row) {
                   <img :src="heroAsset(hero.hero_id)" :alt="hero.hero_name" :title="`${hero.hero_name} · ${laneLabel(positionLanes[hero.position] || 'unknown')}`" />
                 </span>
               </span>
-              <b>VS</b>
+              <b>{{ $t("VS") }}</b>
               <span class="historical-team-box red-box">
                 <span v-for="hero in battle.red" :key="`red-${battle.key}-${hero.hero_id}`">
                   <img :src="heroAsset(hero.hero_id)" :alt="hero.hero_name" :title="`${hero.hero_name} · ${laneLabel(positionLanes[hero.position] || 'unknown')}`" />

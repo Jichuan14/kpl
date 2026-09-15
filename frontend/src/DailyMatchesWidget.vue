@@ -213,8 +213,8 @@ onBeforeUnmount(() => {
       <p v-else-if="!matches.length" class="widget-note">当天暂无已排定赛事。</p>
       <ol v-else class="widget-match-list">
         <li v-for="match in matches" :key="match.match_id">
-          <small>{{ browserTime(match) }} · BO{{ match.bo || '?' }}</small>
-          <strong>{{ match.teams[0].team_name }} <i>vs</i> {{ match.teams[1].team_name }}</strong>
+          <small>{{ browserTime(match) }}{{ $t("· BO") }}{{ match.bo || '?' }}</small>
+          <strong>{{ match.teams[0].team_name }} <i>{{ $t("vs") }}</i> {{ match.teams[1].team_name }}</strong>
           <footer>
             <span>{{ match.league_name }}</span>
           </footer>

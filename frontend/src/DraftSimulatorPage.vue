@@ -1644,20 +1644,18 @@ onBeforeUnmount(() => {
     <header class="simulator-hero">
       <div>
         <p class="simulator-eyebrow">交互式模型</p>
-        <h1>BP 选禁模拟器</h1>
-        <p>
-          逐步构建蓝方与红方的 BP 过程。每次选择或禁用后，模型都会更新预测。
-        </p>
+        <h1>{{ $t("BP 选禁模拟器") }}</h1>
+        <p>{{ $t("逐步构建蓝方与红方的 BP 过程。每次选择或禁用后，模型都会更新预测。") }}</p>
       </div>
       <div class="simulator-header-controls">
         <label class="simulator-season">
           <span>赛事</span>
           <select v-model="leagueId" :disabled="loading">
             <option v-for="season in seasons" :key="season.league_id" :value="season.league_id">
-              {{ season.year }} · {{ season.league_name }} · S{{ season.season }}
+              {{ season.year }} · {{ season.league_name }}{{ $t("· S") }}{{ season.season }}
             </option>
           </select>
-          <small v-if="model">{{ number(model.training_decisions) }} 条历史 BP 操作</small>
+          <small v-if="model">{{ number(model.training_decisions) }}{{ $t("条历史 BP 操作") }}</small>
         </label>
         <div class="simulator-settings">
           <button
@@ -1672,24 +1670,24 @@ onBeforeUnmount(() => {
           <div v-if="settingsOpen" id="simulator-settings-menu" class="settings-menu">
             <p>比赛设置</p>
             <button type="button" :class="{ active: globalMode === 'single' }" :disabled="!teamsReady || liveFollowing" @click="setMatchMode('single')">
-              <strong>单局</strong><small>重置为单局 BP</small>
+              <strong>单局</strong><small>{{ $t("重置为单局 BP") }}</small>
             </button>
             <button type="button" :class="{ active: globalMode === 'match' }" :disabled="!teamsReady || liveFollowing" @click="setMatchMode('match')">
               <strong>完整系列赛</strong><small>跟踪系列赛中的已使用英雄</small>
             </button>
             <button type="button" :class="{ active: globalMode === 'custom' }" :disabled="!teamsReady || liveFollowing" @click="setMatchMode('custom')">
-              <strong>完整系列赛 · 自定义 BP</strong><small>录入此前小局的英雄使用情况</small>
+              <strong>{{ $t("完整系列赛 · 自定义 BP") }}</strong><small>录入此前小局的英雄使用情况</small>
             </button>
             <label class="settings-series">
               <span>系列赛制</span>
               <select v-model.number="bestOf" :disabled="globalMode === 'single' || liveFollowing">
-                <option :value="5">BO5</option>
-                <option :value="7">BO7</option>
+                <option :value="5">{{ $t("BO5") }}</option>
+                <option :value="7">{{ $t("BO7") }}</option>
               </select>
             </label>
             <label class="settings-commentary">
               <input v-model="commentaryEnabled" type="checkbox" />
-              <span><strong>AI 解说</strong><small>默认关闭 · 每次选择后调用 Kimi</small></span>
+              <span><strong>{{ $t("AI 解说") }}</strong><small>{{ $t("默认关闭 · 每次选择后调用 Kimi") }}</small></span>
             </label>
           </div>
         </div>
@@ -1697,13 +1695,13 @@ onBeforeUnmount(() => {
     </header>
 
     <p v-if="error" class="simulator-message error">{{ error }}</p>
-    <p v-else-if="loading" class="simulator-message">正在加载 BP 模型…</p>
+    <p v-else-if="loading" class="simulator-message">{{ $t("正在加载 BP 模型…") }}</p>
 
     <template v-else-if="model">
       <section class="global-bp-panel">
         <div>
           <p class="simulator-eyebrow">比赛赛制</p>
-          <h2>全局 BP</h2>
+          <h2>{{ $t("全局 BP") }}</h2>
           <p>
             {{ bpT("Earlier-game picks follow the team, even when it changes between Blue and Red. After each game, record the winner, then let the losing team choose its next color.") }}
           </p>
@@ -1734,7 +1732,7 @@ onBeforeUnmount(() => {
             </div>
           </div>
         </div>
-        <p v-if="upcomingMatchLabel" class="upcoming-match-note" data-i18n-ignore>
+        <p v-if="upcomingMatchLabel" class="upcoming-match-note">
           {{ upcomingMatchLabel }}
         </p>
         <aside v-if="scheduledMatchStarted && !liveFollowing && !liveFollowDismissed" class="live-match-panel">
@@ -1751,11 +1749,11 @@ onBeforeUnmount(() => {
         <aside v-else-if="liveFollowing" class="live-match-panel active">
           <div>
             <p class="simulator-eyebrow">正在跟随官方比赛</p>
-            <strong data-i18n-ignore>{{ liveMatchStatusLabel }}</strong>
+            <strong>{{ liveMatchStatusLabel }}</strong>
             <small v-if="!liveApiCheckAvailable">已启用跟随；开赛五分钟后将开始同步官方赛况。</small>
-            <small v-else-if="liveMatch?.current_game_status === 'in_progress'">官方对局进行时仍可继续本地 BP。对局结束后，官方选择会自动替换“已使用”上下文。</small>
+            <small v-else-if="liveMatch?.current_game_status === 'in_progress'">{{ $t("官方对局进行时仍可继续本地 BP。对局结束后，官方选择会自动替换“已使用”上下文。") }}</small>
             <small v-else>官方数据最多每三分钟刷新一次。</small>
-            <small v-if="liveRefreshNotice" class="live-refresh-note" data-i18n-ignore>{{ liveRefreshNotice }}</small>
+            <small v-if="liveRefreshNotice" class="live-refresh-note">{{ liveRefreshNotice }}</small>
           </div>
           <div>
             <button type="button" class="quiet" :disabled="liveMatchLoading || !liveApiCheckAvailable" @click="refreshLiveMatch(true)">
@@ -1801,7 +1799,7 @@ onBeforeUnmount(() => {
             </button>
           </div>
           <div v-for="side in ['blue', 'red']" :key="side" class="used-team" :class="side">
-            <span data-i18n-ignore>{{ sideUsedLabel(side) }}</span>
+            <span>{{ sideUsedLabel(side) }}</span>
             <button
               v-for="heroId in globalUsed[teamsBySide[side]]"
               :key="`${side}-${heroId}`"
@@ -1815,30 +1813,30 @@ onBeforeUnmount(() => {
             <small v-if="!globalUsed[teamsBySide[side]].length">暂无已选英雄</small>
           </div>
           <div v-if="globalMode === 'match'" class="next-battle series-progress">
-            <small>BO{{ bestOf }} · {{ teamName(TEAM_A) }} {{ seriesWins[TEAM_A] }}–{{ seriesWins[TEAM_B] }} {{ teamName(TEAM_B) }} · 第 {{ seriesGame }} 局</small>
+            <small>{{ $t("BO") }}{{ bestOf }} · {{ teamName(TEAM_A) }} {{ seriesWins[TEAM_A] }}–{{ seriesWins[TEAM_B] }} {{ teamName(TEAM_B) }} · 第 {{ seriesGame }} 局</small>
             <template v-if="seriesWinner">
-              <strong data-i18n-ignore>{{ seriesWinnerLabel() }}</strong>
+              <strong>{{ seriesWinnerLabel() }}</strong>
             </template>
             <template v-else-if="currentStep && !isPeakDuel">
-              <strong>完成当前 BP 后继续</strong>
+              <strong>{{ $t("完成当前 BP 后继续") }}</strong>
             </template>
             <template v-else>
-              <span data-i18n-ignore>{{ gameWinnerLabel(seriesGame) }}</span>
+              <span>{{ gameWinnerLabel(seriesGame) }}</span>
               <div class="series-choice">
                 <button type="button" :class="{ active: winnerSide === 'blue' }" @click="recordGameWinner('blue')">{{ bpT("Blue wins") }}</button>
                 <button type="button" :class="{ active: winnerSide === 'red' }" @click="recordGameWinner('red')">{{ bpT("Red wins") }}</button>
               </div>
               <template v-if="losingTeam">
-                <span data-i18n-ignore>{{ loserColorChoiceLabel(losingTeam) }}</span>
+                <span>{{ loserColorChoiceLabel(losingTeam) }}</span>
                 <div class="series-choice">
                   <button type="button" :class="{ active: nextBlueTeam === losingTeam }" @click="nextBlueTeam = losingTeam">{{ bpT("Play Blue") }}</button>
                   <button type="button" :class="{ active: nextBlueTeam !== null && nextBlueTeam !== losingTeam }" @click="nextBlueTeam = losingTeam === TEAM_A ? TEAM_B : TEAM_A">{{ bpT("Play Red") }}</button>
                 </div>
               </template>
-              <button type="button" :disabled="!winnerSide || !nextBlueTeam" @click="startNextBattle" data-i18n-ignore>{{ startGameLabel(seriesGame + 1) }}</button>
+              <button type="button" :disabled="!winnerSide || !nextBlueTeam" @click="startNextBattle">{{ startGameLabel(seriesGame + 1) }}</button>
             </template>
           </div>
-          <small v-else data-i18n-ignore>{{ seriesStatusLabel() }}</small>
+          <small v-else>{{ seriesStatusLabel() }}</small>
         </div>
         <button
           v-if="usedHeroesModalSide"
@@ -1851,7 +1849,7 @@ onBeforeUnmount(() => {
           <header>
             <div>
               <p class="simulator-eyebrow">已使用</p>
-              <h2 data-i18n-ignore>{{ sideUsedLabel(usedHeroesModalSide) }}</h2>
+              <h2>{{ sideUsedLabel(usedHeroesModalSide) }}</h2>
             </div>
             <button type="button" aria-label="关闭已使用英雄" @click="usedHeroesModalSide = null">×</button>
           </header>
@@ -1875,10 +1873,10 @@ onBeforeUnmount(() => {
       <section class="simulator-status">
         <div>
           <span>下一步操作</span>
-          <strong data-i18n-ignore>{{ currentLabel }}</strong>
+          <strong>{{ currentLabel }}</strong>
           <small>{{ selectedSeason?.league_name || leagueId }}</small>
         </div>
-        <div class="side-assignment" aria-label="当前 BP 边位">
+        <div class="side-assignment" :aria-label="$t('当前 BP 边位')">
           <label class="blue">
             <span>蓝方</span>
             <select
@@ -1913,7 +1911,7 @@ onBeforeUnmount(() => {
           </label>
         </div>
         <div class="simulator-actions">
-          <button type="button" :disabled="!teamsReady || isPeakDuel || liveHeroSelectionLocked" @click="openWhatIfWorkspace">打开 What-if 窗口</button>
+          <button type="button" :disabled="!teamsReady || isPeakDuel || liveHeroSelectionLocked" @click="openWhatIfWorkspace">{{ $t("打开 What-if 窗口") }}</button>
           <button type="button" :disabled="isPeakDuel || !history.length || simulating || liveHeroSelectionLocked" @click="undo">撤销</button>
           <button type="button" :disabled="isPeakDuel || simulating || liveHeroSelectionLocked" @click="reset">重置</button>
         </div>
@@ -1923,8 +1921,8 @@ onBeforeUnmount(() => {
         <div class="simulator-main-column">
           <section class="simulator-layout">
             <section v-if="isPeakDuel" class="peak-duel-board" aria-disabled="true">
-              <p class="simulator-eyebrow">BO7 · 第 7 局</p>
-              <h2>巅峰对决，不用BP</h2>
+              <p class="simulator-eyebrow">{{ $t("BO7 · 第 7 局") }}</p>
+              <h2>{{ $t("巅峰对决，不用BP") }}</h2>
             </section>
             <div
               v-else
@@ -1938,7 +1936,7 @@ onBeforeUnmount(() => {
                 class="draft-group"
                 :class="[group.tone, group.key]"
               >
-                <p data-i18n-ignore>
+                <p>
                   <span class="desktop-group-title">{{ group.title }}</span>
                   <span class="mobile-group-title">{{ group.mobileTitle }}</span>
                 </p>
@@ -1963,7 +1961,7 @@ onBeforeUnmount(() => {
               <div class="forecast-heading">
                 <div>
                   <p class="simulator-eyebrow">模型预测</p>
-                  <h2 data-i18n-ignore>{{ forecastLabel() }}</h2>
+                  <h2>{{ forecastLabel() }}</h2>
                 </div>
                 <span v-if="simulating">正在更新…</span>
               </div>
@@ -1975,7 +1973,7 @@ onBeforeUnmount(() => {
                 </div>
               </div>
               <div v-if="result?.simulation?.banned_by_end?.length" class="end-ban-list">
-                <p>最可能在 BP 结束前被禁用</p>
+                <p>{{ $t("最可能在 BP 结束前被禁用") }}</p>
                 <span v-for="row in result.simulation.banned_by_end.slice(0, 3)" :key="row.hero_id">
                   <img :src="heroIcon(row.hero_id)" :alt="row.hero_name" />
                   {{ percent(row.probability) }}
@@ -1987,7 +1985,7 @@ onBeforeUnmount(() => {
           <section v-if="!isPeakDuel" class="whatif-launcher">
             <div>
               <h2>版本树快照</h2>
-              <p>保存当前 BP 进度，之后可以从这个检查点继续推演或建立新的分支。</p>
+              <p>{{ $t("保存当前 BP 进度，之后可以从这个检查点继续推演或建立新的分支。") }}</p>
             </div>
             <div class="whatif-launcher-actions">
               <button
@@ -2003,7 +2001,7 @@ onBeforeUnmount(() => {
             <header>
               <div>
                 <p class="simulator-eyebrow">完整阵容评分</p>
-                <h2>5v5 阵容对比</h2>
+                <h2>{{ $t("5v5 阵容对比") }}</h2>
                 <p>使用当前赛季阵容价值模型直接比较双方最终五人阵容。</p>
               </div>
               <span class="recommendation-status" aria-live="polite">
@@ -2064,9 +2062,9 @@ onBeforeUnmount(() => {
           <section v-if="!isPeakDuel" class="recommendation-panel">
             <header>
               <div>
-                <p class="simulator-eyebrow">BP 决策</p>
+                <p class="simulator-eyebrow">{{ $t("BP 决策") }}</p>
                 <h2>推荐下一手</h2>
-                <p>每次 BP 更新后，模型会自动尝试候选英雄、模拟后续选禁，并比较最终阵容的相对优势。</p>
+                <p>{{ $t("每次 BP 更新后，模型会自动尝试候选英雄、模拟后续选禁，并比较最终阵容的相对优势。") }}</p>
               </div>
               <span class="recommendation-status" aria-live="polite">
                 {{ !currentStep ? '当前 BP 已完成' : recommendationLoading ? '正在自动搜索后续 BP…' : recommendationResult ? '已自动更新' : '等待 BP 状态' }}
@@ -2136,7 +2134,7 @@ onBeforeUnmount(() => {
           </section>
 
           <section v-if="!isPeakDuel && (commentary || commentaryLoading)" class="commentary-panel">
-            <p class="simulator-eyebrow">BP 解说</p>
+            <p class="simulator-eyebrow">{{ $t("BP 解说") }}</p>
             <p v-if="commentaryLoading" class="commentary-loading">正在生成解说…</p>
             <template v-else>
               <p class="commentary-context">
@@ -2160,7 +2158,7 @@ onBeforeUnmount(() => {
             <div class="picker-heading">
               <div>
                 <p class="simulator-eyebrow">{{ pickerTarget === 'draft' ? bpT('Add the next action') : bpT('Global BP setup') }}</p>
-                <h2 data-i18n-ignore>{{ pickerTitle }}</h2>
+                <h2>{{ pickerTitle }}</h2>
               </div>
               <div class="picker-controls">
                 <label v-if="pickerTarget === 'draft'" class="hero-lane-filter">
@@ -2178,9 +2176,9 @@ onBeforeUnmount(() => {
               </div>
             </div>
             <div v-if="globalMode !== 'single'" class="picker-targets">
-              <button type="button" :class="{ active: pickerTarget === 'draft' }" :disabled="liveHeroSelectionLocked" @click="pickerTarget = 'draft'">当前 BP</button>
-              <button type="button" :class="{ active: pickerTarget === 'global-blue' }" :disabled="liveHeroSelectionLocked || liveOfficialHeroContextLocked" @click="pickerTarget = 'global-blue'" data-i18n-ignore>{{ earlierGamesLabel(teamsBySide.blue) }}</button>
-              <button type="button" :class="{ active: pickerTarget === 'global-red' }" :disabled="liveHeroSelectionLocked || liveOfficialHeroContextLocked" @click="pickerTarget = 'global-red'" data-i18n-ignore>{{ earlierGamesLabel(teamsBySide.red) }}</button>
+              <button type="button" :class="{ active: pickerTarget === 'draft' }" :disabled="liveHeroSelectionLocked" @click="pickerTarget = 'draft'">{{ $t("当前 BP") }}</button>
+              <button type="button" :class="{ active: pickerTarget === 'global-blue' }" :disabled="liveHeroSelectionLocked || liveOfficialHeroContextLocked" @click="pickerTarget = 'global-blue'">{{ earlierGamesLabel(teamsBySide.blue) }}</button>
+              <button type="button" :class="{ active: pickerTarget === 'global-red' }" :disabled="liveHeroSelectionLocked || liveOfficialHeroContextLocked" @click="pickerTarget = 'global-red'">{{ earlierGamesLabel(teamsBySide.red) }}</button>
             </div>
             <div class="hero-options">
               <button
@@ -2203,13 +2201,13 @@ onBeforeUnmount(() => {
           v-if="coachOpen"
           class="coach-scrim"
           type="button"
-          aria-label="关闭 BP 教练"
+          :aria-label="$t('关闭 BP 教练')"
           @click="coachOpen = false"
         ></button>
-        <aside class="coach-rail" :class="{ 'coach-open': coachOpen }" aria-label="BP 辅助工具">
-          <button class="mobile-coach-close" type="button" aria-label="关闭 BP 教练" @click="coachOpen = false">×</button>
+        <aside class="coach-rail" :class="{ 'coach-open': coachOpen }" :aria-label="$t('BP 辅助工具')">
+          <button class="mobile-coach-close" type="button" :aria-label="$t('关闭 BP 教练')" @click="coachOpen = false">×</button>
           <div class="assistant-rail-shell">
-            <div class="assistant-tabs" role="tablist" aria-label="BP 辅助工具">
+            <div class="assistant-tabs" role="tablist" :aria-label="$t('BP 辅助工具')">
               <button
                 type="button"
                 role="tab"
@@ -2223,7 +2221,7 @@ onBeforeUnmount(() => {
                 :aria-selected="assistantTab === 'coach'"
                 :class="{ active: assistantTab === 'coach' }"
                 @click="assistantTab = 'coach'"
-              >AI 教练</button>
+              >{{ $t("AI 教练") }}</button>
             </div>
             <div v-show="assistantTab === 'tree'" class="assistant-view tree-view" role="tabpanel">
               <DraftVersionTree
@@ -2250,11 +2248,11 @@ onBeforeUnmount(() => {
         <button
           class="mobile-coach-toggle"
           type="button"
-          aria-label="打开 BP 教练"
+          :aria-label="$t('打开 BP 教练')"
           @click="coachOpen = true"
         >
           <span aria-hidden="true">✦</span>
-          <strong>AI</strong>
+          <strong>{{ $t("AI") }}</strong>
         </button>
       </div>
     </template>

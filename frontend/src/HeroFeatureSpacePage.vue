@@ -737,7 +737,7 @@ watch(leagueId, () => {
             <span>{{ t("Competition") }}</span>
             <select v-model="leagueId" :disabled="loading">
               <option v-for="season in seasons" :key="season.league_id" :value="season.league_id">
-                {{ season.year }} · {{ season.league_name }} · S{{ season.season }}
+                {{ season.year }} · {{ season.league_name }}{{ $t("· S") }}{{ season.season }}
               </option>
             </select>
             <small>{{ t("Historical draft evidence · Favorite-style similarity") }}</small>
@@ -745,7 +745,7 @@ watch(leagueId, () => {
         </header>
 
         <aside class="bp-reference-note">
-          <span aria-hidden="true">BP</span>
+          <span aria-hidden="true">{{ $t("BP") }}</span>
           <div>
             <strong>{{ t("Use this as a draft reference—not a promise of a counter.") }}</strong>
             <p>{{ t("Recommendations come from professional match bans and picks. Ranked games, patches, team composition, and personal skill can behave very differently, so use the result as a useful second opinion.") }}</p>
@@ -880,7 +880,7 @@ watch(leagueId, () => {
           <div class="matchup-summary">
             <div>
               <span>{{ matchupResult.methodology.uses_favorite_pool ? t("Favorite pool status") : t("Recommendation scope") }}</span>
-              <div class="favorite-ranks" data-i18n-ignore>
+              <div class="favorite-ranks">
                 <strong v-for="favorite in matchupResult.favorites" :key="favorite.hero_id">
                   {{ favorite.hero_name }} · #{{ favorite.rank }} / {{ favorite.candidate_count }}
                 </strong>
