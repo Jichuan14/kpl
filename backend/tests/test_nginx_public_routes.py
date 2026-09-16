@@ -8,7 +8,7 @@ import unittest
 REPO_ROOT = Path(__file__).resolve().parents[2]
 NGINX_CONF = REPO_ROOT / "frontend" / "nginx.conf"
 LOCATION_BLOCK = re.compile(
-    r"location\s+([^{]+)\{([^}]+)\}",
+    r"^[ \t]*location\s+([^{]+)\{([^}]+)\}",
     re.MULTILINE,
 )
 
@@ -21,20 +21,19 @@ class NginxPublicRouteTest(unittest.TestCase):
             for matcher in LOCATION_BLOCK.finditer(text)
         ]
 
-    def test_simulator_lineup_routes_are_not_behind_management_auth(self) -> None:
-        blocks = self.locations()
-        simulation = [
-            body
-            for matcher, body in blocks
-            if "/api/simulations" in matcher
-        ]
-        self.assertTrue(simulation, "expected an explicit /api/simulations/ location")
-        for body in simulation:
-            self.assertNotIn("auth_basic", body)
+    def test_new_evidence_routes_are_not_behind_management_auth(self) -> None:
+        blocks = {matcher: body for matcher, body in self.locations()}
+        public_routes = {
+            "^~ /api/simulations/",
+            "^~ /api/visualization/draft-evidence/",
+        }
+        for matcher in public_routes:
+            self.assertIn(matcher, blocks)
+            self.assertNotIn("auth_basic", blocks[matcher], matcher)
 
         public_api = [
             body
-            for matcher, body in blocks
+            for matcher, body in blocks.items()
             if matcher in {"/api/", "/api/"} or matcher.endswith("/api/")
         ]
         self.assertTrue(public_api)
@@ -46,6 +45,7 @@ class NginxPublicRouteTest(unittest.TestCase):
             "= /management",
             "^~ /api/sync/",
             "^~ /api/pipeline/",
+            "^~ /api/visualization/",
             "= /api/coach/usage",
             "= /api/coach/limits",
         }
