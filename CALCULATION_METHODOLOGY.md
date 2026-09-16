@@ -414,3 +414,26 @@ a series, final match scores, standings, or the remaining season.
 - `analysis/build_draft_model.py` — training, scoring, and offline rollouts.
 - `backend/app/services/draft_simulator.py` — API-time prediction, legality,
   and simulation.
+## Historical BP move evidence
+
+The historical evidence inspector compares an observed action with other legal
+actions in compatible draft contexts across all locally available seasons.
+Compatibility requires the same BP schedule, action type, side, order, game
+number, and visible pick counts. Rates are estimated within each season before
+pooling; the pooled alternative rate uses selected-action support as its
+weight. The inspected match is always excluded.
+
+The result is descriptive. A positive continuation difference says that a
+later hero pick appeared more often after the observed action than after other
+legal actions in overlapping historical contexts. It does not prove that the
+coach intended that continuation or that the action caused it. Negative,
+disagreeing, sparse, and unavailable evidence remains visible. Hero legality
+comes from the exported pre-action pool and is labelled inferred because no
+patch-certified availability timeline is maintained.
+
+In the BP simulator, this evidence is recomputed after each user move from the
+board immediately before that move. The synthetic move is matched by schedule,
+game number, action, side, order, and visible pick counts, then compared with
+all compatible local seasons. Up to five continuation candidates per side are
+shown, ranked by how often they are picked later in compatible battles. It is
+not inserted into the historical sample.

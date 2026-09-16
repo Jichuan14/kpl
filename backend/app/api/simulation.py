@@ -7,6 +7,7 @@ from app.config import get_settings
 from app.database import get_db
 from app.schemas import (
     ApiResponse,
+    DraftMoveEvidenceRequest,
     DraftSelectionCommentaryRequest,
     DraftSimulationRequest,
     DraftScenarioRequest,
@@ -17,6 +18,7 @@ from app.schemas import (
     UltimateCounterLineupRequest,
 )
 from app.services.draft_commentary import build_selection_commentary
+from app.services.draft_evidence import build_simulator_move_evidence
 from app.services.draft_simulator import (
     FIXED_ROLLOUTS,
     learned_feature_space,
@@ -73,6 +75,20 @@ def selection_commentary(
             red_team_name=str(teams["red"]["team_name"]),
         )
         return ApiResponse(data=build_selection_commentary(league_id=body.league_id, state=state, selected_hero_id=body.selected_hero_id, model_type=body.model_type))
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/move-evidence")
+def move_evidence(body: DraftMoveEvidenceRequest) -> ApiResponse:
+    try:
+        return ApiResponse(
+            data=build_simulator_move_evidence(
+                body.model_dump(exclude={"league_id"})
+            )
+        )
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:

@@ -17,6 +17,8 @@ backend/data/*.sqlite*
 *.sqlite3
 *.jsonl
 analysis/outputs/*/draft_model.json
+# Reproducible intention research; includes generated Markdown summaries.
+analysis/outputs/draft_intention_research/
 *.json
 *.pt
 *.npz

@@ -37,6 +37,40 @@ def team_synergy_ready(league_id: str) -> bool:
     return (OUTPUT_ROOT / league_id / "team_synergy_stats.jsonl").is_file()
 
 
+def _safe_identifier(value: str, label: str) -> str:
+    if not value or not all(character.isalnum() or character in "-_" for character in value):
+        raise HTTPException(status_code=400, detail=f"Invalid {label}")
+    return value
+
+
+def _read_evidence_json(path: Path) -> dict[str, Any]:
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Draft evidence has not been generated")
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise HTTPException(status_code=500, detail="Draft evidence artifact is invalid") from exc
+    if not isinstance(value, dict) or int(value.get("schema_version") or 0) != 1:
+        raise HTTPException(status_code=500, detail="Unsupported draft evidence artifact")
+    return value
+
+
+@router.get("/draft-evidence/{league_id}/manifest")
+def draft_evidence_manifest(league_id: str) -> ApiResponse:
+    league_id = _safe_identifier(league_id, "league ID")
+    return ApiResponse(data=_read_evidence_json(OUTPUT_ROOT / league_id / "draft_evidence" / "manifest.json"))
+
+
+@router.get("/draft-evidence/{league_id}/matches/{match_id}")
+def draft_evidence_match(league_id: str, match_id: str) -> ApiResponse:
+    league_id = _safe_identifier(league_id, "league ID")
+    match_id = _safe_identifier(match_id, "match ID")
+    payload = _read_evidence_json(OUTPUT_ROOT / league_id / "draft_evidence" / "matches" / f"{match_id}.json")
+    if payload.get("match_id") != match_id:
+        raise HTTPException(status_code=500, detail="Draft evidence match identity does not agree with its path")
+    return ApiResponse(data=payload)
+
+
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     with path.open(encoding="utf-8") as source:

@@ -23,6 +23,8 @@ hero may have several rows when it has been played in multiple positions.
 | `export_match_data.py` | Export ordered match BP, players, sides, winners, and quality flags to JSONL |
 | `build_bp_decisions.py` | Convert match JSONL into one pre-action state per ban/pick |
 | `compute_bp_statistics.py` | Compute availability-adjusted response, synergy, counter-pick, and counter-ban statistics |
+| `explore_draft_intentions.py` | Probe observed moves against comparable alternatives and inspect later own/opponent picks; descriptive research only |
+| `run_intention_case_study.py` | Reproduce the 海月/关羽 and 元坦/鲁班大师 probes separately by season |
 | `compute_meta_heroes.py` | Rank opening-priority heroes from first-phase bans and Blue first picks |
 | `compute_team_synergies.py` | Rank availability-adjusted hero pairs preferred by each team |
 | `compute_team_draft_profiles.py` | Build season rosters, team tendencies/openings/combos, player pools, and recent trends |
@@ -115,6 +117,32 @@ Generated under `analysis/outputs/`:
 - `pick_synergy_stats.jsonl`
 - `counter_pick_stats.jsonl`
 - `counter_ban_stats.jsonl`
+
+### Explore move-intention hypotheses
+
+The [research note](DRAFT_INTENTION_RESEARCH.md) explains the distinction between
+observed follow-up patterns, package restriction, and a coach's unobserved intent.
+These commands read existing exports and write offline research reports; they
+do not load, retrain, or change the production BP model.
+
+```bash
+# Investigate the motivating examples in three separate seasons.
+python3 analysis/run_intention_case_study.py
+
+# Ban 海月 -> own later 关羽, using a denominator fixed at the ban.
+python3 analysis/explore_draft_intentions.py \
+  --league-id 20260003 --action ban --hero-id 521 --target-id 140 \
+  --perspective own \
+  --output analysis/outputs/draft_intention_research/haiyue_guanyu.json \
+  --report analysis/outputs/draft_intention_research/haiyue_guanyu.md
+```
+
+Add `--before-match-id MATCH_ID` to restrict the reference data to matches whose
+start time precedes that match, excluding the whole target match. Optional
+`--team-id`, `--opponent-team-id`, `--bp-order`, `--side`, and `--max-order-gap`
+filters narrow the query. A narrow query can have insufficient comparable
+evidence; missing rates stay unavailable. A later ban or opponent pick of the
+target is still a failed continuation, rather than an excluded trial.
 
 ### Compute opening-priority meta heroes
 
@@ -352,3 +380,19 @@ team_combo_performance.jsonl
 player_hero_pools.jsonl
 team_recent_trends.jsonl
 ```
+## Historical draft evidence
+
+Build structured evidence for a target season against every compatible local
+season export:
+
+```sh
+python analysis/build_draft_evidence.py --league-id 20260003
+```
+
+The default retrospective mode includes later matches but excludes the entire
+inspected match from its own supporting samples. Use
+`--mode as_of_target_match` for chronology-restricted evaluation. The builder
+does not use or update any BP model. It is an optional research command rather
+than part of the management display/full pipeline; the simulator intent widget
+computes from the exported BP corpus at request time. See
+`DRAFT_EVIDENCE_SPEC.md`.

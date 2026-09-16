@@ -267,6 +267,14 @@ export function fetchSelectionCommentary(state, { signal } = {}) {
   });
 }
 
+export function fetchDraftMoveEvidence(state, { signal } = {}) {
+  return request("/api/simulations/move-evidence", {
+    method: "POST",
+    body: JSON.stringify(state),
+    signal,
+  });
+}
+
 export function askDraftCoach(payload) {
   return request("/api/coach", {
     method: "POST",

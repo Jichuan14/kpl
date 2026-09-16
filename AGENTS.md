@@ -32,6 +32,8 @@ Generated artifact locations and Git policy: `ARTIFACTS.md`
 | Syncing official KPL data | `backend/app/api/sync.py` | `backend/app/services/sync.py`, `backend/app/clients/kpl_api.py` |
 | Analysis and publishing pipeline | `backend/app/services/analysis_pipeline.py` | `backend/app/api/pipeline.py`, `backend/app/services/static_publisher.py` |
 | Hero relationship statistics | `analysis/compute_bp_statistics.py` | `analysis/build_bp_decisions.py`, `analysis/common.py` |
+| Researching ban/pick intentions | `analysis/DRAFT_INTENTION_RESEARCH.md` | `analysis/explore_draft_intentions.py`, `analysis/run_intention_case_study.py` (offline; no model changes) |
+| Historical BP evidence dossiers and simulator move evidence | `analysis/DRAFT_EVIDENCE_SPEC.md` | `analysis/build_draft_evidence.py`, `analysis/draft_evidence/`, `backend/app/services/draft_evidence.py`, `frontend/src/DraftEvidenceExplorer.vue` |
 | Draft models and calibration | `analysis/train_production_draft_policy.py` | `analysis/sequence_training/`, `analysis/fit_draft_calibration.py` |
 | Lineup value and Ban value | `analysis/lineup_value/`, `analysis/train_lineup_value_model.py`, `analysis/train_ban_value_model.py` | `backend/app/services/lineup_value.py`, `backend/app/services/ban_recommender.py` |
 | Coach/RAG behavior | `backend/app/agent/` | `backend/app/api/coach.py`, `backend/app/knowledge/` |

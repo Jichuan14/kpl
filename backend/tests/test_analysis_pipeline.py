@@ -157,6 +157,14 @@ class AnalysisPipelineTests(unittest.TestCase):
         request = AnalysisRunRequest(league_id="20250004", step="display")
         self.assertEqual(request.step, "display")
 
+    def test_draft_evidence_step_is_model_free_and_all_season_scoped(self) -> None:
+        request = AnalysisRunRequest(league_id="20260003", step="draft_evidence")
+        command = analysis_pipeline.AnalysisPipeline("20260003")._command(request.step)
+        self.assertTrue(command[1].endswith("build_draft_evidence.py"))
+        self.assertIn("--exports-root", command)
+        self.assertIn("--output-root", command)
+        self.assertNotIn("train", " ".join(command))
+
     def test_sequence_timeout_is_reported_as_pipeline_error(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
