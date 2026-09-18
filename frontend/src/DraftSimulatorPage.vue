@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, toRaw, watch } from "vue";
 import {
   fetchDraftModel,
+  fetchDraftMoveEvidence,
   fetchLiveMatch,
   fetchLiveWinnerPredictions,
   refreshLiveMatch as requestLiveMatchRefresh,
@@ -16,6 +17,7 @@ import {
   simulateDraftScenario,
 } from "./api";
 import DraftCoachPanel from "./DraftCoachPanel.vue";
+import DraftEvidenceExplorer from "./DraftEvidenceExplorer.vue";
 import DraftScenarioPanel from "./DraftScenarioPanel.vue";
 import DraftVersionTree from "./DraftVersionTree.vue";
 import WhatIfWorkspaceModal from "./WhatIfWorkspaceModal.vue";
@@ -41,9 +43,15 @@ const expandedRecommendationIds = ref([]);
 const commentary = ref(null);
 const commentaryLoading = ref(false);
 const commentaryEnabled = ref(false);
+const moveEvidence = ref(null);
+const moveEvidenceLoading = ref(false);
+const moveEvidenceError = ref("");
+const moveEvidenceHistoryKey = ref("");
 const settingsOpen = ref(false);
 let commentaryRequestNumber = 0;
 let commentaryAbortController = null;
+let moveEvidenceRequestNumber = 0;
+let moveEvidenceAbortController = null;
 let recommendationRequestNumber = 0;
 let lineupScoreRequestNumber = 0;
 const loading = ref(false);
@@ -84,6 +92,22 @@ function clearCommentary() {
   commentaryAbortController = null;
   commentaryLoading.value = false;
   commentary.value = null;
+}
+
+function historyEvidenceKey() {
+  return history.value
+    .map((event) => `${event.bpOrder}:${event.field}:${event.heroId}`)
+    .join("|");
+}
+
+function clearMoveEvidence() {
+  moveEvidenceRequestNumber += 1;
+  moveEvidenceAbortController?.abort();
+  moveEvidenceAbortController = null;
+  moveEvidence.value = null;
+  moveEvidenceLoading.value = false;
+  moveEvidenceError.value = "";
+  moveEvidenceHistoryKey.value = "";
 }
 const teamsBySide = ref({ blue: TEAM_A, red: TEAM_B });
 const seriesWins = ref({ [TEAM_A]: 0, [TEAM_B]: 0 });
@@ -560,11 +584,6 @@ async function setMatchMode(mode) {
   else if (mode === "custom") await customizeGlobalBp();
   else await startGlobalBp();
   settingsOpen.value = false;
-}
-
-function forecastLabel() {
-  const step = result.value?.next_step;
-  return step ? `${sideLabel(step.side)}${bpT(step.action)}` : "";
 }
 
 function resetSeriesTeams() {
@@ -1150,6 +1169,51 @@ async function recommendCurrentDraft() {
   }
 }
 
+async function loadMoveEvidence(preSelectionState, step, heroId, expectedHistoryKey) {
+  moveEvidenceRequestNumber += 1;
+  moveEvidenceAbortController?.abort();
+  const requestNumber = moveEvidenceRequestNumber;
+  const controller = new AbortController();
+  moveEvidenceAbortController = controller;
+  moveEvidence.value = null;
+  moveEvidenceError.value = "";
+  moveEvidenceLoading.value = true;
+  moveEvidenceHistoryKey.value = expectedHistoryKey;
+  try {
+    const payload = await fetchDraftMoveEvidence({
+      league_id: leagueId.value,
+      schedule: model.value?.draft_sequence?.length === 20 ? "standard_20" : "standard_18",
+      battle_seq: Number(seriesGame.value),
+      bp_order: Number(step.bp_order),
+      action: step.action,
+      side: step.side,
+      selected_hero_id: Number(heroId),
+      blue_team_id: preSelectionState.blue_team_id,
+      red_team_id: preSelectionState.red_team_id,
+      blue_picks: preSelectionState.blue_picks,
+      red_picks: preSelectionState.red_picks,
+      blue_bans: preSelectionState.blue_bans,
+      red_bans: preSelectionState.red_bans,
+      blue_used_previous_battles: preSelectionState.blue_used_previous_battles,
+      red_used_previous_battles: preSelectionState.red_used_previous_battles,
+      available_hero_ids: heroes.value.map((hero) => Number(hero.hero_id)),
+      hero_names: Object.fromEntries(heroes.value.map((hero) => [Number(hero.hero_id), hero.hero_name])),
+    }, { signal: controller.signal });
+    if (requestNumber === moveEvidenceRequestNumber && historyEvidenceKey() === expectedHistoryKey) {
+      moveEvidence.value = payload;
+    }
+  } catch (err) {
+    if (err.name !== "AbortError" && requestNumber === moveEvidenceRequestNumber) {
+      moveEvidenceError.value = err.message || "Could not build historical evidence for this move.";
+    }
+  } finally {
+    if (requestNumber === moveEvidenceRequestNumber) {
+      moveEvidenceLoading.value = false;
+      moveEvidenceAbortController = null;
+    }
+  }
+}
+
 async function chooseHero(heroId) {
   if (!teamsReady.value || isPeakDuel.value || liveHeroSelectionLocked.value || simulating.value) return;
   if (pickerTarget.value !== "draft") {
@@ -1198,6 +1262,8 @@ async function chooseHero(heroId) {
   }`;
   board.value[field].push(Number(heroId));
   history.value.push({ field, heroId: Number(heroId), bpOrder: bpOrder.value });
+  const evidenceKey = historyEvidenceKey();
+  void loadMoveEvidence(preSelectionState, currentStep.value, heroId, evidenceKey);
   bpOrder.value += 1;
   search.value = "";
   syncVersionTreeWithBoard();
@@ -1397,6 +1463,13 @@ watch(commentaryEnabled, (enabled) => {
   clearCommentary();
 });
 
+watch(
+  () => historyEvidenceKey(),
+  (key) => {
+    if (key !== moveEvidenceHistoryKey.value) clearMoveEvidence();
+  }
+);
+
 async function undo() {
   if (isPeakDuel.value) return;
   const event = history.value.pop();
@@ -1405,6 +1478,7 @@ async function undo() {
   if (index >= 0) board.value[event.field].splice(index, 1);
   bpOrder.value = event.bpOrder;
   clearCommentary();
+  clearMoveEvidence();
   syncVersionTreeWithBoard();
   await forecast();
 }
@@ -1416,6 +1490,7 @@ async function reset() {
   bpOrder.value = 1;
   search.value = "";
   clearCommentary();
+  clearMoveEvidence();
   resetScenarioTree();
   clearVersionTree();
   await forecast();
@@ -1626,6 +1701,7 @@ watch(
 
 onBeforeUnmount(() => {
   clearCommentary();
+  clearMoveEvidence();
   scenarioAbortController?.abort();
   stopLiveMatchPolling();
   stopLiveMatchCheckSchedule();
@@ -1648,48 +1724,50 @@ onBeforeUnmount(() => {
         <p>{{ $t("逐步构建蓝方与红方的 BP 过程。每次选择或禁用后，模型都会更新预测。") }}</p>
       </div>
       <div class="simulator-header-controls">
-        <label class="simulator-season">
-          <span>赛事</span>
-          <select v-model="leagueId" :disabled="loading">
-            <option v-for="season in seasons" :key="season.league_id" :value="season.league_id">
-              {{ season.year }} · {{ season.league_name }}{{ $t("· S") }}{{ season.season }}
-            </option>
-          </select>
-          <small v-if="model">{{ number(model.training_decisions) }}{{ $t("条历史 BP 操作") }}</small>
-        </label>
-        <div class="simulator-settings">
-          <button
-            type="button"
-            class="settings-trigger"
-            :aria-expanded="settingsOpen"
-            aria-controls="simulator-settings-menu"
-            @click="settingsOpen = !settingsOpen"
-          >
-            <span aria-hidden="true">⚙</span> 设置
-          </button>
-          <div v-if="settingsOpen" id="simulator-settings-menu" class="settings-menu">
-            <p>比赛设置</p>
-            <button type="button" :class="{ active: globalMode === 'single' }" :disabled="!teamsReady || liveFollowing" @click="setMatchMode('single')">
-              <strong>单局</strong><small>{{ $t("重置为单局 BP") }}</small>
-            </button>
-            <button type="button" :class="{ active: globalMode === 'match' }" :disabled="!teamsReady || liveFollowing" @click="setMatchMode('match')">
-              <strong>完整系列赛</strong><small>跟踪系列赛中的已使用英雄</small>
-            </button>
-            <button type="button" :class="{ active: globalMode === 'custom' }" :disabled="!teamsReady || liveFollowing" @click="setMatchMode('custom')">
-              <strong>{{ $t("完整系列赛 · 自定义 BP") }}</strong><small>录入此前小局的英雄使用情况</small>
-            </button>
-            <label class="settings-series">
-              <span>系列赛制</span>
-              <select v-model.number="bestOf" :disabled="globalMode === 'single' || liveFollowing">
-                <option :value="5">{{ $t("BO5") }}</option>
-                <option :value="7">{{ $t("BO7") }}</option>
-              </select>
-            </label>
-            <label class="settings-commentary">
-              <input v-model="commentaryEnabled" type="checkbox" />
-              <span><strong>{{ $t("AI 解说") }}</strong><small>{{ $t("默认关闭 · 每次选择后调用 Kimi") }}</small></span>
-            </label>
+        <div class="simulator-season">
+          <label for="simulator-season-select">赛事</label>
+          <div class="simulator-control-row">
+            <select id="simulator-season-select" v-model="leagueId" :disabled="loading">
+              <option v-for="season in seasons" :key="season.league_id" :value="season.league_id">
+                {{ season.year }} · {{ season.league_name }}{{ $t("· S") }}{{ season.season }}
+              </option>
+            </select>
+            <div class="simulator-settings">
+              <button
+                type="button"
+                class="settings-trigger"
+                :aria-expanded="settingsOpen"
+                aria-controls="simulator-settings-menu"
+                @click="settingsOpen = !settingsOpen"
+              >
+                <span aria-hidden="true">⚙</span> 设置
+              </button>
+              <div v-if="settingsOpen" id="simulator-settings-menu" class="settings-menu">
+                <p>比赛设置</p>
+                <button type="button" :class="{ active: globalMode === 'single' }" :disabled="!teamsReady || liveFollowing" @click="setMatchMode('single')">
+                  <strong>单局</strong><small>{{ $t("重置为单局 BP") }}</small>
+                </button>
+                <button type="button" :class="{ active: globalMode === 'match' }" :disabled="!teamsReady || liveFollowing" @click="setMatchMode('match')">
+                  <strong>完整系列赛</strong><small>跟踪系列赛中的已使用英雄</small>
+                </button>
+                <button type="button" :class="{ active: globalMode === 'custom' }" :disabled="!teamsReady || liveFollowing" @click="setMatchMode('custom')">
+                  <strong>{{ $t("完整系列赛 · 自定义 BP") }}</strong><small>录入此前小局的英雄使用情况</small>
+                </button>
+                <label class="settings-series">
+                  <span>系列赛制</span>
+                  <select v-model.number="bestOf" :disabled="globalMode === 'single' || liveFollowing">
+                    <option :value="5">{{ $t("BO5") }}</option>
+                    <option :value="7">{{ $t("BO7") }}</option>
+                  </select>
+                </label>
+                <label class="settings-commentary">
+                  <input v-model="commentaryEnabled" type="checkbox" />
+                  <span><strong>{{ $t("AI 解说") }}</strong><small>{{ $t("默认关闭 · 每次选择后调用 Kimi") }}</small></span>
+                </label>
+              </div>
+            </div>
           </div>
+          <small v-if="model">{{ number(model.training_decisions) }}{{ $t("条历史 BP 操作") }}</small>
         </div>
       </div>
     </header>
@@ -1957,44 +2035,68 @@ onBeforeUnmount(() => {
               </section>
             </div>
 
-            <aside v-if="!isPeakDuel" class="forecast-panel">
-              <div class="forecast-heading">
-                <div>
-                  <p class="simulator-eyebrow">模型预测</p>
-                  <h2>{{ forecastLabel() }}</h2>
+            <aside v-if="!isPeakDuel" class="decision-slot">
+              <section class="recommendation-panel recommendation-rail">
+                <header>
+                  <div>
+                    <p class="simulator-eyebrow">{{ $t("BP 决策") }}</p>
+                    <h2>推荐下一手</h2>
+                  </div>
+                  <span class="recommendation-status" aria-live="polite">
+                    {{ !currentStep ? '已完成' : recommendationLoading ? '搜索中…' : recommendationResult ? '已更新' : '等待状态' }}
+                  </span>
+                </header>
+                <p v-if="recommendationError" class="recommendation-error">{{ recommendationError }}</p>
+                <div v-if="recommendationResult?.recommendations?.length" class="recommendation-list">
+                  <article v-for="row in recommendationResult.recommendations" :key="row.hero_id">
+                    <button
+                      type="button"
+                      class="recommendation-choice"
+                      :disabled="liveHeroSelectionLocked"
+                      :title="`采用 ${row.hero_name}`"
+                      @click="chooseHero(row.hero_id)"
+                    >
+                      <span class="recommendation-rank">#{{ row.rank }}</span>
+                      <img :src="heroIcon(row.hero_id)" :alt="row.hero_name" />
+                      <span>
+                        <strong>{{ row.hero_name }}</strong>
+                        <small>{{ recommendationMetricLabel('score', row.action) }} {{ percent(row.expected_advantage) }}</small>
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      class="recommendation-detail-toggle"
+                      :aria-expanded="recommendationDetailsExpanded(row.hero_id)"
+                      @click="toggleRecommendationDetails(row.hero_id)"
+                    >
+                      {{ recommendationDetailsExpanded(row.hero_id) ? '收起详情' : '评分详情' }}
+                      <span aria-hidden="true">{{ recommendationDetailsExpanded(row.hero_id) ? '−' : '+' }}</span>
+                    </button>
+                    <div class="recommendation-details" :class="{ expanded: recommendationDetailsExpanded(row.hero_id) }">
+                      <dl>
+                        <div v-for="metric in ['score', 'delta', 'confidence', 'policy']" :key="metric">
+                          <dt>{{ recommendationMetricLabel(metric, row.action) }}</dt>
+                          <dd v-if="metric === 'score'">{{ percent(row.expected_advantage) }}</dd>
+                          <dd v-else-if="metric === 'delta'">{{ signedPoints(row.advantage_delta_vs_policy_baseline) }}</dd>
+                          <dd v-else-if="metric === 'confidence'">{{ confidenceLabel(row.confidence) }}</dd>
+                          <dd v-else>{{ percent(row.policy_probability) }}</dd>
+                        </div>
+                      </dl>
+                      <div class="recommendation-reasons">
+                        <span v-for="reason in row.explanations.slice(0, 4)" :key="`${row.hero_id}-${reason.code}`">{{ recommendationReasonLabel(reason) }}</span>
+                      </div>
+                    </div>
+                  </article>
                 </div>
-                <span v-if="simulating">正在更新…</span>
-              </div>
-              <div class="probability-list">
-                <div v-for="row in result?.next_action_probabilities?.slice(0, 10)" :key="row.hero_id">
-                  <img :src="heroIcon(row.hero_id)" :alt="row.hero_name" />
-                  <span class="probability-track"><i :style="{ width: percent(row.probability) }"></i></span>
-                  <em>{{ percent(row.probability) }}</em>
-                </div>
-              </div>
-              <div v-if="result?.simulation?.banned_by_end?.length" class="end-ban-list">
-                <p>{{ $t("最可能在 BP 结束前被禁用") }}</p>
-                <span v-for="row in result.simulation.banned_by_end.slice(0, 3)" :key="row.hero_id">
-                  <img :src="heroIcon(row.hero_id)" :alt="row.hero_name" />
-                  {{ percent(row.probability) }}
-                </span>
-              </div>
+                <p v-else-if="!recommendationError" class="recommendation-rail-empty">{{ recommendationLoading ? '正在计算三个候选…' : '完成当前操作后显示三个候选。' }}</p>
+                <button
+                  type="button"
+                  class="tree-snapshot-action"
+                  :disabled="!history.length || liveHeroSelectionLocked"
+                  @click="pinPracticeBoardToTree"
+                >{{ uiT('Add snapshot to tree') }}</button>
+              </section>
             </aside>
-          </section>
-
-          <section v-if="!isPeakDuel" class="whatif-launcher">
-            <div>
-              <h2>版本树快照</h2>
-              <p>{{ $t("保存当前 BP 进度，之后可以从这个检查点继续推演或建立新的分支。") }}</p>
-            </div>
-            <div class="whatif-launcher-actions">
-              <button
-                type="button"
-                class="tree-snapshot-action"
-                :disabled="!history.length || liveHeroSelectionLocked"
-                @click="pinPracticeBoardToTree"
-              >{{ uiT('Add snapshot to tree') }}</button>
-            </div>
           </section>
 
           <section v-if="lineupComplete || lineupScoreLoading || lineupScoreError" class="lineup-score-panel">
@@ -2059,78 +2161,13 @@ onBeforeUnmount(() => {
             @pin-snapshot="pinWhatIfSnapshot"
           />
 
-          <section v-if="!isPeakDuel" class="recommendation-panel">
-            <header>
-              <div>
-                <p class="simulator-eyebrow">{{ $t("BP 决策") }}</p>
-                <h2>推荐下一手</h2>
-                <p>{{ $t("每次 BP 更新后，模型会自动尝试候选英雄、模拟后续选禁，并比较最终阵容的相对优势。") }}</p>
-              </div>
-              <span class="recommendation-status" aria-live="polite">
-                {{ !currentStep ? '当前 BP 已完成' : recommendationLoading ? '正在自动搜索后续 BP…' : recommendationResult ? '已自动更新' : '等待 BP 状态' }}
-              </span>
-            </header>
-            <p v-if="recommendationError" class="recommendation-error">{{ recommendationError }}</p>
-            <div v-if="recommendationResult?.recommendations?.length" class="recommendation-list">
-              <article v-for="row in recommendationResult.recommendations" :key="row.hero_id">
-                <button
-                  type="button"
-                  class="recommendation-choice"
-                  :disabled="liveHeroSelectionLocked"
-                  :title="`采用 ${row.hero_name}`"
-                  @click="chooseHero(row.hero_id)"
-                >
-                  <span class="recommendation-rank">#{{ row.rank }}</span>
-                  <img :src="heroIcon(row.hero_id)" :alt="row.hero_name" />
-                  <span>
-                    <strong>{{ row.hero_name }}</strong>
-                    <small>点击采用这一手</small>
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  class="recommendation-detail-toggle"
-                  :aria-expanded="recommendationDetailsExpanded(row.hero_id)"
-                  @click="toggleRecommendationDetails(row.hero_id)"
-                >
-                  {{ recommendationDetailsExpanded(row.hero_id) ? '收起评分详情' : '查看评分详情' }}
-                  <span aria-hidden="true">{{ recommendationDetailsExpanded(row.hero_id) ? '−' : '+' }}</span>
-                </button>
-                <div
-                  class="recommendation-details"
-                  :class="{ expanded: recommendationDetailsExpanded(row.hero_id) }"
-                >
-                <dl>
-                  <div v-for="metric in ['score', 'delta', 'confidence', 'policy']" :key="metric">
-                    <dt>
-                      {{ recommendationMetricLabel(metric, row.action) }}
-                      <button
-                        type="button"
-                        class="metric-help"
-                        :aria-label="`${recommendationMetricLabel(metric, row.action)}说明：${recommendationMetricHelp(metric, row.action)}`"
-                        :data-help="recommendationMetricHelp(metric, row.action)"
-                      >?</button>
-                    </dt>
-                    <dd v-if="metric === 'score'">{{ percent(row.expected_advantage) }}</dd>
-                    <dd v-else-if="metric === 'delta'">{{ signedPoints(row.advantage_delta_vs_policy_baseline) }}</dd>
-                    <dd v-else-if="metric === 'confidence'">{{ confidenceLabel(row.confidence) }}</dd>
-                    <dd v-else>{{ percent(row.policy_probability) }}</dd>
-                  </div>
-                </dl>
-                <div class="recommendation-reasons">
-                  <span v-for="reason in row.explanations.slice(0, 4)" :key="`${row.hero_id}-${reason.code}`">
-                    {{ recommendationReasonLabel(reason) }}
-                  </span>
-                </div>
-                <p v-if="row.likely_opponent_responses?.length">
-                  可能应对：{{ row.likely_opponent_responses.map((response) => response.hero_name).join('、') }}
-                </p>
-                </div>
-              </article>
-            </div>
-            <small v-if="recommendationResult" class="recommendation-warning">
-              {{ recommendationResult.recommender === 'ban_value' ? '禁用价值分综合对手英雄偏好、克制关系、历史禁用结果与 BP 真实性，不是因果胜率。' : '阵容优势分用于候选排序，不是承诺胜率；全局 BP 已使用英雄会在每次模拟中排除。' }}
-            </small>
+          <section v-if="!isPeakDuel" class="intent-panel">
+            <DraftEvidenceExplorer
+              :payload="moveEvidence"
+              :loading="moveEvidenceLoading"
+              :error="moveEvidenceError"
+              wide
+            />
           </section>
 
           <section v-if="!isPeakDuel && (commentary || commentaryLoading)" class="commentary-panel">
@@ -2264,30 +2301,22 @@ onBeforeUnmount(() => {
 .tree-snapshot-action:hover:not(:disabled) { background:#084f42; }
 .tree-snapshot-action:focus-visible { outline:2px solid #28745d; outline-offset:3px; }
 .tree-snapshot-action:disabled { cursor:not-allowed; opacity:.45; }
-.whatif-launcher { display:flex; width:calc(100% - .75rem - clamp(250px,31%,320px)); box-sizing:border-box; align-items:center; justify-content:space-between; gap:1rem; margin-top:.75rem; padding:.85rem 1rem; border:1px solid #b8d8c9; background:#edf7f2; }
-.whatif-launcher h2 { margin:0; color:var(--accent-deep); font:700 .92rem var(--display); letter-spacing:-.02em; }
-.whatif-launcher p { max-width:62ch; margin:.2rem 0 0; color:#28745d; font-size:.63rem; line-height:1.45; }
-.whatif-launcher-actions { display:flex; flex:0 0 auto; flex-wrap:wrap; justify-content:flex-end; gap:.45rem; }
-.whatif-launcher button { min-height:2.35rem; padding:.48rem .7rem; border:1px solid var(--accent-deep); background:#fff; color:var(--accent-deep); font:700 .62rem var(--mono); cursor:pointer; white-space:nowrap; }
-.whatif-launcher .tree-snapshot-action { background:var(--accent-deep); color:#fff; }
-.whatif-launcher button:hover:not(:disabled) { background:#dff1e7; }
-.whatif-launcher .tree-snapshot-action:hover:not(:disabled) { background:#084f42; }
-.whatif-launcher button:focus-visible { outline:2px solid #28745d; outline-offset:3px; }
-.whatif-launcher button:disabled { cursor:not-allowed; opacity:.45; }
 .simulator-page { width: min(1560px, calc(100% - 2rem)); margin: 0 auto; padding: 2.25rem 0 5rem; }
 .simulator-hero, .simulator-status, .simulator-layout { display: flex; gap: 1.5rem; justify-content: space-between; }
 .simulator-hero { align-items: flex-end; }
 .simulator-eyebrow { margin: 0 0 .45rem; color: var(--accent-deep); font-size: .66rem; letter-spacing: .13em; text-transform: uppercase; }
-.simulator-hero h1, .picker-heading h2, .forecast-heading h2 { margin: 0; font-family: var(--display); letter-spacing: -.045em; }
+.simulator-hero h1, .picker-heading h2 { margin: 0; font-family: var(--display); letter-spacing: -.045em; }
 .simulator-hero h1 { font-size: clamp(2.4rem, 5vw, 4rem); line-height: .95; }
 .simulator-hero > div > p:last-child { max-width: 40rem; margin: .8rem 0 0; color: var(--ink-soft); font-size: .8rem; }
-.simulator-header-controls { display:flex; align-items:end; justify-content:end; gap:.55rem; }
-.simulator-season { display: grid; min-width: 310px; gap: .4rem; }
-.simulator-season span, .simulator-actions label span { color: var(--ink-soft); font-size: .64rem; letter-spacing: .1em; text-transform: uppercase; }
+.simulator-header-controls { display:grid; justify-items:end; }
+.simulator-season { display:grid; min-width:420px; gap:.4rem; }
+.simulator-season>label, .simulator-actions label span { color: var(--ink-soft); font-size: .64rem; letter-spacing: .1em; text-transform: uppercase; }
+.simulator-control-row { display:flex; align-items:stretch; gap:.55rem; }
 .simulator-season select, .simulator-actions select, .picker-heading input { min-height: 42px; padding: .55rem .7rem; border: 1px solid var(--line); background: rgba(255,255,255,.85); color: var(--ink); font: inherit; }
+.simulator-control-row>select { flex:1 1 auto; min-width:0; }
 .simulator-season small { color: var(--ink-soft); font-size: .66rem; }
-.simulator-settings { position:relative; }
-.settings-trigger { display:inline-flex; min-height:42px; align-items:center; gap:.35rem; padding:.55rem .75rem; border:1px solid var(--line); background:rgba(255,255,255,.85); color:var(--ink); font:700 .68rem var(--mono); cursor:pointer; }
+.simulator-settings { position:relative; flex:0 0 auto; }
+.settings-trigger { display:inline-flex; min-width:72px; min-height:42px; align-items:center; justify-content:center; gap:.35rem; padding:.55rem .75rem; border:1px solid var(--line); background:rgba(255,255,255,.85); color:var(--ink); white-space:nowrap; font:700 .68rem var(--mono); cursor:pointer; }
 .settings-trigger:hover { border-color:var(--accent-deep); }
 .settings-menu { position:absolute; z-index:50; top:calc(100% + .45rem); right:0; display:grid; width:min(19rem, calc(100vw - 2rem)); gap:.35rem; padding:.75rem; border:1px solid var(--line); background:#fff; box-shadow:0 .9rem 2.2rem rgba(16,42,46,.2); }
 .settings-menu > p { margin:0 0 .1rem; color:var(--ink-soft); font-size:.58rem; letter-spacing:.1em; text-transform:uppercase; }
@@ -2320,29 +2349,45 @@ onBeforeUnmount(() => {
 .upcoming-match-note { grid-column:1 / -1; margin:0; padding:.65rem .75rem; border-left:3px solid var(--accent); background:#edf8f3; color:var(--accent-deep); font-size:.68rem; line-height:1.45; }
 .live-match-panel { grid-column:1 / -1; display:flex; align-items:center; justify-content:space-between; gap:1rem; margin:0; padding:.75rem; border:1px solid #d9b663; background:#fff8e7; }.live-match-panel.active { border-color:var(--accent-deep); background:#edf8f3; }.live-match-panel strong { display:block; margin:.1rem 0; font:700 .8rem var(--mono); }.live-match-panel small { display:block; max-width:48rem; color:var(--ink-soft); font-size:.62rem; line-height:1.45; }.live-match-panel .live-refresh-note { margin-top:.25rem; color:var(--accent-deep); }.live-match-panel > div:last-child { display:flex; flex-wrap:wrap; gap:.35rem; }.live-match-panel button { min-height:32px; padding:.4rem .55rem; border:1px solid var(--accent-deep); background:var(--accent-deep); color:#fff; font:700 .61rem var(--mono); cursor:pointer; white-space:nowrap; }.live-match-panel button.quiet { border-color:var(--line); background:#fff; color:var(--ink-soft); }.live-match-panel button:disabled { cursor:not-allowed; opacity:.55; }
 .live-winner-prediction { grid-column:1 / -1; display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:.75rem; border:1px solid #9ab9cd; background:#f3f9fd; }.live-winner-prediction strong { display:block; margin:.1rem 0; font:700 .8rem var(--mono); }.live-winner-prediction small { display:block; color:var(--ink-soft); font-size:.62rem; line-height:1.45; }.live-winner-choices { display:flex; flex-wrap:wrap; gap:.4rem; }.live-winner-choices button { display:grid; gap:.1rem; min-width:7.5rem; min-height:38px; padding:.4rem .6rem; border:1px solid #9ab9cd; background:#fff; color:var(--ink); font:700 .64rem var(--mono); cursor:pointer; }.live-winner-choices button.active { border-color:var(--accent-deep); background:var(--ink); color:#fff; }.live-winner-choices button.active small { color:#fff; }.live-winner-choices button:disabled { cursor:not-allowed; opacity:.6; }
-.simulator-workspace { display:grid; grid-template-columns:minmax(0, 1fr) minmax(340px, 390px); gap:.85rem; align-items:start; margin-top:.75rem; }.simulator-main-column { min-width:0; }.coach-rail { position:sticky; top:1rem; min-width:0; }.assistant-rail-shell{display:grid;grid-template-rows:auto minmax(0,1fr);height:min(760px,calc(100vh - 2rem));min-height:580px}.assistant-tabs{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--accent-deep);border-bottom:0;background:#102a2e}.assistant-tabs button{min-height:44px;border:0;border-right:1px solid rgba(255,255,255,.14);background:transparent;color:rgba(255,255,255,.7);font:700 .66rem var(--mono);cursor:pointer}.assistant-tabs button:last-child{border-right:0}.assistant-tabs button.active{background:#084f42;color:#fff}.assistant-tabs button:focus-visible{position:relative;z-index:1;outline:2px solid #8fe0c8;outline-offset:-3px}.assistant-view{min-height:0;overflow:hidden}.coach-view :deep(.coach-panel){height:100%;min-height:0;border-top:0}.tree-view :deep(.version-tree){border-top:0}.simulator-layout { align-items: stretch; margin-top:0; gap:.75rem; }.draft-board { display: grid; flex: 1; min-width:0; grid-template-columns: repeat(2, minmax(0,1fr)); gap: .75rem; }
+.simulator-workspace { display:grid; grid-template-columns:minmax(0, 1fr) minmax(340px, 390px); gap:.85rem; align-items:start; margin-top:.75rem; }.simulator-main-column { min-width:0; }.coach-rail { position:sticky; top:1rem; min-width:0; }.assistant-rail-shell{display:grid;grid-template-rows:auto minmax(0,1fr);height:min(760px,calc(100vh - 2rem));min-height:580px}.assistant-tabs{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--accent-deep);border-bottom:0;background:#102a2e}.assistant-tabs button{min-height:44px;border:0;border-right:1px solid rgba(255,255,255,.14);background:transparent;color:rgba(255,255,255,.7);font:700 .66rem var(--mono);cursor:pointer}.assistant-tabs button:last-child{border-right:0}.assistant-tabs button.active{background:#084f42;color:#fff}.assistant-tabs button:focus-visible{position:relative;z-index:1;outline:2px solid #8fe0c8;outline-offset:-3px}.assistant-view{min-height:0;overflow:hidden}.coach-view :deep(.coach-panel){height:100%;min-height:0;border-top:0}.tree-view :deep(.version-tree){border-top:0}.simulator-layout { height:260px; align-items:stretch; margin-top:0; gap:.75rem; }.draft-board { display:grid; flex:1; min-width:0; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.55rem; }
 .peak-duel-board { display:grid; min-height:20rem; flex:1; place-content:center; padding:2rem; border:1px dashed var(--line); background:rgba(255,255,255,.6); color:var(--ink-soft); text-align:center; }
 .peak-duel-board h2 { margin:0; color:var(--ink); font:700 clamp(1.8rem, 4vw, 3rem) var(--display); letter-spacing:-.04em; }
 .mobile-group-title { display:none; }
 .mobile-coach-toggle,.mobile-coach-close,.coach-scrim{display:none}
-.draft-group, .forecast-panel, .hero-picker { border: 1px solid var(--line); background: rgba(255,255,255,.76); }.draft-group { min-height: 160px; padding: 1rem; }.draft-group > p { margin: 0 0 .8rem; font-size: .67rem; letter-spacing: .1em; text-transform: uppercase; }.draft-group.blue > p { color: #286999; }.draft-group.red > p { color: #a84b4b; }
-.draft-slots { display:grid; grid-template-columns:repeat(5, minmax(0, 1fr)); gap:.35rem; }.draft-slots button, .draft-slots span { display:grid; place-items:center; width:100%; max-width:4rem; aspect-ratio:1; padding:0; font-size:.7rem; text-align:left; }.draft-slots button img { width:100%; height:100%; object-fit:cover; }.draft-slots span { border: 1px dashed var(--line); color: var(--ink-soft); }
-.forecast-panel { width: min(31%, 320px); min-width:250px; padding: 1rem; }.forecast-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }.forecast-heading h2 { font-size: 1.5rem; }.forecast-heading > span, .forecast-heading small { color: var(--ink-soft); font-size: .68rem; }
-.probability-list { margin-top: 1rem; }.probability-list > div { display: grid; grid-template-columns:2rem minmax(4rem,1.8fr) 3rem; gap: .55rem; align-items: center; margin-top: .55rem; font-size: .7rem; }.probability-list img { width:2rem; height:2rem; object-fit:cover; }.probability-list em { color: var(--ink-soft); font-style: normal; text-align: right; }.probability-track { height: .42rem; overflow: hidden; background: rgba(16,42,46,.1); }.probability-track i { display:block; height:100%; background: var(--accent); }
-.end-ban-list { margin-top: 1.2rem; padding-top: .85rem; border-top: 1px solid var(--line); }.end-ban-list p { margin:0 0 .5rem; color: var(--ink-soft); font-size:.65rem; }.end-ban-list span { display:inline-flex; align-items:center; gap:.25rem; margin:.25rem .6rem 0 0; font-size:.7rem; }.end-ban-list img { width:1.6rem; height:1.6rem; object-fit:cover; }
+.draft-group, .hero-picker { border:1px solid var(--line); background:rgba(255,255,255,.76); }.draft-group { min-height:0; padding:.65rem; }.draft-group > p { margin:0 0 .45rem; font-size:.6rem; letter-spacing:.08em; text-transform:uppercase; }.draft-group.blue > p { color:#286999; }.draft-group.red > p { color:#a84b4b; }
+.draft-slots { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:.25rem; }.draft-slots button, .draft-slots span { display:grid; place-items:center; width:100%; max-width:3rem; aspect-ratio:1; padding:0; font-size:.62rem; text-align:left; }.draft-slots button img { width:100%; height:100%; object-fit:cover; }.draft-slots span { border:1px dashed var(--line); color:var(--ink-soft); }
+.decision-slot { width:clamp(310px,35%,360px); min-width:310px; min-height:0; }
+.intent-panel { height:320px; margin-top:.75rem; }
 .recommendation-panel { margin-top:.75rem; padding:1rem 1.15rem; border:1px solid var(--line); background:rgba(255,255,255,.8); }.recommendation-panel > header { display:flex; align-items:center; justify-content:space-between; gap:1rem; }.recommendation-panel h2 { margin:0; font:700 1.25rem var(--display); letter-spacing:-.035em; }.recommendation-panel header p:last-child { max-width:48rem; margin:.3rem 0 0; color:var(--ink-soft); font-size:.68rem; }.recommendation-status { padding:.38rem .55rem; border:1px solid var(--line); background:#edf8f3; color:var(--accent-deep); font:700 .6rem var(--mono); white-space:nowrap; }.recommendation-list { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.6rem; margin-top:.9rem; }.recommendation-list article { min-width:0; padding:.7rem; border:1px solid var(--line); background:#fff; }.recommendation-choice { display:grid; width:100%; grid-template-columns:auto 2.6rem minmax(0,1fr); gap:.45rem; align-items:center; padding:0 0 .6rem; border:0; border-bottom:1px solid var(--line); background:none; color:var(--ink); text-align:left; cursor:pointer; }.recommendation-choice:disabled { cursor:not-allowed; opacity:.55; }.recommendation-choice img { width:2.6rem; height:2.6rem; object-fit:cover; }.recommendation-choice span:last-child { display:grid; min-width:0; }.recommendation-choice strong { overflow:hidden; font:700 .78rem var(--mono); text-overflow:ellipsis; white-space:nowrap; }.recommendation-choice small { color:var(--ink-soft); font-size:.56rem; }.recommendation-rank { color:var(--accent-deep); font:700 .65rem var(--mono); }.recommendation-list dl { display:grid; grid-template-columns:1fr 1fr; gap:.35rem .55rem; margin:.65rem 0; }.recommendation-list dl div { min-width:0; }.recommendation-list dt { display:flex; align-items:center; gap:.2rem; color:var(--ink-soft); font-size:.52rem; letter-spacing:.04em; }.recommendation-list dd { margin:.08rem 0 0; font:700 .66rem var(--mono); }.metric-help { position:relative; display:inline-grid; width:.85rem; height:.85rem; flex:0 0 .85rem; place-items:center; padding:0; border:1px solid currentColor; border-radius:50%; background:#fff; color:var(--ink-soft); font:700 .5rem/1 var(--mono); cursor:help; }.metric-help::after { position:absolute; z-index:20; bottom:calc(100% + .4rem); left:50%; width:12rem; padding:.45rem .5rem; border:1px solid var(--line); background:var(--ink); color:#fff; box-shadow:0 .35rem .9rem rgba(16,42,46,.2); content:attr(data-help); font:.56rem/1.45 var(--mono); letter-spacing:0; opacity:0; pointer-events:none; text-align:left; transform:translate(-50%, .2rem); transition:opacity .15s ease, transform .15s ease; }.metric-help:hover::after,.metric-help:focus-visible::after { opacity:1; transform:translate(-50%, 0); }.recommendation-reasons { display:flex; flex-wrap:wrap; gap:.25rem; }.recommendation-reasons span { padding:.2rem .3rem; background:#edf8f3; color:var(--accent-deep); font-size:.52rem; }.recommendation-list article > p { margin:.55rem 0 0; color:var(--ink-soft); font-size:.57rem; line-height:1.4; }.recommendation-warning { display:block; margin-top:.7rem; color:var(--ink-soft); font-size:.56rem; }.recommendation-error { margin:.7rem 0 0; color:var(--warn); font-size:.65rem; }
 .lineup-score-panel { margin-top:.75rem; padding:1rem 1.15rem; border:1px solid var(--line); background:linear-gradient(135deg,rgba(237,248,243,.95),rgba(255,255,255,.92)); }.lineup-score-panel > header { display:flex; align-items:center; justify-content:space-between; gap:1rem; }.lineup-score-panel h2 { margin:0; font:700 1.25rem var(--display); letter-spacing:-.035em; }.lineup-score-panel header p:last-child { margin:.3rem 0 0; color:var(--ink-soft); font-size:.68rem; }.lineup-score-teams { display:grid; grid-template-columns:1fr 1fr; gap:.7rem; margin-top:.9rem; }.lineup-score-teams article { display:grid; gap:.18rem; padding:.85rem; border:1px solid var(--line); background:#fff; }.lineup-score-teams article.red { text-align:right; }.lineup-score-teams small,.lineup-score-teams span { color:var(--ink-soft); font-size:.58rem; }.lineup-score-teams strong { font:700 1.8rem var(--display); }.lineup-score-teams .blue strong { color:#247aa5; }.lineup-score-teams .red strong { color:#b74942; }.lineup-score-breakdown { display:grid; grid-template-columns:1fr 1fr; gap:.7rem; margin-top:.7rem; }.lineup-score-breakdown > div { padding:.75rem; border:1px solid var(--line); background:rgba(255,255,255,.8); }.lineup-score-breakdown h3 { margin:0 0 .55rem; font:700 .72rem var(--mono); }.lineup-score-breakdown dl { display:grid; grid-template-columns:1fr 1fr; gap:.45rem .7rem; margin:0; }.lineup-score-breakdown dl div { min-width:0; }.lineup-score-breakdown dt { color:var(--ink-soft); font-size:.54rem; }.lineup-score-breakdown dd { margin:.08rem 0 0; font:700 .67rem var(--mono); }.lineup-score-breakdown dd.positive { color:#167451; }.lineup-score-breakdown dd.negative { color:#a8463f; }
 .metric-help { box-sizing:border-box; min-width:.85rem; max-width:.85rem; min-height:.85rem; max-height:.85rem; aspect-ratio:1; appearance:none; border-radius:999px; }
 .recommendation-detail-toggle { display:none; }
 .recommendation-details > p { margin:.55rem 0 0; color:var(--ink-soft); font-size:.57rem; line-height:1.4; }
+.recommendation-rail { display:grid;grid-template-rows:auto minmax(0,1fr) auto;height:100%;box-sizing:border-box;margin:0;padding:0;overflow:hidden;background:#fff; }
+.recommendation-rail > header { gap:.65rem;padding:.65rem .7rem;border-bottom:1px solid var(--line); }
+.recommendation-rail > header .simulator-eyebrow { margin-bottom:.15rem;font-size:.5rem; }
+.recommendation-rail > header h2 { font-size:1rem; }
+.recommendation-rail .recommendation-status { padding:.28rem .38rem;font-size:.5rem; }
+.recommendation-rail .recommendation-error { margin:0;padding:.55rem .7rem;border-bottom:1px solid var(--line); }
+.recommendation-rail .recommendation-list { display:grid;grid-template-columns:1fr;align-content:start;gap:0;min-height:0;margin:0;overflow:auto;overscroll-behavior:contain; }
+.recommendation-rail .recommendation-list article { position:relative;padding:.45rem .55rem;border:0;border-bottom:1px solid var(--line); }
+.recommendation-rail .recommendation-choice { min-height:2.75rem;grid-template-columns:1.2rem 2.2rem minmax(0,1fr);gap:.45rem;padding:0 5.2rem 0 0;border:0; }
+.recommendation-rail .recommendation-choice img { width:2.2rem;height:2.2rem; }
+.recommendation-rail .recommendation-choice strong { font-size:.68rem; }
+.recommendation-rail .recommendation-choice small { margin-top:.08rem;font-size:.49rem; }
+.recommendation-rail .recommendation-detail-toggle { position:absolute;top:.85rem;right:.55rem;display:flex;width:auto;min-height:1.55rem;align-items:center;gap:.25rem;margin:0;padding:.24rem .35rem;border:1px solid var(--line);background:#fff;color:var(--accent-deep);font:700 .5rem var(--mono);cursor:pointer; }
+.recommendation-rail .recommendation-details:not(.expanded) { display:none; }
+.recommendation-rail .recommendation-details { padding-top:.45rem;border-top:1px solid rgba(16,42,46,.08); }
+.recommendation-rail .recommendation-details dl { margin:.15rem 0 .5rem; }
+.recommendation-rail-empty { margin:0;padding:.8rem;color:var(--ink-soft);font-size:.58rem;line-height:1.5; }
+.recommendation-rail .tree-snapshot-action { width:100%;min-height:2.15rem;border:0;border-top:1px solid var(--accent-deep);background:var(--accent-deep);color:#fff;font-size:.56rem; }
 .commentary-panel { margin-top:.75rem; padding:1rem 1.15rem; border:1px solid var(--accent-deep); background:linear-gradient(120deg, rgba(232,191,108,.18), rgba(255,255,255,.84)); }.commentary-panel h2 { max-width:70rem; margin:.25rem 0 0; font:700 1rem/1.55 var(--display); letter-spacing:-.015em; }.commentary-loading { margin:0; color:var(--ink-soft); font-size:.75rem; }.commentary-context { display:flex; flex-wrap:wrap; gap:.35rem; margin:.1rem 0 0; color:var(--ink-soft); font-size:.68rem; }.commentary-context span { color:var(--accent-deep); }.commentary-evidence { margin-top:.7rem; color:var(--ink-soft); font-size:.72rem; }.commentary-evidence summary { cursor:pointer; color:var(--ink); }.commentary-evidence dl { display:grid; grid-template-columns:auto 1fr; gap:.28rem .55rem; margin:.55rem 0 0; }.commentary-evidence dt { color:var(--accent-deep); font-weight:700; }.commentary-evidence dd { margin:0; }
 .hero-picker { margin-top: .75rem; padding: 1rem; }.picker-heading { display:flex; align-items:end; justify-content:space-between; gap:1rem; }.picker-heading h2 { font-size:1.4rem; }.picker-controls { display:flex; align-items:end; gap:.55rem; }.picker-controls input { width:min(100%, 260px); }.hero-lane-filter { display:grid; gap:.22rem; color:var(--ink-soft); font-size:.67rem; font-weight:700; letter-spacing:.04em; }.hero-lane-filter select { min-width:9.2rem; }.picker-targets { margin-top:.85rem; }.hero-options { display:grid; grid-template-columns:repeat(auto-fill, minmax(3.6rem, 1fr)); gap:.45rem; margin-top:1rem; max-height:360px; overflow:auto; }.hero-options button { position:relative; display:grid; place-items:center; aspect-ratio:1; padding:0; overflow:hidden; }.hero-options button img { width:100%; height:100%; object-fit:cover; }.hero-options button small { position:absolute; right:0; bottom:0; padding:.14rem .2rem; background:rgba(16,42,46,.84); color:#fff; font-size:.56rem; }.hero-options button:hover:not(:disabled), .draft-slots button:not(:disabled):hover { border-color: var(--accent); color: var(--accent-deep); }
 .scenario-mode { display:flex; align-items:center; gap:.28rem; color:var(--ink-soft); font-size:.61rem; white-space:nowrap; }.scenario-mode input { width:auto; accent-color:var(--accent-deep); }
 @media (max-width: 1000px) { .simulator-workspace { grid-template-columns:1fr; }.coach-rail { position:static; }.coach-rail { grid-row:1; }.assistant-rail-shell{height:auto;min-height:520px;max-height:700px}.simulator-main-column { grid-row:2; } }
-@media (max-width: 860px) { .simulator-hero, .simulator-status, .simulator-layout { flex-direction:column; align-items:stretch; }.simulator-header-controls { justify-content:stretch; }.simulator-season, .forecast-panel { width:100%; }.simulator-season { min-width:0; }.simulator-settings { align-self:flex-end; }.forecast-panel { min-width:0; }.simulator-actions { justify-content:space-between; }.side-assignment { position:static; width:100%; transform:none; }.side-assignment label { flex:1; }.draft-board { grid-template-columns:1fr; }.global-bp-panel { grid-template-columns:1fr; }.global-used { grid-template-columns:1fr; }.next-battle { justify-self:start; }.recommendation-list,.lineup-score-breakdown { grid-template-columns:1fr; } }
+@media (max-width: 860px) { .simulator-hero, .simulator-status, .simulator-layout { flex-direction:column; align-items:stretch; }.simulator-layout{height:auto}.simulator-header-controls { width:100%; justify-items:stretch; }.simulator-season { width:100%; min-width:0; }.decision-slot{width:100%;min-width:0;height:260px}.simulator-actions { justify-content:space-between; }.side-assignment { position:static; width:100%; transform:none; }.side-assignment label { flex:1; }.draft-board { height:230px;grid-template-columns:repeat(2,minmax(0,1fr)); }.global-bp-panel { grid-template-columns:1fr; }.global-used { grid-template-columns:1fr; }.next-battle { justify-self:start; }.recommendation-list,.lineup-score-breakdown { grid-template-columns:1fr; } }
 @media (max-width:620px) {
-  .settings-menu { left:0; right:auto; width:min(19rem, calc(100vw - 1rem)); }
-  .forecast-panel { display:none; }
+  .settings-menu { right:0; left:auto; width:min(19rem, calc(100vw - 1rem)); }
   .simulator-layout { display:contents; }
   .recommendation-panel > header { align-items:stretch; flex-direction:column; }.recommendation-status { align-self:flex-start; }.recommendation-list dl { grid-template-columns:1fr 1fr; }
   .recommendation-list article { position:relative; }
@@ -2350,6 +2395,7 @@ onBeforeUnmount(() => {
   .recommendation-detail-toggle { position:absolute; top:1.05rem; right:.7rem; display:flex; width:auto; min-height:1.75rem; align-items:center; gap:.35rem; margin:0; padding:.3rem .45rem; border:1px solid var(--line); border-radius:.3rem; background:#fff; color:var(--accent-deep); font:700 .58rem var(--mono); }
   .recommendation-detail-toggle span { font-size:.78rem; line-height:1; }
   .recommendation-details:not(.expanded) { display:none; }
+  .recommendation-rail > header { flex-direction:row;align-items:center; }.recommendation-rail .recommendation-status { align-self:auto; }.recommendation-rail .recommendation-choice { min-height:2.75rem;padding-right:5.2rem; }.intent-panel { height:320px; }
   .metric-help::after { right:-.4rem; left:auto; width:min(12rem, calc(100vw - 3rem)); transform:translateY(.2rem); }
   .metric-help:hover::after,.metric-help:focus-visible::after { transform:translateY(0); }
   .global-used > .used-team { display:none; }
@@ -2397,6 +2443,5 @@ onBeforeUnmount(() => {
 }
 @media (max-width: 620px) { .simulator-page { width:calc(100% - 1rem); padding-top:1.25rem; }.simulator-status { gap:1rem; }.simulator-actions { flex-wrap:wrap; }.picker-heading { align-items:stretch; flex-direction:column; }.picker-controls { align-items:stretch; flex-direction:column; }.picker-controls input, .hero-lane-filter select { width:100%; }.hero-options { grid-template-columns:repeat(auto-fill, minmax(3.25rem, 1fr)); }.coach-rail{display:none}.coach-rail.coach-open{position:fixed;z-index:91;right:.75rem;bottom:calc(5.25rem + env(safe-area-inset-bottom));left:.75rem;display:block;overflow:hidden;border:1px solid var(--line);border-radius:.8rem;background:#fff;box-shadow:0 1rem 3rem rgba(16,42,46,.28)}.coach-rail.coach-open .assistant-rail-shell{height:100%;min-height:0;max-height:none}.coach-rail.coach-open :deep(.coach-panel){height:auto;min-height:0;max-height:none;grid-template-rows:auto minmax(150px,auto) auto auto;border:0;box-shadow:none}.coach-rail.coach-open :deep(.coach-header){padding:.72rem 3.25rem .72rem .8rem}.coach-rail.coach-open :deep(.coach-thread){min-height:150px;max-height:42dvh;padding:.75rem}.coach-rail.coach-open :deep(.coach-form){padding:.65rem .7rem .45rem}.coach-rail.coach-open :deep(.coach-disclaimer){padding:0 .7rem .45rem}.coach-scrim{position:fixed;z-index:90;inset:0;display:block;width:100%;height:100%;border:0;background:rgba(16,42,46,.28)}.mobile-coach-toggle{position:fixed;z-index:80;right:1rem;bottom:calc(6rem + env(safe-area-inset-bottom));display:grid;width:3.5rem;height:3.5rem;place-items:center;border:1px solid rgba(255,255,255,.7);border-radius:50%;background:var(--ink);color:#fff;box-shadow:0 .6rem 1.4rem rgba(16,42,46,.28);font-family:var(--mono)}.mobile-coach-toggle span{position:absolute;top:.38rem;right:.5rem;color:#8fe0c8;font-size:.8rem}.mobile-coach-toggle strong{font-size:.7rem;letter-spacing:.08em}.coach-open~.mobile-coach-toggle{display:none}.mobile-coach-close{position:absolute;z-index:3;top:.5rem;right:.55rem;display:grid;width:1.85rem;height:1.85rem;min-height:1.85rem;place-items:center;margin:0;padding:0;border:1px solid rgba(255,255,255,.28);border-radius:.5rem;background:rgba(255,255,255,.12);color:#fff;box-shadow:none;font:400 1.15rem/1 var(--display)} }
 @media (max-width: 620px) { .coach-rail.coach-open{top:auto;height:75dvh;max-height:75dvh;border-radius:1rem}.coach-rail.coach-open :deep(.coach-panel){height:100% !important;min-height:0 !important;max-height:none !important;grid-template-rows:auto minmax(0,1fr) auto auto !important}.coach-rail.coach-open :deep(.coach-thread){min-height:0 !important;max-height:none !important} }
-@media(max-width:860px){.whatif-launcher{width:100%}}
-@media(max-width:620px){.tree-snapshot-action{min-height:2.35rem}.whatif-launcher{align-items:stretch;flex-direction:column}.whatif-launcher-actions{display:grid;grid-template-columns:1fr 1fr}.whatif-launcher button{width:100%}}
+@media(max-width:620px){.tree-snapshot-action{min-height:2.35rem}}
 </style>

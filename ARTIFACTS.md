@@ -73,6 +73,18 @@ The frontend requests them under `/assets/data/...`.
 `patterns.json` is a retired monolithic artifact. Publishing removes it and
 uses the smaller relation/context files above instead.
 
+## Offline intention research
+
+`analysis/outputs/draft_intention_research/` contains optional continuation-probe
+JSON reports and a generated `summary.md`, built by
+`analysis/run_intention_case_study.py`. These are explicitly ignored research
+outputs, not published website inputs or model training targets. Individual
+probes can be generated with `analysis/explore_draft_intentions.py`; every report
+records the query, source fingerprints, sample exclusions, and comparison
+denominators. Reproduce them from the season exports rather than editing the
+generated reports. The methodology and findings live in
+`analysis/DRAFT_INTENTION_RESEARCH.md`.
+
 ## Shared JSON inputs
 
 These files are not season exports, but they supply hero definitions and
@@ -102,3 +114,15 @@ the repository workspace, but they are not loaded by a live website page.
   tracked model snapshots, are exceptions.
 - Do not edit a published JSON file as the source of a fix. Change its producer
   or source artifact, rerun analysis, and publish again.
+### Historical draft evidence
+
+`analysis/build_draft_evidence.py` builds model-free, descriptive evidence from
+all compatible local season exports. Shared corpus manifests live under
+`analysis/outputs/draft_evidence/{corpus_id}/`; target manifests and match
+shards live under `analysis/outputs/{league_id}/draft_evidence/`. These are
+generated artifacts and follow the same Git policy as other analysis outputs.
+They are optional research artifacts: the management display/full pipelines do
+not build or publish them, and the simulator intent widget computes directly
+from the exported BP corpus.
+The schema and interpretation limits are defined in
+`analysis/DRAFT_EVIDENCE_SPEC.md`.

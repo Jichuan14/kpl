@@ -416,6 +416,24 @@ def data_status(
         except (OSError, ValueError, json.JSONDecodeError):
             power_rankings["records"] = 0
 
+    draft_evidence_path = league_output_dir / "draft_evidence" / "manifest.json"
+    draft_evidence = artifact(
+        draft_evidence_path,
+        "draft_evidence",
+        "Historical all-season draft evidence",
+    )
+    draft_evidence["ready"] = bool(
+        decisions["ready"]
+        and draft_evidence_path.is_file()
+        and draft_evidence_path.stat().st_mtime >= decisions_path.stat().st_mtime
+    )
+    if draft_evidence["exists"]:
+        try:
+            with draft_evidence_path.open(encoding="utf-8") as source:
+                draft_evidence["records"] = int(json.load(source).get("move_count") or 0)
+        except (OSError, ValueError, json.JSONDecodeError):
+            draft_evidence["records"] = 0
+
     # The public site reads only these generated JSON files.  Keep this scan
     # separate from the analysis artifacts so the management page can show the
     # precise point at which a completed analysis has (or has not) been made
@@ -597,6 +615,7 @@ def data_status(
                 "team_synergy": team_synergy,
                 "team_profiles": team_profiles,
                 "power_rankings": power_rankings,
+                "draft_evidence": draft_evidence,
                 "draft_model": draft_model,
                 "learnable_draft_model": learnable_draft_model,
                 "sequence_draft_model": sequence_draft_model,

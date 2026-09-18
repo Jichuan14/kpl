@@ -153,6 +153,7 @@ class AnalysisRunRequest(BaseModel):
         "team_synergy",
         "team_profiles",
         "power_rankings",
+        "draft_evidence",
         "draft_model",
         "learnable_draft_model",
         "sequence_draft_model",
@@ -274,3 +275,51 @@ class DraftSelectionCommentaryRequest(DraftSimulationRequest):
     action: Literal["pick", "ban"]
     side: Literal["blue", "red"]
     selected_hero_id: int = Field(gt=0)
+
+
+class DraftMoveEvidenceRequest(BaseModel):
+    """A simulator move plus its exact pre-action board."""
+
+    model_config = {"extra": "forbid"}
+
+    league_id: str = Field(min_length=1, max_length=32)
+    schedule: Literal["standard_18", "standard_20"]
+    battle_seq: int = Field(ge=1, le=7)
+    bp_order: int = Field(ge=1, le=20)
+    action: Literal["pick", "ban"]
+    side: Literal["blue", "red"]
+    selected_hero_id: int = Field(gt=0)
+    blue_team_id: str = Field(min_length=1, max_length=32)
+    red_team_id: str = Field(min_length=1, max_length=32)
+    blue_picks: list[int] = Field(default_factory=list, max_length=5)
+    red_picks: list[int] = Field(default_factory=list, max_length=5)
+    blue_bans: list[int] = Field(default_factory=list, max_length=5)
+    red_bans: list[int] = Field(default_factory=list, max_length=5)
+    blue_used_previous_battles: list[int] = Field(default_factory=list)
+    red_used_previous_battles: list[int] = Field(default_factory=list)
+    available_hero_ids: list[int] = Field(min_length=1)
+    hero_names: dict[int, str] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def validate_move(self) -> "DraftMoveEvidenceRequest":
+        if self.blue_team_id == self.red_team_id:
+            raise ValueError("Blue and Red must be different teams")
+        collections = (
+            self.blue_picks,
+            self.red_picks,
+            self.blue_bans,
+            self.red_bans,
+            self.blue_used_previous_battles,
+            self.red_used_previous_battles,
+            self.available_hero_ids,
+        )
+        if any(hero_id <= 0 for values in collections for hero_id in values):
+            raise ValueError("Hero IDs must be positive")
+        board = self.blue_picks + self.red_picks + self.blue_bans + self.red_bans
+        if len(board) != len(set(board)):
+            raise ValueError("The pre-move board contains a duplicate hero")
+        if len(self.available_hero_ids) != len(set(self.available_hero_ids)):
+            raise ValueError("Available hero IDs must be unique")
+        if any(hero_id <= 0 or not name.strip() for hero_id, name in self.hero_names.items()):
+            raise ValueError("Hero names require positive IDs and non-empty names")
+        return self
