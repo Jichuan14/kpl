@@ -69,6 +69,7 @@ The frontend requests them under `/assets/data/...`.
 | `analysis/published/data/{league_id}/team-synergies.json` | Teams page | `team_synergy_stats.jsonl` plus league/team metadata |
 | `analysis/published/data/{league_id}/rankings.json` | Rankings page | `power_rankings.json` plus league metadata |
 | `analysis/published/data/{league_id}/draft-model.json` | Browser-ready draft-model metadata | `draft_model.json` |
+| `analysis/published/data/{league_id}/feature-space.json` | Feature Space board and hero catalog | Validated `learned_hero_feature_space.json` plus draft-model catalog metadata |
 
 `patterns.json` is a retired monolithic artifact. Publishing removes it and
 uses the smaller relation/context files above instead.

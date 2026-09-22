@@ -40,6 +40,8 @@ const leagueId = selectedLeagueId;
 const payload = shallowRef(null);
 const responses = shallowRef(null);
 const historicalLineups = shallowRef([]);
+const responseState = ref("idle");
+const historicalState = ref("idle");
 const loading = ref(false);
 const error = ref("");
 const selectedHeroId = ref(null);
@@ -493,21 +495,16 @@ async function loadFeatureSpace() {
   payload.value = null;
   responses.value = null;
   historicalLineups.value = [];
+  responseState.value = "loading";
+  historicalState.value = "loading";
   try {
     const result = await latestFeatureSpace(async (signal, current) => {
-    const [featureSpace, responseData, historicalData] = await Promise.all([
-      fetchLearnedFeatureSpace(leagueId.value),
-      fetchHeroResponses(leagueId.value, { signal }).catch(() => null),
-      fetchBattleLineups(leagueId.value, { signal }).catch(() => null),
-    ]);
-    if (!current()) return null;
-    return { featureSpace, responseData, historicalData };
+      const featureSpace = await fetchLearnedFeatureSpace(leagueId.value);
+      if (!current()) return null;
+      return featureSpace;
     });
     if (!result) return;
-    const { featureSpace, responseData, historicalData } = result;
-    payload.value = featureSpace;
-    responses.value = responseData;
-    historicalLineups.value = historicalData?.battles || [];
+    payload.value = result;
     const requestedHeroId = Number(new URLSearchParams(window.location.search).get("hero"));
     selectedHeroId.value = rows.value.some((row) => Number(row.hero_id) === requestedHeroId)
       ? requestedHeroId
@@ -546,6 +543,26 @@ async function loadFeatureSpace() {
     matchupError.value = "";
     showAllHeroes.value = false;
     resetView();
+    // These enrichments must never hold back the usable feature board. They use
+    // the same load version so a slow prior season cannot overwrite the latest.
+    void fetchHeroResponses(leagueId.value)
+      .then((data) => {
+        if (loadVersion !== featureLoadVersion) return;
+        responses.value = data;
+        responseState.value = "ready";
+      })
+      .catch(() => {
+        if (loadVersion === featureLoadVersion) responseState.value = "unavailable";
+      });
+    void fetchBattleLineups(leagueId.value)
+      .then((data) => {
+        if (loadVersion !== featureLoadVersion) return;
+        historicalLineups.value = data?.battles || [];
+        historicalState.value = "ready";
+      })
+      .catch(() => {
+        if (loadVersion === featureLoadVersion) historicalState.value = "unavailable";
+      });
   } catch (err) {
     if (err.name === "AbortError") return;
     error.value = t("No learned feature space is available for this season. Train the learnable model first.");
@@ -580,6 +597,7 @@ watch(leagueId, () => {
         :heroes="pickerHeroes"
         :response-rows="responses?.rows || []"
         :historical-lineups="historicalLineups"
+        :historical-state="historicalState"
       />
 
       <details class="feature-space-deep-dive">
@@ -703,6 +721,8 @@ watch(leagueId, () => {
             </div>
           </label>
         </header>
+        <p v-if="responseState === 'loading'" class="response-empty">{{ t("Loading historical response evidence…") }}</p>
+        <p v-else-if="responseState === 'unavailable'" class="response-empty">{{ t("Historical response evidence is unavailable for this season.") }}</p>
         <div class="hero-response-grid">
           <article v-for="group in responseGroups" :key="group.title" class="hero-response-card">
             <h3>{{ t(group.title) }}</h3>

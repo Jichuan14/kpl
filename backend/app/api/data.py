@@ -452,6 +452,11 @@ def data_status(
             "Team synergies",
         ),
         artifact(published_dir / "draft-model.json", "draft_model", "Draft model"),
+        artifact(
+            published_dir / "feature-space.json",
+            "feature_space",
+            "Learned hero feature space",
+        ),
         artifact(published_dir / "rankings.json", "power_rankings", "Power rankings"),
     ]
     frontend_sources = [
@@ -460,6 +465,7 @@ def data_status(
         [match_export_path],
         [team_synergy_path],
         [draft_model_path],
+        [league_output_dir / "learned_hero_feature_space.json", draft_model_path],
         [power_rankings_path],
     ]
     for public_file, sources in zip(frontend_assets, frontend_sources, strict=True):
@@ -472,6 +478,7 @@ def data_status(
             "battle_lineups": "battle-lineups.json",
             "team_synergies": "team-synergies.json",
             "draft_model": "draft-model.json",
+            "feature_space": "feature-space.json",
             "power_rankings": "rankings.json",
         }[public_file["key"]]
         public_file["ready"] = bool(

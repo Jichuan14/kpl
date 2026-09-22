@@ -1,4 +1,5 @@
 import json
+import hashlib
 import tempfile
 import unittest
 from pathlib import Path
@@ -85,6 +86,73 @@ class PredictNextActionTest(unittest.TestCase):
             ):
                 with self.assertRaisesRegex(ValueError, "checksum"):
                     draft_simulator.load_sequence_model("league-1")
+
+    def test_sequence_loader_reuses_an_unchanged_prepared_model(self) -> None:
+        parameters = {}
+        checksum = hashlib.sha256(
+            json.dumps(parameters, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+        artifact = {
+            "schema_version": 3,
+            "model_type": "frozen_bag_gru_residual_choice",
+            "target_season": "league-1",
+            "feature_artifact": "features.json",
+            "feature_names": ["feature_known"],
+            "hero_ids": [101],
+            "team_ids": ["team-1"],
+            "parameters": parameters,
+            "parameters_sha256": checksum,
+        }
+        feature_artifact = {"feature_names": [], "rows": [{"hero_id": 101, "vector": []}]}
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = Path(temporary_directory)
+            path = directory / "sequence.json"
+            features_path = directory / "features.json"
+            legacy_path = directory / "legacy.json"
+            path.write_text(json.dumps(artifact), encoding="utf-8")
+            features_path.write_text(json.dumps(feature_artifact), encoding="utf-8")
+            draft_simulator._SEQUENCE_CACHE.clear()
+            with (
+                patch.object(draft_simulator, "sequence_model_path", return_value=path),
+                patch.object(draft_simulator, "DRAFT_FEATURES_PATH", features_path),
+                patch.object(draft_simulator, "LEGACY_SPECIALTY_FEATURES_PATH", legacy_path),
+                patch.object(draft_simulator, "prepare_sequence_parameters", return_value={}),
+                patch.object(draft_simulator, "semantic_model_fingerprint", return_value="fingerprint"),
+                patch("app.services.draft_simulator.json.load", wraps=json.load) as load_json,
+            ):
+                first = draft_simulator.load_sequence_model("league-1")
+                second = draft_simulator.load_sequence_model("league-1")
+            self.assertIs(first, second)
+            self.assertEqual(load_json.call_count, 2)
+
+    def test_feature_space_preparation_reuses_the_unchanged_catalog(self) -> None:
+        feature_space = {
+            "schema_version": 1,
+            "projection": "pca",
+            "target_season": "league-1",
+            "rows": [{"hero_id": 101, "primary_lane": "mid"}],
+        }
+        catalog = {
+            "hero_names": {"101": "Hero"},
+            "hero_icons": {"101": ""},
+            "hero_positions": {"101": [2]},
+        }
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = Path(temporary_directory)
+            space_path = directory / "space.json"
+            catalog_path = directory / "model.json"
+            space_path.write_text(json.dumps(feature_space), encoding="utf-8")
+            catalog_path.write_text("{}", encoding="utf-8")
+            draft_simulator._FEATURE_SPACE_CACHE.clear()
+            with (
+                patch.object(draft_simulator, "feature_space_path", return_value=space_path),
+                patch.object(draft_simulator, "model_path", return_value=catalog_path),
+                patch.object(draft_simulator, "load_model", return_value=catalog) as load_model,
+            ):
+                first = draft_simulator.learned_feature_space("league-1")
+                second = draft_simulator.learned_feature_space("league-1")
+            self.assertIs(first, second)
+            self.assertEqual(load_model.call_count, 1)
 
     def test_sequence_history_reconstructs_the_canonical_prefix(self) -> None:
         base_model = {

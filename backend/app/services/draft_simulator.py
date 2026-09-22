@@ -34,7 +34,8 @@ from app.services.player_draft_context import candidate_features as personalized
 
 _CACHE: dict[Path, tuple[tuple[int, int], dict[str, Any]]] = {}
 _LEARNABLE_CACHE: dict[Path, tuple[int, dict[str, Any]]] = {}
-_SEQUENCE_CACHE: dict[Path, tuple[tuple[int, int, int, str], dict[str, Any]]] = {}
+_SEQUENCE_CACHE: dict[Path, tuple[tuple[int, int, int, int, str], dict[str, Any]]] = {}
+_FEATURE_SPACE_CACHE: dict[Path, tuple[tuple[int, int], dict[str, Any]]] = {}
 _PERSONALIZED_CACHE: dict[Path, tuple[tuple[int, int, int], dict[str, Any]]] = {}
 _TEAM_TENDENCY_CACHE: dict[
     Path,
@@ -399,6 +400,22 @@ def load_sequence_model(league_id: str) -> dict[str, Any]:
     path = sequence_model_path(league_id)
     if not path.is_file():
         raise FileNotFoundError(f"No sequence draft model has been generated for {league_id}")
+    # Check every file dependency before parsing the multi-megabyte model. Both
+    # supported feature artifacts participate because the selected one is named
+    # inside the model; this deliberately trades a harmless cold reload for
+    # correctness when an artifact is republished.
+    calibration_path = sequence_calibration_path(league_id)
+    calibration_mode = os.getenv("DRAFT_SEQUENCE_CALIBRATION", "off").strip().lower()
+    signature = (
+        path.stat().st_mtime_ns,
+        DRAFT_FEATURES_PATH.stat().st_mtime_ns if DRAFT_FEATURES_PATH.is_file() else -1,
+        LEGACY_SPECIALTY_FEATURES_PATH.stat().st_mtime_ns if LEGACY_SPECIALTY_FEATURES_PATH.is_file() else -1,
+        calibration_path.stat().st_mtime_ns if calibration_path.is_file() else -1,
+        calibration_mode,
+    )
+    cached = _SEQUENCE_CACHE.get(path)
+    if cached and cached[0] == signature:
+        return cached[1]
     with path.open(encoding="utf-8") as source:
         model = json.load(source)
     if (
@@ -422,17 +439,6 @@ def load_sequence_model(league_id: str) -> dict[str, Any]:
     features_path = feature_artifact_path(model)
     if not features_path.is_file():
         raise FileNotFoundError(f"Sequence feature vectors are missing: {features_path}")
-    calibration_path = sequence_calibration_path(league_id)
-    calibration_mode = os.getenv("DRAFT_SEQUENCE_CALIBRATION", "off").strip().lower()
-    signature = (
-        path.stat().st_mtime_ns,
-        features_path.stat().st_mtime_ns,
-        calibration_path.stat().st_mtime_ns if calibration_path.is_file() else -1,
-        calibration_mode,
-    )
-    cached = _SEQUENCE_CACHE.get(path)
-    if cached and cached[0] == signature:
-        return cached[1]
     with features_path.open(encoding="utf-8") as source:
         feature_artifact = json.load(source)
     expected_feature_names = [*feature_artifact.get("feature_names", []), "feature_known"]
@@ -473,6 +479,13 @@ def learned_feature_space(league_id: str) -> dict[str, Any]:
     path = feature_space_path(league_id)
     if not path.is_file():
         raise FileNotFoundError(f"No learned hero feature space has been generated for {league_id}")
+    catalog_path = model_path(league_id)
+    if not catalog_path.is_file():
+        raise FileNotFoundError(f"No draft model has been generated for {league_id}")
+    signature = (path.stat().st_mtime_ns, catalog_path.stat().st_mtime_ns)
+    cached = _FEATURE_SPACE_CACHE.get(path)
+    if cached and cached[0] == signature:
+        return cached[1]
     with path.open(encoding="utf-8") as source:
         feature_space = json.load(source)
     if (
@@ -502,10 +515,12 @@ def learned_feature_space(league_id: str) -> dict[str, Any]:
                 "primary_lane": primary_lane,
             }
         )
-    return {
+    prepared = {
         **{key: value for key, value in feature_space.items() if key != "rows"},
         "rows": rows,
     }
+    _FEATURE_SPACE_CACHE[path] = (signature, prepared)
+    return prepared
 
 
 def metadata(league_id: str) -> dict[str, Any]:
