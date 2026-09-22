@@ -48,12 +48,26 @@ async function request(path, options = {}) {
 
 const staticCache = new Map();
 const STATIC_CACHE_TTL = 5 * 60_000;
+const STATIC_CACHE_MAX_ENTRIES = 48;
+
+function pruneStaticCache(now = Date.now()) {
+  for (const [path, entry] of staticCache) {
+    if (entry.expiresAt <= now) staticCache.delete(path);
+  }
+  while (staticCache.size >= STATIC_CACHE_MAX_ENTRIES) {
+    const oldestPath = staticCache.keys().next().value;
+    if (!oldestPath) break;
+    staticCache.delete(oldestPath);
+  }
+}
 
 async function staticData(path, { signal, cache = true } = {}) {
   // Never share a caller-owned AbortSignal: aborting one view must not abort a
   // concurrent consumer of the same published artifact.
+  const now = Date.now();
   const cached = staticCache.get(path);
   if (cache && cached && cached.expiresAt > Date.now()) return cached.promise;
+  if (cache) pruneStaticCache(now);
   const load = (async () => {
   let res;
   try {
@@ -68,7 +82,7 @@ async function staticData(path, { signal, cache = true } = {}) {
   return res.json();
   })();
   if (cache) {
-    staticCache.set(path, { promise: load, expiresAt: Date.now() + STATIC_CACHE_TTL });
+    staticCache.set(path, { promise: load, expiresAt: now + STATIC_CACHE_TTL });
     load.catch(() => { if (staticCache.get(path)?.promise === load) staticCache.delete(path); });
   }
   return load;
@@ -197,8 +211,13 @@ export function fetchDraftModel(leagueId) {
 }
 
 export function fetchLearnedFeatureSpace(leagueId) {
-  const params = new URLSearchParams({ league_id: leagueId });
-  return request(`/api/simulations/feature-space?${params}`);
+  const encodedLeagueId = encodeURIComponent(leagueId);
+  // Published feature space is validated during publishing. Keep the API fallback
+  // for seasons published by an older server that do not have this compact asset.
+  return staticData(`/assets/data/${encodedLeagueId}/feature-space.json`).catch(() => {
+    const params = new URLSearchParams({ league_id: leagueId });
+    return request(`/api/simulations/feature-space?${params}`);
+  });
 }
 
 export function fetchHeroMatchupRecommendations(payload) {
@@ -401,7 +420,11 @@ export function publishFrontendAssets(leagueId) {
   return request("/api/pipeline/publish", {
     method: "POST",
     body: JSON.stringify({ league_id: leagueId }),
-  }).then((result) => { invalidatePublishedData(leagueId); return result; });
+  }).then((result) => {
+    // Publishing changes the season catalog and cross-season meta history too.
+    invalidatePublishedData();
+    return result;
+  });
 }
 
 export function fetchHeroBp({ leagueId, sort = "presence", limit = 40 } = {}) {

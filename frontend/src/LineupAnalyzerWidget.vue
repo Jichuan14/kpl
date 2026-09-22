@@ -10,6 +10,7 @@ const props = defineProps({
   heroes: { type: Array, default: () => [] },
   responseRows: { type: Array, default: () => [] },
   historicalLineups: { type: Array, default: () => [] },
+  historicalState: { type: String, default: "idle" },
 });
 
 const blueHeroIds = ref([]);
@@ -25,6 +26,10 @@ const counterLoading = ref(false);
 const counterError = ref("");
 const generatedCounter = ref(null);
 const selectedHistoricalLineupKey = ref("");
+const historicalSearch = ref("");
+const historicalPage = ref(1);
+const historyOpen = ref(false);
+const HISTORY_PAGE_SIZE = 24;
 let counterRequestNumber = 0;
 const historicalScore = ref(null);
 const historicalScoreLoading = ref(false);
@@ -249,6 +254,28 @@ const selectedHistoricalLineup = computed(() =>
     (row) => row.key === selectedHistoricalLineupKey.value
   ) || null
 );
+const filteredHistoricalLineups = computed(() => {
+  const query = historicalSearch.value.trim().toLocaleLowerCase();
+  if (!query) return props.historicalLineups;
+  return props.historicalLineups.filter((battle) =>
+    `${battle.blue_team_name} ${battle.red_team_name} ${battle.start_time} ${battle.battle_seq}`
+      .toLocaleLowerCase()
+      .includes(query)
+  );
+});
+const historicalPageCount = computed(() => Math.max(1, Math.ceil(filteredHistoricalLineups.value.length / HISTORY_PAGE_SIZE)));
+const visibleHistoricalLineups = computed(() => {
+  const page = Math.min(historicalPage.value, historicalPageCount.value);
+  const start = (page - 1) * HISTORY_PAGE_SIZE;
+  return filteredHistoricalLineups.value.slice(start, start + HISTORY_PAGE_SIZE);
+});
+function setHistoryOpen(event) {
+  historyOpen.value = event.currentTarget.open;
+  if (historyOpen.value) historicalPage.value = 1;
+}
+function updateHistoricalSearch() {
+  historicalPage.value = 1;
+}
 
 function loadHistoricalLineup(battle, event) {
   if (!battle) return;
@@ -646,12 +673,12 @@ function liftLabel(row) {
       <p>{{ t("Computed on demand from existing season artifacts. Team and player preferences are excluded.") }}</p>
     </section>
 
-    <div v-if="historicalLineups.length" class="historical-lineup-picker">
+    <div v-if="historicalState !== 'idle'" class="historical-lineup-picker">
       <span>
         <strong>{{ t("Load a past KPL battle") }}</strong>
         <small>{{ t("Select a completed game to place both official lineups on the board.") }}</small>
       </span>
-      <details class="historical-lineup-dropdown">
+      <details class="historical-lineup-dropdown" @toggle="setHistoryOpen">
         <summary>
           <span>{{ selectedHistoricalLineup ? historicalLineupLabel(selectedHistoricalLineup) : t("Choose a past battle…") }}</span>
           <div v-if="selectedHistoricalLineup" class="selected-lineup-preview" aria-hidden="true">
@@ -664,9 +691,13 @@ function liftLabel(row) {
             </span>
           </div>
         </summary>
-        <div class="historical-lineup-options" role="listbox">
+        <div v-if="historyOpen" class="historical-lineup-options" role="listbox">
+          <p v-if="historicalState === 'loading'" class="historical-lineup-status">{{ t("Loading past battles…") }}</p>
+          <p v-else-if="historicalState === 'unavailable'" class="historical-lineup-status">{{ t("Historical battle lineups are unavailable for this season.") }}</p>
+          <template v-else>
+          <input v-model="historicalSearch" class="historical-lineup-search" type="search" :placeholder="t('Search teams or date')" @input="updateHistoricalSearch" />
           <button
-            v-for="battle in historicalLineups"
+            v-for="battle in visibleHistoricalLineups"
             :key="battle.key"
             type="button"
             :class="{ selected: battle.key === selectedHistoricalLineupKey }"
@@ -694,6 +725,13 @@ function liftLabel(row) {
               </span>
             </span>
           </button>
+          <p v-if="!visibleHistoricalLineups.length" class="historical-lineup-status">{{ t("No past battles match that search.") }}</p>
+          <nav v-if="historicalPageCount > 1" class="historical-pagination" :aria-label="t('Historical battle pages')">
+            <button type="button" :disabled="historicalPage <= 1" @click="historicalPage -= 1">{{ t("Previous") }}</button>
+            <span>{{ historicalPage }} / {{ historicalPageCount }}</span>
+            <button type="button" :disabled="historicalPage >= historicalPageCount" @click="historicalPage += 1">{{ t("Next") }}</button>
+          </nav>
+          </template>
         </div>
       </details>
     </div>
@@ -957,6 +995,9 @@ function liftLabel(row) {
 .selected-lineup-preview img { display:block; width:1rem; height:1rem; object-fit:cover; }
 .selected-lineup-preview b,.historical-heroes-row>b { color:var(--ink-soft); font-size:.48rem; }
 .historical-lineup-options { position:absolute; z-index:20; top:calc(100% + .25rem); right:0; width:min(32rem,calc(100vw - 2rem)); max-height:28rem; overflow-x:hidden; overflow-y:auto; border:1px solid var(--line); background:#fff; box-shadow:0 16px 36px rgba(16,42,46,.18); }
+.historical-lineup-search { display:block; width:calc(100% - 1rem); margin:.5rem; box-sizing:border-box; padding:.45rem .55rem; border:1px solid var(--line); font:600 .6rem var(--display); }
+.historical-lineup-status { margin:.75rem; color:var(--ink-soft); font-size:.6rem; }
+.historical-pagination { display:flex; align-items:center; justify-content:space-between; gap:.5rem; padding:.55rem; border-top:1px solid var(--line); font-size:.58rem; }.historical-pagination button { padding:.35rem .55rem; border:1px solid var(--line); background:#fff; font:inherit; cursor:pointer; }.historical-pagination button:disabled { cursor:not-allowed; opacity:.45; }
 .historical-lineup-options>button { position:relative; display:grid; grid-template-columns:minmax(0,1fr) 2rem minmax(0,1fr); width:100%; gap:.4rem; padding:.55rem; border:0; border-bottom:1px solid var(--line); background:#fff; color:var(--ink); font:inherit; text-align:left; cursor:pointer; }
 .historical-lineup-options>button:hover,.historical-lineup-options>button.selected { background:rgba(29,111,91,.08); }
 .historical-match-row,.historical-heroes-row { display:contents!important; }

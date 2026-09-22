@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.models import League
 from app.services.analysis_pipeline import ANALYSIS_DIR, EXPORT_ROOT, OUTPUT_ROOT
-from app.services.draft_simulator import metadata
+from app.services.draft_simulator import learned_feature_space, metadata
 
 PUBLISHED_ROOT = ANALYSIS_DIR / "published"
 DATA_ROOT = PUBLISHED_ROOT / "data"
@@ -284,6 +284,15 @@ def publish_league(db: Session, league_id: str) -> dict[str, object]:
         model = metadata(league_id)
         _write_json(directory / "draft-model.json", model)
         published.append("draft-model.json")
+
+    if (
+        (OUTPUT_ROOT / league_id / "learned_hero_feature_space.json").is_file()
+        and (OUTPUT_ROOT / league_id / "draft_model.json").is_file()
+    ):
+        # The runtime adds catalog names, lanes, and positions, then validates
+        # the feature-space schema before it becomes a browser asset.
+        _write_json(directory / "feature-space.json", learned_feature_space(league_id))
+        published.append("feature-space.json")
 
     _publish_seasons(db)
     _publish_meta_history()
