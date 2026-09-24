@@ -139,11 +139,8 @@ function fuzzyHeroOptions(heroes, query) {
 }
 const favoriteOptions = computed(() => {
   const selected = new Set(favoriteHeroIds.value.map(Number));
-  const opponents = new Set(opponentHeroIds.value.map(Number));
   return fuzzyHeroOptions(pickerHeroes.value.filter(
-    (hero) =>
-      !selected.has(Number(hero.hero_id)) &&
-      !opponents.has(Number(hero.hero_id))
+    (hero) => !selected.has(Number(hero.hero_id))
   ), favoriteSearch.value);
 });
 const selectedOpponents = computed(() => {
@@ -153,9 +150,7 @@ const selectedOpponents = computed(() => {
 const opponentOptions = computed(() => {
   const selected = new Set(opponentHeroIds.value.map(Number));
   return fuzzyHeroOptions(pickerHeroes.value.filter(
-    (hero) =>
-      !favoriteHeroIds.value.includes(Number(hero.hero_id)) &&
-      !selected.has(Number(hero.hero_id))
+    (hero) => !selected.has(Number(hero.hero_id))
   ), opponentSearch.value);
 });
 const matchupRecommendations = computed(() => matchupResult.value?.recommendations || []);
@@ -302,9 +297,6 @@ function addFavorite(heroId) {
   ) return;
   favoriteHeroIds.value = [...favoriteHeroIds.value, id];
   favoriteSearch.value = "";
-  opponentHeroIds.value = opponentHeroIds.value.filter(
-    (opponentId) => Number(opponentId) !== id
-  );
   persistFavorites();
   matchupResult.value = null;
   matchupError.value = "";
@@ -354,9 +346,10 @@ async function recommendForMatchup(limit = INITIAL_MATCHUP_RECOMMENDATION_LIMIT)
       matchupError.value = t("The selected heroes do not yet have professional BP data.");
       return;
     }
+    const opponentIds = new Set(supportedOpponents.map(Number));
     const request = {
       league_id: leagueId.value,
-      favorite_hero_ids: supportedFavorites.map(Number),
+      favorite_hero_ids: supportedFavorites.map(Number).filter((heroId) => !opponentIds.has(heroId)),
       opponent_hero_ids: supportedOpponents.map(Number),
       preferred_lane: preferredLane.value || null,
     };
@@ -908,7 +901,9 @@ watch(leagueId, () => {
             </div>
             <p>
               {{ !matchupResult.methodology.uses_favorite_pool
-                ? t("No favorite pool selected: recommendations consider every hero.")
+                ? favoriteHeroIds.length
+                  ? t("No available favorite remains for this matchup, so recommendations consider every available hero.")
+                  : t("No favorite pool selected: recommendations consider every hero.")
                 : matchupResult.methodology.selected_lane
                 ? t("Recommendations are filtered to {lane}.").replace("{lane}", laneLabel(matchupResult.methodology.selected_lane))
                 : matchupResult.methodology.lane_constraints.length

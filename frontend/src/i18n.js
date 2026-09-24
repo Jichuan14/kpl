@@ -561,6 +561,7 @@ export const messages = {
     "Could not calculate hero recommendations.": "无法计算英雄推荐。",
     "Add at least one opponent pick to see recommendations.": "请至少加入一名对手英雄以查看推荐。",
     "No favorite pool selected: recommendations consider every hero.": "尚未选择本命英雄池：推荐将考虑所有英雄。",
+    "No available favorite remains for this matchup, so recommendations consider every available hero.": "本次对局中没有可选的本命英雄，因此推荐将考虑所有可用英雄。",
     "Favorite status": "本命英雄表现",
     "Favorite pool status": "本命英雄池表现",
     "Recommendation scope": "推荐范围",
