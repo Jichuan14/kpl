@@ -1,7 +1,8 @@
 # ECS deployment with SQLite
 
-This deployment runs Vue/Nginx and FastAPI on one ECS instance. The application
-database is a SQLite file on that instance's disk; no RDS instance is needed.
+This deployment runs Vue/Nginx, FastAPI, RabbitMQ, and one Celery pipeline
+worker on one ECS instance. The application database is a SQLite file on that
+instance's disk; no RDS instance is needed.
 
 SQLite is a good fit for this single-ECS deployment. Keep exactly one API
 container and one Uvicorn worker, as supplied. Do not run multiple ECS
@@ -18,6 +19,8 @@ instances against the same database file or put the database on NFS/OSS.
 
    ```bash
    cp .env.production.example .env.production
+   # Generate a hex password and replace both RabbitMQ placeholders with it.
+   openssl rand -hex 24
    mkdir -p backend/data analysis/exports analysis/outputs deploy
    docker run --rm httpd:2.4-alpine htpasswd -nbB admin 'CHOOSE_A_LONG_PASSWORD' \
      > deploy/.htpasswd
@@ -25,8 +28,9 @@ instances against the same database file or put the database on NFS/OSS.
    ```
 
    On a small instance, create host swap before starting the containers. The
-   production Compose file limits the API container to 1 GiB of physical RAM
-   and 2.5 GiB total RAM plus swap so training cannot starve the host:
+   production Compose file limits each Python container to 1 GiB of physical
+   RAM and 2.5 GiB total RAM plus swap. The worker and RabbitMQ raise peak
+   memory use; measure it during a full update on the target host:
 
    ```bash
    sudo fallocate -l 2G /swapfile
@@ -56,13 +60,18 @@ instances against the same database file or put the database on NFS/OSS.
    curl --fail http://127.0.0.1/health
    ```
 
-The API image is Python-based and includes the CPU-only PyTorch package used by
-the private management pipeline. A full update retrains both draft models and
-exports the chronological model to a NumPy-compatible JSON artifact; public
-inference does not import PyTorch. Only one pipeline can run at a time; another
-request receives HTTP 409. Pipeline commands run in isolated process groups so
-a timeout also terminates nested trainer processes instead of leaving them to
-consume resources in the background.
+   Run one manual Full update from `/management` and watch
+   `docker stats` and `free -h` on the ECS host. Confirm the worker completes
+   without an OOM restart before relying on the 03:00 schedule.
+
+The API and worker share SQLite, exports, outputs, and published data mounts.
+Management actions create persisted jobs; the single worker processes them
+under a shared file lock. RabbitMQ keeps durable quorum-queue messages on its
+own volume.
+If broker delivery fails, the committed SQLite job stays pending and a
+30-second recovery sweep dispatches it later. Jobs have up to three attempts,
+heartbeats, and a visible failure state. Pipeline commands use isolated process
+groups so a timeout terminates nested trainer processes.
 
 Caddy accepts public traffic on ports 80 and 443, automatically obtains and
 renews HTTPS certificates for `kpllab.xyz` and `www.kpllab.xyz`, and proxies
@@ -82,35 +91,48 @@ docker image prune -f
 
 ## Scheduled refresh
 
-Install the repository-managed refresh script so failed or stale analysis is
-retried even when the incremental download finds no additional matches:
+Install the repository-managed refresh script. It submits one idempotent job
+per China calendar day. The worker refreshes the official league catalog and
+selects the newest league that has started and has a completed match. A future
+announced league remains ineligible until play begins. Set `KPL_LEAGUE_ID`
+only to pin an emergency run to a particular official league. The job starts
+at 03:00 China time when the worker is healthy; the site updates after analysis
+and publishing finish. Confirm the host cron honors `CRON_TZ` (or use 19:00 UTC
+on a UTC host):
 
 ```bash
 sudo install -m 0755 deploy/kpl-refresh /usr/local/sbin/kpl-refresh
 ```
 
 The script reads HTTP Basic credentials from `/etc/kpl-sync.netrc` by default.
-Its league, API URL, and credential path can be overridden with
+Its optional league override, API URL, and credential path are
 `KPL_LEAGUE_ID`, `KPL_API_URL`, and `KPL_AUTH_FILE`. A typical root crontab is:
+Remove any old `KPL_LEAGUE_ID` assignment from the scheduled environment so
+automatic season discovery can take effect.
 
 ```cron
 CRON_TZ=Asia/Shanghai
 0 3 * * * /usr/bin/flock -n /var/lock/kpl-refresh.lock /usr/local/sbin/kpl-refresh >> /var/log/kpl-sync.log 2>&1
 ```
 
-Keep only the final `2>&1`; an additional input redirection is invalid. The
-script logs API error response bodies, checks analysis freshness after every
-sync, and publishes only after successful analysis.
+The script polls the job and logs stage changes, completion, or failure for up
+to 3.5 hours. `KPL_POLL_SECONDS` and `KPL_MAX_POLLS` can adjust that bound.
+Check `/management` for progress and attempts. Scheduled jobs skip analysis when source data and
+artifacts are current, but repair stale or missing outputs and published files.
+Manual **Full update** always rebuilds analysis and publishes. A broker or
+worker outage delays the run; pending jobs are recovered when service returns.
+The worker has a three-hour hard deadline and the broker allows four hours
+before an unacknowledged delivery expires.
 
-For a consistent backup, stop the API first, copy the database and artifacts,
-then start it again:
+For a consistent backup, stop the API and worker, copy the database and
+artifacts, then restart them:
 
 ```bash
-docker compose -f docker-compose.production.yml stop api
+docker compose -f docker-compose.production.yml stop api worker
 cp backend/data/kpl_bp.db /safe/backup/location/kpl_bp-$(date +%F).db
 tar -czf /safe/backup/location/kpl-artifacts-$(date +%F).tgz \
-  analysis/exports analysis/outputs
-docker compose -f docker-compose.production.yml start api
+  analysis/exports analysis/outputs analysis/published
+docker compose -f docker-compose.production.yml start api worker
 ```
 
 Keep database and artifact backups outside the ECS disk, such as in OSS. For

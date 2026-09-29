@@ -35,7 +35,7 @@ def _write_json(path: Path, value: object) -> None:
 
 def _publish_seasons(db: Session) -> None:
     leagues = db.scalars(
-        select(League).order_by(League.year.desc(), League.season.desc(), League.id.desc())
+        select(League).order_by(League.year.desc(), League.start_time.desc(), League.season.desc(), League.id.desc())
     ).all()
     rows = []
     for league in leagues:
@@ -48,6 +48,7 @@ def _publish_seasons(db: Session) -> None:
                 "league_name": league.league_name,
                 "year": league.year,
                 "season": league.season,
+                "start_time": league.start_time,
                 "status": league.status,
                 "team_synergy_ready": (directory / "team-synergies.json").is_file(),
                 "rankings_ready": (directory / "rankings.json").is_file(),

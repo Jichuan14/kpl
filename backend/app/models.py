@@ -1,9 +1,29 @@
 from datetime import date, datetime
 
-from sqlalchemy import BigInteger, Date, DateTime, Float, Integer, String, UniqueConstraint, func
+from sqlalchemy import BigInteger, Date, DateTime, Float, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
+
+
+class PipelineJob(Base):
+    __tablename__ = "pipeline_jobs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    idempotency_key: Mapped[str | None] = mapped_column(String(128), unique=True, nullable=True)
+    kind: Mapped[str] = mapped_column(String(32), index=True)
+    league_id: Mapped[str | None] = mapped_column(String(32), index=True, nullable=True)
+    payload: Mapped[str] = mapped_column(Text, default="{}")
+    status: Mapped[str] = mapped_column(String(16), default="pending", index=True)
+    stage: Mapped[str] = mapped_column(String(64), default="queued")
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    dispatched_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    result: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class League(Base):

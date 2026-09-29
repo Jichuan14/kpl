@@ -30,6 +30,7 @@ Generated artifact locations and Git policy: `ARTIFACTS.md`
 | Chinese/English text | `frontend/src/i18n.js` | page-local copy in the relevant Vue component |
 | League, match, hero, team, and player endpoints | `backend/app/api/leagues.py`, `backend/app/api/bp.py`, `backend/app/api/data.py` | `backend/app/models.py`, `backend/app/schemas.py` |
 | Syncing official KPL data | `backend/app/api/sync.py` | `backend/app/services/sync.py`, `backend/app/clients/kpl_api.py` |
+| Queue-backed update jobs and 03:00 China-time refresh | `backend/app/services/pipeline_jobs.py` | `backend/app/api/jobs.py`, `deploy/kpl-refresh`, `docker-compose.production.yml` |
 | Analysis and publishing pipeline | `backend/app/services/analysis_pipeline.py` | `backend/app/api/pipeline.py`, `backend/app/services/static_publisher.py` |
 | Hero relationship statistics | `analysis/compute_bp_statistics.py` | `analysis/build_bp_decisions.py`, `analysis/common.py` |
 | Researching ban/pick intentions | `analysis/DRAFT_INTENTION_RESEARCH.md` | `analysis/explore_draft_intentions.py`, `analysis/run_intention_case_study.py` (offline; no model changes) |

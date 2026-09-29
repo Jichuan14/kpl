@@ -138,7 +138,6 @@ async function loadLeagues() {
   const rows = await fetchLeagues();
   leagues.value = rows || [];
   apiConnected.value = true;
-  selectAvailableLeague(leagues.value);
   const initial = leagues.value.find(
     (league) => league.league_id === leagueId.value
   );

@@ -42,12 +42,28 @@ for required_path in \
   fi
 done
 
+for rabbitmq_key in RABBITMQ_DEFAULT_USER RABBITMQ_DEFAULT_PASS RABBITMQ_URL; do
+  if ! grep -Eq "^${rabbitmq_key}=.+" "$target_root/.env.production"; then
+    printf 'Missing %s in live .env.production; configure RabbitMQ before installing.\n' "$rabbitmq_key" >&2
+    exit 1
+  fi
+done
+if grep -q 'CHANGE_TO_A_LONG_RANDOM_PASSWORD' "$target_root/.env.production"; then
+  printf 'Replace the RabbitMQ password placeholders in live .env.production.\n' >&2
+  exit 1
+fi
+
 timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
 backup_parent="$(dirname "$target_root")/kpl-release-backups"
 backup_root="$backup_parent/$timestamp"
 mkdir -p "$backup_root"
 
 printf 'Stopping the live containers...\n'
+if docker compose -f "$target_root/docker-compose.production.yml" config --services | grep -qx worker; then
+  # Celery's warm shutdown waits for the active job. The worker's own hard
+  # deadline is three hours; keep the timeout slightly above that deadline.
+  docker compose -f "$target_root/docker-compose.production.yml" stop -t 11100 worker
+fi
 docker compose -f "$target_root/docker-compose.production.yml" stop api web
 
 printf 'Backing up the existing backend, analysis data, and server secrets to %s\n' "$backup_root"
@@ -85,6 +101,7 @@ rsync -a --exclude='.htpasswd' "$release_root/deploy/" "$target_root/deploy/"
 for root_file in \
   README.md \
   CALCULATION_METHODOLOGY.md \
+  ARTIFACTS.md \
   docker-compose.production.yml \
   .env.production.example; do
   if [[ -f "$release_root/$root_file" ]]; then

@@ -47,6 +47,7 @@ const moveEvidence = ref(null);
 const moveEvidenceLoading = ref(false);
 const moveEvidenceError = ref("");
 const moveEvidenceHistoryKey = ref("");
+const pendingMoveEvidence = ref(null);
 const settingsOpen = ref(false);
 let commentaryRequestNumber = 0;
 let commentaryAbortController = null;
@@ -108,6 +109,7 @@ function clearMoveEvidence() {
   moveEvidenceLoading.value = false;
   moveEvidenceError.value = "";
   moveEvidenceHistoryKey.value = "";
+  pendingMoveEvidence.value = null;
 }
 const teamsBySide = ref({ blue: TEAM_A, red: TEAM_B });
 const seriesWins = ref({ [TEAM_A]: 0, [TEAM_B]: 0 });
@@ -1214,6 +1216,12 @@ async function loadMoveEvidence(preSelectionState, step, heroId, expectedHistory
   }
 }
 
+function calculateMoveEvidence() {
+  const pending = pendingMoveEvidence.value;
+  if (!pending || moveEvidenceLoading.value || historyEvidenceKey() !== pending.historyKey) return;
+  void loadMoveEvidence(pending.preSelectionState, pending.step, pending.heroId, pending.historyKey);
+}
+
 async function chooseHero(heroId) {
   if (!teamsReady.value || isPeakDuel.value || liveHeroSelectionLocked.value || simulating.value) return;
   if (pickerTarget.value !== "draft") {
@@ -1262,8 +1270,15 @@ async function chooseHero(heroId) {
   }`;
   board.value[field].push(Number(heroId));
   history.value.push({ field, heroId: Number(heroId), bpOrder: bpOrder.value });
+  clearMoveEvidence();
   const evidenceKey = historyEvidenceKey();
-  void loadMoveEvidence(preSelectionState, currentStep.value, heroId, evidenceKey);
+  pendingMoveEvidence.value = {
+    preSelectionState,
+    step: { ...currentStep.value },
+    heroId: Number(heroId),
+    historyKey: evidenceKey,
+  };
+  moveEvidenceHistoryKey.value = evidenceKey;
   bpOrder.value += 1;
   search.value = "";
   syncVersionTreeWithBoard();
@@ -1682,6 +1697,7 @@ watch(
   selectedTeamIds,
   async () => {
     clearCommentary();
+    clearMoveEvidence();
     stopFollowingLiveMatch({ forget: false });
     stopLiveMatchPolling();
     liveMatch.value = null;
@@ -2166,7 +2182,9 @@ onBeforeUnmount(() => {
               :payload="moveEvidence"
               :loading="moveEvidenceLoading"
               :error="moveEvidenceError"
+              :ready="Boolean(pendingMoveEvidence)"
               wide
+              @calculate="calculateMoveEvidence"
             />
           </section>
 

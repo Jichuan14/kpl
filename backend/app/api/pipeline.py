@@ -5,13 +5,12 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import League
 from app.schemas import AnalysisRunRequest, ApiResponse
-from app.services.analysis_pipeline import AnalysisPipeline, PipelineBusyError
-from app.services.static_publisher import publish_league
+from app.services.pipeline_jobs import enqueue_job
 
 router = APIRouter(prefix="/api/pipeline", tags=["pipeline"])
 
 
-@router.post("/run")
+@router.post("/run", status_code=202)
 def run_pipeline(
     body: AnalysisRunRequest,
     db: Session = Depends(get_db),
@@ -21,16 +20,11 @@ def run_pipeline(
     )
     if league is None:
         raise HTTPException(status_code=404, detail="League not found")
-    try:
-        result = AnalysisPipeline(body.league_id).run(body.step)
-    except PipelineBusyError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-    except (ValueError, RuntimeError) as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return ApiResponse(message=f"{body.step} completed", data=result)
+    return ApiResponse(message=f"{body.step} queued", data=enqueue_job(
+        db, "analysis", body.league_id, {"step": body.step}))
 
 
-@router.post("/publish")
+@router.post("/publish", status_code=202)
 def publish_frontend_assets(
     body: AnalysisRunRequest,
     db: Session = Depends(get_db),
@@ -39,8 +33,5 @@ def publish_frontend_assets(
     league = db.scalar(select(League).where(League.league_id == body.league_id))
     if league is None:
         raise HTTPException(status_code=404, detail="League not found")
-    try:
-        result = publish_league(db, body.league_id)
-    except (ValueError, RuntimeError) as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return ApiResponse(message="frontend assets published", data=result)
+    return ApiResponse(message="frontend asset publication queued", data=enqueue_job(
+        db, "publish", body.league_id))

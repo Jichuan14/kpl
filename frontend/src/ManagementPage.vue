@@ -3,7 +3,7 @@ import { onBeforeUnmount, onMounted } from "vue";
 import { useManagement } from "./composables/useManagement";
 import { language } from "./i18n";
 const management = useManagement();
-const { leagueId, selectedYear, dataStatus, coachUsage, visitorAnalytics, coachLimits, loading, syncing, syncingCatalog, savingCoachLimits, processingStep, processingElapsed, syncMode, syncElapsed, error, notice, apiConnected, years, seasonLeagues, selectedLeague, analysisPipeline, readyStages, totalStages, frontendAssets, frontendAssetsReady, artifacts, loadStatus, loadCoachUsage, loadVisitorAnalytics, refreshLeagueCatalog, runDownload, runPipeline, runFullUpdate, publishAssets, saveCoachLimits, pipelineReady, number, bytes, dateTime, initialize, startMonitoring, stopMonitoring } = management;
+const { leagueId, selectedYear, dataStatus, coachUsage, visitorAnalytics, coachLimits, loading, syncing, syncingCatalog, savingCoachLimits, processingStep, processingElapsed, syncMode, syncElapsed, error, notice, apiConnected, recentJobs, activeJob, years, seasonLeagues, selectedLeague, analysisPipeline, readyStages, totalStages, frontendAssets, frontendAssetsReady, artifacts, loadStatus, loadCoachUsage, loadVisitorAnalytics, refreshLeagueCatalog, runDownload, runPipeline, runFullUpdate, publishAssets, saveCoachLimits, pipelineReady, number, bytes, dateTime, initialize, startMonitoring, stopMonitoring } = management;
 onMounted(async () => { await initialize(); startMonitoring(); });
 onBeforeUnmount(stopMonitoring);
 </script>
@@ -105,6 +105,19 @@ onBeforeUnmount(stopMonitoring);
 
     <p v-if="error" class="banner error">{{ error }}</p>
     <p v-else-if="notice" class="banner notice">{{ notice }}</p>
+
+    <section class="panel" :aria-label="$t('Update jobs')">
+      <div class="panel-title"><div><p class="kicker">{{ $t('Update jobs') }}</p><h2>{{ $t('Worker progress') }}</h2></div><button class="button ghost compact" type="button" @click="management.loadJobs()">{{ $t('Refresh') }}</button></div>
+      <p class="panel-intro">{{ $t('The 03:00 China-time refresh starts a queued job. Published data updates after the job completes.') }}</p>
+      <p v-if="activeJob && ['pending', 'running'].includes(activeJob.status)" class="banner notice">{{ $t(activeJob.kind) }} · {{ $t(activeJob.status) }} · {{ $t(activeJob.stage) }} · {{ processingElapsed }}s</p>
+      <p v-if="!recentJobs.length" class="terminal-note">{{ $t('No update jobs yet.') }}</p>
+      <ul v-else class="public-assets">
+        <li v-for="job in recentJobs.slice(0, 8)" :key="job.id">
+          <span class="file-state" :class="{ ready: job.status === 'completed' }">{{ $t(job.status) }}</span>
+          <div><strong>{{ $t(job.kind) }} · {{ job.league_id || '—' }}</strong><small>{{ $t(job.stage) }} · {{ dateTime(job.created_at) }} · {{ $t('attempts') }} {{ job.attempts }}/3</small><small v-if="job.error">{{ job.error }}</small></div>
+        </li>
+      </ul>
+    </section>
 
     <section v-if="coachUsage" class="panel coach-monitor-panel">
         <div class="panel-title">

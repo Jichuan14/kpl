@@ -1,18 +1,20 @@
 import { computed, ref } from "vue";
-import { fetchDataStatus, fetchLeagues, fetchCoachUsage, fetchVisitorStats, updateCoachLimits, syncLeagues, syncLeagueBp, runAnalysisStep, publishFrontendAssets } from "../api";
-import { selectedLeagueId } from "../selectedLeague";
+import { fetchDataStatus, fetchLeagues, fetchVisualizationSeasons, fetchCoachUsage, fetchVisitorStats, updateCoachLimits, syncLeagues, syncLeagueBp, runAnalysisStep, publishFrontendAssets, fetchPipelineJobs, queueFullUpdate, invalidatePublishedData } from "../api";
+import { selectAvailableLeague, selectedLeagueId } from "../selectedLeague";
 import { language } from "../i18n";
 import { usePolling } from "./usePolling";
+import { loadSelectedStatus } from "../managementStatus";
 
-// Module scope intentionally retains in-progress local operations while the
-// management route is temporarily unmounted.
+// Keep job state while the management route is unmounted. The server ledger is
+// authoritative and restores an in-progress job after a browser reload.
 let singleton;
 export function useManagement() {
   if (singleton) return singleton;
   const leagueId = selectedLeagueId, leagues = ref([]), selectedYear = ref(""), dataStatus = ref(null);
   const coachUsage = ref(null), visitorAnalytics = ref(null), coachLimits = ref(null);
   const loading = ref(false), syncing = ref(false), syncingCatalog = ref(false), savingCoachLimits = ref(false);
-  const processingStep = ref(""), processingElapsed = ref(0), syncMode = ref(""), syncElapsed = ref(0), error = ref(""), notice = ref(""), apiConnected = ref(false);
+  const processingStep = ref(""), processingElapsed = ref(0), syncMode = ref(""), syncElapsed = ref(0);
+  const error = ref(""), notice = ref(""), apiConnected = ref(false), recentJobs = ref([]), activeJob = ref(null);
   const years = computed(() => [...new Set(leagues.value.map((l) => l.year).filter(Boolean))].sort((a,b) => b-a));
   const seasonLeagues = computed(() => leagues.value.filter((l) => !selectedYear.value || String(l.year) === selectedYear.value));
   const selectedLeague = computed(() => leagues.value.find((l) => l.league_id === leagueId.value));
@@ -21,22 +23,63 @@ export function useManagement() {
   const frontendAssets = computed(() => dataStatus.value?.frontend_assets || []), frontendAssetsReady = computed(() => frontendAssets.value.filter((s) => s.ready).length);
   const artifacts = computed(() => Object.values(dataStatus.value?.artifacts || {}).flat().filter((x) => x && typeof x === "object" && (x.path || x.key)));
   async function loadLeagues() { leagues.value = await fetchLeagues() || []; apiConnected.value = true; selectedYear.value = String(selectedLeague.value?.year || leagues.value[0]?.year || ""); }
-  async function loadStatus(operationLeagueId = leagueId.value) { if (!operationLeagueId) return; loading.value = true; try { dataStatus.value = await fetchDataStatus(operationLeagueId); } catch (e) { error.value=e.message || "Could not load local data status."; } finally { loading.value=false; } }
+  async function loadStatus(operationLeagueId = leagueId.value) { if (!operationLeagueId) return; loading.value = true; try { await loadSelectedStatus(fetchDataStatus, operationLeagueId, () => leagueId.value, (status) => { dataStatus.value = status; }); } catch (e) { if (operationLeagueId === leagueId.value) error.value=e.message || "Could not load local data status."; } finally { loading.value=false; } }
   async function loadCoachUsage() { try { coachUsage.value=await fetchCoachUsage(); coachLimits.value ||= { ip_requests_per_minute: coachUsage.value.per_ip.per_minute_limit, ip_requests_per_day: coachUsage.value.per_ip.per_24_hours_limit, server_requests_per_minute: coachUsage.value.server.per_minute_limit, server_requests_per_day: coachUsage.value.server.per_24_hours_limit, ip_max_active_requests: coachUsage.value.per_ip.max_active_requests, server_max_active_requests: coachUsage.value.server.max_active_requests }; } catch {} }
   async function loadVisitorAnalytics() { try { visitorAnalytics.value=await fetchVisitorStats(); } catch {} }
   const coachPolling=usePolling(loadCoachUsage,15000), visitorPolling=usePolling(loadVisitorAnalytics,30000);
-  async function initialize() { await Promise.all([loadLeagues(),loadStatus(),loadCoachUsage(),loadVisitorAnalytics()]); }
-  function startMonitoring() { coachPolling.start(); visitorPolling.start(); }
-  function stopMonitoring() { coachPolling.stop(); visitorPolling.stop(); }
-  async function refreshLeagueCatalog() { syncingCatalog.value=true; try { await syncLeagues(); await loadLeagues(); await loadStatus(); } finally { syncingCatalog.value=false; } }
-  let syncTimer = null, processingTimer = null;
-  function startTimer(target) { return window.setInterval(() => { target.value += 1; }, 1000); }
-  async function runDownload({matchLimit=null,mode="all"}={}) { if(!leagueId.value || syncing.value) return; const operationLeagueId=leagueId.value; syncing.value=true; syncMode.value=mode; syncElapsed.value=0; error.value=""; notice.value=mode === "all" ? "Downloading every finished match and its battle BP data…" : "Downloading a five-match sample from the KPL API…"; syncTimer=startTimer(syncElapsed); try { const result=await syncLeagueBp({leagueId:operationLeagueId,matchLimit}); notice.value=`Download complete · ${result.finished_matches_processed || 0} matches · ${result.battles_upserted || 0} battles · ${result.bp_rows_written || 0} BP actions · ${result.battle_player_rows_written || 0} player mappings · ${result.heroes_upserted || 0} heroes · local source data refreshed`; await loadStatus(operationLeagueId); } catch(e){notice.value="";error.value=e.message || "KPL data download failed.";} finally { if(syncTimer)window.clearInterval(syncTimer);syncTimer=null;syncing.value=false;syncMode.value="";} }
-  async function runPipeline(step) { if(!leagueId.value || processingStep.value || syncing.value) return; const operationLeagueId=leagueId.value; processingStep.value=step;processingElapsed.value=0;error.value="";notice.value=step === "all" ? "Running the complete season analysis pipeline…" : `Running ${step} for the selected season…`;processingTimer=startTimer(processingElapsed);try{const result=await runAnalysisStep({leagueId:operationLeagueId,step});const duration=(result.steps || []).reduce((sum,item)=>sum+Number(item.duration_seconds||0),0);notice.value=`${step === "all" ? "Complete pipeline" : step} finished for ${operationLeagueId} in ${duration.toFixed(1)}s`;await loadStatus(operationLeagueId);}catch(e){notice.value="";error.value=e.message || `${step} failed.`;}finally{if(processingTimer)window.clearInterval(processingTimer);processingTimer=null;processingStep.value="";} }
-  async function publishAssets() { if(!leagueId.value || processingStep.value || syncing.value)return;const operationLeagueId=leagueId.value;processingStep.value="publish";processingElapsed.value=0;error.value="";notice.value="Writing browser-ready assets from local analysis…";processingTimer=startTimer(processingElapsed);try{const result=await publishFrontendAssets(operationLeagueId);notice.value=`Frontend assets published for ${operationLeagueId} · ${(result.files||[]).length} files written`;await loadStatus(operationLeagueId);}catch(e){notice.value="";error.value=e.message || "Could not publish frontend assets.";}finally{if(processingTimer)window.clearInterval(processingTimer);processingTimer=null;processingStep.value="";} }
-  async function runFullUpdate() { if(!leagueId.value || syncing.value || processingStep.value)return;const operationLeagueId=leagueId.value;syncing.value=true;processingStep.value="full_update";processingElapsed.value=0;error.value="";processingTimer=startTimer(processingElapsed);try{notice.value="Downloading finished matches and BP data…";const download=await syncLeagueBp({leagueId:operationLeagueId,matchLimit:null,runAnalysis:false});syncing.value=false;notice.value="Download complete · rebuilding analysis and both draft models…";const analysis=await runAnalysisStep({leagueId:operationLeagueId,step:"all"});const duration=(analysis.steps||[]).reduce((sum,item)=>sum+Number(item.duration_seconds||0),0);notice.value="Analysis complete · publishing browser-ready assets…";const published=await publishFrontendAssets(operationLeagueId);notice.value=`Full update complete · ${download.finished_matches_processed||0} matches checked · ${duration.toFixed(1)}s analysis · ${(published.files||[]).length} public files published`;await loadStatus(operationLeagueId);}catch(e){notice.value="";error.value=e.message || "Full update failed.";}finally{if(processingTimer)window.clearInterval(processingTimer);processingTimer=null;syncing.value=false;processingStep.value="";} }
+  const jobsPolling=usePolling(loadJobs,3000);
+  function applyBusy(job) {
+    const busy = job && ["pending", "running"].includes(job.status);
+    syncing.value = Boolean(busy && ["sync_bp", "scheduled", "full_update", "sync_leagues"].includes(job.kind));
+    syncingCatalog.value = Boolean(busy && job.kind === "sync_leagues");
+    syncMode.value = busy && job.kind === "sync_bp" ? (job.payload?.match_limit === 5 ? "sample" : "all") : "";
+    processingStep.value = !busy ? "" : job.kind === "full_update" || job.kind === "scheduled" ? "full_update" : job.kind === "analysis" ? job.payload?.step || "all" : job.kind === "publish" ? "publish" : "";
+    const elapsed = busy && job.created_at ? Math.max(0, Math.floor((Date.now() - Date.parse(job.created_at)) / 1000)) : 0;
+    processingElapsed.value = elapsed;
+    syncElapsed.value = elapsed;
+  }
+  async function loadJobs() {
+    try {
+      const jobs = await fetchPipelineJobs() || [];
+      recentJobs.value = jobs;
+      const previous = activeJob.value;
+      const chosen = jobs.find((job) => ["pending", "running"].includes(job.status) && (job.league_id === leagueId.value || job.kind === "sync_leagues" || (job.kind === "scheduled" && !job.league_id)));
+      const updated = previous && jobs.find((job) => job.id === previous.id);
+      activeJob.value = chosen || updated || null;
+      applyBusy(chosen);
+      if (updated && previous.status !== updated.status && ["completed", "failed"].includes(updated.status)) {
+        if (updated.status === "failed") { error.value = updated.error || "Pipeline job failed."; notice.value = ""; }
+        else {
+          notice.value = `${updated.kind} completed`; error.value = ""; invalidatePublishedData();
+          if (["scheduled", "full_update", "publish"].includes(updated.kind)) {
+            try { selectAvailableLeague(await fetchVisualizationSeasons() || []); } catch { /* Public data may not exist yet. */ }
+          }
+          await loadLeagues(); await loadStatus(leagueId.value);
+        }
+      }
+    } catch (e) { if (activeJob.value) error.value = e.message || "Could not load job status."; }
+  }
+  async function initialize() { await Promise.all([loadLeagues(),loadStatus(),loadCoachUsage(),loadVisitorAnalytics(),loadJobs()]); }
+  function startMonitoring() { coachPolling.start(); visitorPolling.start(); jobsPolling.start(); }
+  function stopMonitoring() { coachPolling.stop(); visitorPolling.stop(); jobsPolling.stop(); }
+  async function submit(action, label) {
+    error.value = "";
+    try {
+      const job = await action();
+      activeJob.value = job;
+      applyBusy(job);
+      notice.value = `${label} · ${job.status}`;
+      await loadJobs();
+      return job;
+    } catch (e) { notice.value = ""; error.value = e.message || `${label} failed`; return null; }
+  }
+  async function refreshLeagueCatalog() { await submit(() => syncLeagues(), "League catalog refresh"); }
+  async function runDownload({matchLimit=null,mode="all"}={}) { if(!leagueId.value || syncing.value || processingStep.value) return; syncMode.value=mode; await submit(() => syncLeagueBp({leagueId:leagueId.value,matchLimit}), mode === "all" ? "League download" : "Sample download"); }
+  async function runPipeline(step) { if(!leagueId.value || syncing.value || processingStep.value) return; await submit(() => runAnalysisStep({leagueId:leagueId.value,step}), `${step} analysis`); }
+  async function publishAssets() { if(!leagueId.value || syncing.value || processingStep.value) return; await submit(() => publishFrontendAssets(leagueId.value), "Asset publication"); }
+  async function runFullUpdate() { if(!leagueId.value || syncing.value || processingStep.value) return; await submit(() => queueFullUpdate(leagueId.value), "Full update"); }
   async function saveCoachLimits(){ if(!coachLimits.value)return; savingCoachLimits.value=true; try{coachUsage.value=await updateCoachLimits(coachLimits.value);}finally{savingCoachLimits.value=false;} }
   const pipelineReady=(key)=>Boolean(dataStatus.value?.pipeline?.find((s)=>s.key===key)?.ready);
   const number=(v)=>Number(v||0).toLocaleString(language.value), bytes=(v)=>!v?"—":`${(Number(v)/1024).toFixed(1)} KB`, dateTime=(v)=>v?new Date(v).toLocaleString(language.value):"Never";
-  singleton={leagueId,leagues,selectedYear,dataStatus,coachUsage,visitorAnalytics,coachLimits,loading,syncing,syncingCatalog,savingCoachLimits,processingStep,processingElapsed,syncMode,syncElapsed,error,notice,apiConnected,years,seasonLeagues,selectedLeague,analysisPipeline,readyStages,totalStages,frontendAssets,frontendAssetsReady,artifacts,loadLeagues,loadStatus,loadCoachUsage,loadVisitorAnalytics,refreshLeagueCatalog,runDownload,runPipeline,runFullUpdate,publishAssets,saveCoachLimits,pipelineReady,number,bytes,dateTime,initialize,startMonitoring,stopMonitoring}; return singleton;
+  singleton={leagueId,leagues,selectedYear,dataStatus,coachUsage,visitorAnalytics,coachLimits,loading,syncing,syncingCatalog,savingCoachLimits,processingStep,processingElapsed,syncMode,syncElapsed,error,notice,apiConnected,recentJobs,activeJob,years,seasonLeagues,selectedLeague,analysisPipeline,readyStages,totalStages,frontendAssets,frontendAssetsReady,artifacts,loadLeagues,loadStatus,loadJobs,loadCoachUsage,loadVisitorAnalytics,refreshLeagueCatalog,runDownload,runPipeline,runFullUpdate,publishAssets,saveCoachLimits,pipelineReady,number,bytes,dateTime,initialize,startMonitoring,stopMonitoring}; return singleton;
 }

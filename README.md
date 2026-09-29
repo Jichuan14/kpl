@@ -32,12 +32,12 @@ its sample size, baseline, and confidence information.
 KPL public APIs
       │
       ▼
-FastAPI service ──► SQLite ──► analysis scripts ──► published JSON assets
-      │                                                        │
-      └──────────────────── REST API ◄─────────────────────────┘
-                                                               │
-                                                               ▼
-                                                        Vue + Vite UI
+FastAPI ──► SQLite job ledger ──► RabbitMQ ──► one analysis worker
+  ▲                                                │
+  │                                                ▼
+  │                                   SQLite + published JSON assets
+  │                                                │
+  └──────────── Vue + Vite UI ◄─────────────────────┘
 ```
 
 The SQLite database is the source of truth. Analysis outputs are scoped to a
@@ -51,6 +51,7 @@ outputs rather than treated as source data.
 - Python 3.12 or newer
 - Node.js 20 or newer
 - npm
+- RabbitMQ 4.3 (or Docker to run it locally)
 
 ### 1. Start the API
 
@@ -70,6 +71,21 @@ It creates `backend/data/kpl_bp.db` on first start.
 PyTorch is needed only when the private management pipeline retrains the
 chronological model; normal inference remains NumPy-only.
 
+For local maintenance jobs, start RabbitMQ in another terminal:
+
+```bash
+docker run --rm --name kpl-rabbitmq -p 127.0.0.1:5672:5672 rabbitmq:4.3.6-alpine
+```
+
+Then start one worker from `backend/` using the same virtual environment:
+
+```bash
+celery -A app.services.pipeline_jobs:celery_app worker --beat --pool=solo --concurrency=1 --loglevel=INFO
+```
+
+The local default broker URL uses RabbitMQ's loopback-only `guest` account.
+Production uses the private Compose network and credentials in `.env.production`.
+
 ### 2. Start the web app
 
 In another terminal:
@@ -87,8 +103,18 @@ proxies `/api` calls to the API on port 8000.
 
 Use the **Management** screen to refresh the league catalog, select a season,
 download its finished matches, run the analysis pipeline, and publish frontend
-assets. The UI is the recommended path because it reports which artifacts are
-ready for the chosen season.
+assets. The UI reports queued job progress and which artifacts are ready for
+the chosen season. The local backend now needs RabbitMQ and a Celery worker;
+the production Compose file runs both. Maintenance mutation calls return HTTP
+202 with a job ID and `status_url` to poll.
+
+The daily 03:00 China-time job refreshes the official league catalog and picks
+the newest started competition with a completed match. New visitors open the
+newest **published** season; an intentionally chosen season stays selected if
+it remains available. An older browser record holding the former hard-coded
+default `20260003` cannot be distinguished from an automatic default, so it is
+migrated to automatic selection. Visitors who want that season fixed can select
+it again in the season control.
 
 For a small API smoke sync instead:
 
@@ -173,10 +199,13 @@ endpoints are:
 
 | Method | Endpoint | Purpose |
 | --- | --- | --- |
-| `POST` | `/api/sync/leagues` | Refresh the locally stored league catalog |
-| `POST` | `/api/sync/league-bp` | Incrementally sync matches and BP actions |
-| `POST` | `/api/pipeline/run` | Run one analysis step or the full pipeline |
-| `POST` | `/api/pipeline/publish` | Write browser-ready assets for a season |
+| `POST` | `/api/sync/leagues` | Queue a league catalog refresh |
+| `POST` | `/api/sync/league-bp` | Queue an incremental match and BP sync |
+| `POST` | `/api/pipeline/run` | Queue one analysis step or the full pipeline |
+| `POST` | `/api/pipeline/publish` | Queue browser-ready asset publication |
+| `POST` | `/api/jobs/scheduled` | Queue the idempotent daily 03:00 China-time refresh; optional `league_id` pins a league |
+| `POST` | `/api/jobs/full-update` | Queue a forced data, model, and site refresh |
+| `GET` | `/api/jobs`, `/api/jobs/{id}` | Inspect persisted job progress and results |
 | `GET` | `/api/data/status` | Inspect local source and artifact readiness |
 | `POST` | `/api/simulations/recommend-lineup` | Rank realistic next picks or bans through policy-guided completed-draft rollouts |
 | `POST` | `/api/simulations/score-lineup` | Directly score one complete legal 5v5 lineup comparison |

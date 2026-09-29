@@ -404,6 +404,21 @@ export function syncLeagues() {
   return request("/api/sync/leagues", { method: "POST" });
 }
 
+export function fetchPipelineJobs() {
+  return request("/api/jobs?limit=30");
+}
+
+export function fetchPipelineJob(jobId) {
+  return request(`/api/jobs/${encodeURIComponent(jobId)}`);
+}
+
+export function queueFullUpdate(leagueId) {
+  return request("/api/jobs/full-update", {
+    method: "POST",
+    body: JSON.stringify({ league_id: leagueId }),
+  });
+}
+
 export function fetchDataStatus(leagueId) {
   const params = new URLSearchParams({ league_id: leagueId });
   return request(`/api/data/status?${params}`);
@@ -420,10 +435,6 @@ export function publishFrontendAssets(leagueId) {
   return request("/api/pipeline/publish", {
     method: "POST",
     body: JSON.stringify({ league_id: leagueId }),
-  }).then((result) => {
-    // Publishing changes the season catalog and cross-season meta history too.
-    invalidatePublishedData();
-    return result;
   });
 }
 

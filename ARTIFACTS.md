@@ -17,6 +17,16 @@ The SQLite database remains the source of truth. Export, output, and published
 files are derived artifacts and can be rebuilt from the Management page or the
 pipeline API.
 
+Update requests now create rows in the `pipeline_jobs` table of
+`backend/data/kpl_bp.db`. The durable RabbitMQ queue carries job IDs; the
+SQLite rows hold status, attempts, progress, and results. Neither the database
+nor the RabbitMQ volume is a generated analysis artifact to commit. Back up
+SQLite with the season exports, analysis outputs, and published files. A
+scheduled 03:00 China-time job refreshes the official catalog, selects the
+newest started league with a completed match, performs incremental sync,
+rebuilds missing or stale analysis, and publishes changed assets; manual Full update forces a
+rebuild. See `deploy/README.md` for broker and worker recovery.
+
 ## Season exports
 
 | Artifact | Built by | Used by |
@@ -60,7 +70,7 @@ The frontend requests them under `/assets/data/...`.
 
 | Published artifact | Frontend consumer | Derived from |
 | --- | --- | --- |
-| `analysis/published/data/seasons.json` | Season selectors and page availability | League records plus each season's published files |
+| `analysis/published/data/seasons.json` | Season selectors and page availability; includes league start time for newest-published default selection | League records with an existing published `overview.json` |
 | `analysis/published/data/meta-history.json` | Cross-season meta history | Every published `overview.json` |
 | `analysis/published/data/{league_id}/overview.json` | Main visualization overview and meta heroes | Relationship statistics, meta heroes, and league metadata |
 | `analysis/published/data/{league_id}/patterns/{relation}/{context}.json` | Main relationship tables | The four relationship-stat JSONL files; `relation` is `ban_response`, `pick_synergy`, `counter_pick`, or `counter_ban`, and `context` is normally `overall` or `slot_context` |

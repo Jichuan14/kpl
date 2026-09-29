@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import logging
 import time
+from datetime import datetime, timezone
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
@@ -30,6 +32,17 @@ logger = logging.getLogger(__name__)
 
 # Match status used by official API for finished series (same convention as kpl-agent).
 FINISHED_MATCH_STATUS = 2
+CHINA_TZ = ZoneInfo("Asia/Shanghai")
+
+
+def _china_time(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed.replace(tzinfo=CHINA_TZ) if parsed.tzinfo is None else parsed.astimezone(CHINA_TZ)
 
 
 def _as_int(value: Any) -> int:
@@ -98,6 +111,42 @@ class SyncService:
         if not latest:
             raise RuntimeError("No leagues available after sync")
         return latest.league_id
+
+    def select_started_league_id(self, at: datetime | None = None) -> str:
+        """Choose the newest officially listed league with a completed match.
+
+        The official catalog can list future competitions before play begins.
+        Require both a started league window and evidence of a finished match.
+        """
+        instant = at or datetime.now(timezone.utc)
+        if instant.tzinfo is None:
+            instant = instant.replace(tzinfo=timezone.utc)
+        current = instant.astimezone(CHINA_TZ)
+        leagues = list(self.db.scalars(select(League)))
+        leagues.sort(
+            key=lambda league: (
+                _china_time(league.start_time) or datetime.min.replace(tzinfo=CHINA_TZ),
+                league.year or 0,
+                league.season or 0,
+                league.league_id,
+            ),
+            reverse=True,
+        )
+        for league in leagues:
+            start = _china_time(league.start_time)
+            if start is None or start > current:
+                continue
+            payload = self.api.get_matches(league.league_id)
+            if not payload or payload.get("code") != 200:
+                raise RuntimeError(f"Failed to fetch matches for league {league.league_id}")
+            if any(
+                _as_int(match.get("status")) == FINISHED_MATCH_STATUS
+                and (match_start is None or match_start <= current)
+                for match in (payload.get("results") or [])
+                for match_start in (_china_time(match.get("start_time")),)
+            ):
+                return league.league_id
+        raise RuntimeError("No officially started league has a completed match yet")
 
     def sync_league_bp(
         self,
