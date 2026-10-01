@@ -4,6 +4,7 @@ import { fetchUltimateCounterLineup, fetchUltimateLineups, scoreLineup, scoreNeu
 import { heroAsset } from "./heroAssets";
 import { heroSearchAliases } from "./heroSearchAliases";
 import { language, t } from "./i18n";
+import { indexRelationships, relationshipWeight } from "./lineupRelationships.js";
 
 const props = defineProps({
   leagueId: { type: String, required: true },
@@ -133,21 +134,10 @@ function laneConflict(hero, side = activeSide.value) {
   return !rolesAreFeasible([...teamIds(side), Number(hero?.hero_id)]);
 }
 
-function relationshipWeight(row) {
-  const lift = Math.max(1, Number(row?.smoothed_lift || 1));
-  const support = Math.min(1, Number(row?.selections || 0) / 6);
-  return Math.log2(lift) * support;
-}
+const relationshipLookup = computed(() => indexRelationships(supportedRows.value));
 
 function directRelationship(relation, sourceId, targetId) {
-  return supportedRows.value
-    .filter(
-      (row) =>
-        row.relation === relation &&
-        Number(row.source_hero_id) === Number(sourceId) &&
-        Number(row.target_hero_id) === Number(targetId)
-    )
-    .sort((a, b) => relationshipWeight(b) - relationshipWeight(a))[0] || null;
+  return relationshipLookup.value(relation, sourceId, targetId);
 }
 
 function synergyRelationship(firstId, secondId) {
@@ -184,16 +174,20 @@ function fuzzyScore(hero, query) {
   return best;
 }
 
-const heroOptions = computed(() => {
-  const query = search.value.trim();
-  return props.heroes
+const candidateOptions = computed(() =>
+  props.heroes
     .filter((hero) => !selectedActiveSideIds.value.has(Number(hero.hero_id)))
     .map((hero) => ({
       hero,
       fit: candidateFit(hero.hero_id),
-      fuzzy: fuzzyScore(hero, query),
       laneConflict: laneConflict(hero),
     }))
+);
+
+const heroOptions = computed(() => {
+  const query = search.value.trim();
+  return candidateOptions.value
+    .map((item) => ({ ...item, fuzzy: fuzzyScore(item.hero, query) }))
     .filter((item) => !query || Number.isFinite(item.fuzzy))
     .sort(
       (a, b) =>

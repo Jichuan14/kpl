@@ -15,6 +15,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterable
 
+from statistical_helpers import read_jsonl
+
 from common import CURRENT_LEAGUE_ID, REPO_ROOT
 
 DEFAULT_HALF_LIFE_DAYS = 180.0
@@ -29,22 +31,6 @@ PLAYER_METRIC_NAMES = (
     "gold_per_minute",
 )
 POSITION_ORDER = {6: 0, 5: 1, 2: 2, 7: 3, 4: 4}
-
-
-def read_jsonl(path: Path) -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = []
-    with path.open(encoding="utf-8") as source:
-        for line_number, line in enumerate(source, 1):
-            if not line.strip():
-                continue
-            try:
-                row = json.loads(line)
-            except json.JSONDecodeError as exc:
-                raise ValueError(f"Invalid JSON in {path}:{line_number}") from exc
-            if not isinstance(row, dict):
-                raise ValueError(f"Expected an object in {path}:{line_number}")
-            rows.append(row)
-    return rows
 
 
 def parse_time(value: Any) -> datetime | None:

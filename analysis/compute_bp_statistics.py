@@ -30,10 +30,11 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, Callable, Iterable
+
+from statistical_helpers import read_decisions, wilson_interval
 
 from common import CURRENT_LEAGUE_ID, DB_PATH, REPO_ROOT, connect
 
@@ -73,26 +74,6 @@ def load_hero_names(db_path: Path) -> dict[int, str]:
     return {int(row["hero_id"]): row["hero_name"] or "" for row in rows}
 
 
-def read_decisions(path: Path) -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = []
-    with path.open(encoding="utf-8") as source:
-        for line_number, line in enumerate(source, 1):
-            if not line.strip():
-                continue
-            try:
-                row = json.loads(line)
-            except json.JSONDecodeError as exc:
-                raise ValueError(
-                    f"Invalid JSON on line {line_number} of {path}: {exc}"
-                ) from exc
-            if not isinstance(row, dict):
-                raise ValueError(
-                    f"Line {line_number} of {path} is not a JSON object"
-                )
-            rows.append(row)
-    return rows
-
-
 def group_battles(
     decisions: Iterable[dict[str, Any]],
 ) -> list[list[dict[str, Any]]]:
@@ -130,23 +111,6 @@ def effective_legal_ids(decision: dict[str, Any]) -> tuple[set[int], bool]:
 
 def round6(value: float | None) -> float | None:
     return None if value is None else round(value, 6)
-
-
-def wilson_interval(successes: int, trials: int) -> tuple[float, float]:
-    if trials <= 0:
-        return 0.0, 0.0
-    z = 1.959963984540054
-    p = successes / trials
-    denominator = 1 + z * z / trials
-    center = (p + z * z / (2 * trials)) / denominator
-    margin = (
-        z
-        * math.sqrt(
-            p * (1 - p) / trials + z * z / (4 * trials * trials)
-        )
-        / denominator
-    )
-    return max(0.0, center - margin), min(1.0, center + margin)
 
 
 def write_jsonl(path: Path, rows: list[dict[str, Any]]) -> int:

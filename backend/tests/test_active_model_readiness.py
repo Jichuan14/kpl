@@ -36,7 +36,15 @@ class ActiveModelReadinessTests(unittest.TestCase):
                 db.add(League(league_id='season', league_name='Season', year=2026, season=3, start_time='2026-01-01')); db.commit()
                 handle=SimpleNamespace(metadata=lambda:{'model_version':'fixture','context_reference_cutoff':'2020-01-01'})
                 with patch('app.services.model_registry.resolve_bundle',return_value=handle), patch('app.services.model_registry.REGISTRY_ROOT',root/'outputs/models'):
-                    result = data.data_status('season', db).data
+                    write_map()
+                    opened_models = []
+                    original_open = Path.open
+                    def counted_open(path, *args, **kwargs):
+                        if path.name == 'personalized_draft_choice_model.json': opened_models.append(path)
+                        return original_open(path, *args, **kwargs)
+                    with patch.object(Path, 'open', counted_open):
+                        result = data.data_status('season', db).data
+                    self.assertEqual(len(opened_models), 1)
                     self.assertTrue(result['analysis_ready'])
                     self.assertTrue(result['active_model']['ready'])
                     self.assertNotIn('learnable_draft_model', [row['key'] for row in result['pipeline']])

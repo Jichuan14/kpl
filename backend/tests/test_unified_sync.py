@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-from sqlalchemy import create_engine, func, inspect, select
+from sqlalchemy import create_engine, event, func, inspect, select
 from sqlalchemy.orm import Session
 
 from app.database import Base, ensure_schema_compatibility
@@ -41,6 +41,29 @@ class UnifiedBattleSyncTest(unittest.TestCase):
         self.service.close()
         self.db.close()
         self.engine.dispose()
+
+    def test_batch_completeness_requires_bp_for_every_known_battle(self):
+        self.db.add_all([
+            Battle(battle_id="complete", match_id="complete-match", league_id="league-1"),
+            Battle(battle_id="partial", match_id="match-1", league_id="league-1"),
+            BattleBp(battle_id="complete", league_id="league-1", action_type=1),
+            BattleBp(battle_id="battle-1", league_id="league-1", action_type=1),
+        ])
+        self.db.commit()
+        statements = []
+        def record(conn, cursor, statement, parameters, context, executemany):
+            statements.append(statement)
+        event.listen(self.engine, "before_cursor_execute", record)
+        try:
+            result = self.service._complete_match_ids(["complete-match", "match-1", "no-battles"])
+        finally:
+            event.remove(self.engine, "before_cursor_execute", record)
+        self.assertEqual(result, {"complete-match"})
+        self.assertEqual(len(statements), 1)
+        self.assertEqual(self.service._complete_match_ids([]), set())
+        self.db.add(BattleBp(battle_id="partial", league_id="league-1", action_type=0))
+        self.db.commit()
+        self.assertTrue(self.service._match_has_complete_battle_data("match-1"))
 
     def detail(self) -> dict:
         return {

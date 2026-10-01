@@ -1,4 +1,5 @@
 <script setup>
+import { createSeasonStartup } from "./seasonStartup.js";
 import ModelCoverageNote from "./ModelCoverageNote.vue";
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import {
@@ -571,19 +572,16 @@ async function loadFeatureSpace() {
   }
 }
 
+const seasonStartup = createSeasonStartup(loadSeasons, () => { matchupRequestNumber += 1; return loadFeatureSpace(); });
 onMounted(async () => {
   try {
-    await loadSeasons();
-    await loadFeatureSpace();
+    await seasonStartup.initialize();
   } finally {
     finishStartupLoading();
   }
 });
 
-watch(leagueId, () => {
-  matchupRequestNumber += 1;
-  loadFeatureSpace();
-}, { flush: "sync" });
+watch(leagueId, seasonStartup.changed, { flush: "sync" });
 </script>
 
 <template>

@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import delete, select
+from sqlalchemy import case, delete, func, select
 from sqlalchemy.orm import Session
 
 from app.clients.kpl_api import KplApiClient
@@ -182,11 +182,8 @@ class SyncService:
             finished = finished[: max(0, match_limit)]
 
         if incremental:
-            finished_to_sync = [
-                match
-                for match in finished
-                if not self._match_has_complete_battle_data(match.match_id)
-            ]
+            complete_ids = self._complete_match_ids([match.match_id for match in finished])
+            finished_to_sync = [match for match in finished if match.match_id not in complete_ids]
         else:
             finished_to_sync = finished
 
@@ -244,17 +241,21 @@ class SyncService:
         is available. Treat that as incomplete so the *same new match* is
         retried on the next run instead of silently publishing partial data.
         """
-        battle_ids = list(
-            self.db.scalars(select(Battle.battle_id).where(Battle.match_id == match_id))
-        )
-        if not battle_ids:
-            return False
-        for battle_id in battle_ids:
-            if self.db.scalar(
-                select(BattleBp.id).where(BattleBp.battle_id == battle_id).limit(1)
-            ) is None:
-                return False
-        return True
+        return match_id in self._complete_match_ids([match_id])
+
+    def _complete_match_ids(self, match_ids: list[str]) -> set[str]:
+        complete = set()
+        has_bp = select(BattleBp.id).where(BattleBp.battle_id == Battle.battle_id).exists()
+        # Bound SQLite parameters while checking each locally known battle once.
+        for offset in range(0, len(match_ids), 500):
+            rows = self.db.scalars(
+                select(Battle.match_id)
+                .where(Battle.match_id.in_(match_ids[offset:offset + 500]))
+                .group_by(Battle.match_id)
+                .having(func.sum(case((has_bp, 0), else_=1)) == 0)
+            )
+            complete.update(rows)
+        return complete
 
     def _sync_matches(self, league_id: str) -> int:
         payload = self.api.get_matches(league_id)

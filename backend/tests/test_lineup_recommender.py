@@ -160,13 +160,15 @@ class LineupRecommendationTest(unittest.TestCase):
             "blue_bans": [],
             "red_bans": [],
         }
+        prepared = object()
         with (
+            patch.object(lineup_recommender, "_prepare_prediction", return_value=prepared) as prepare,
             patch.object(lineup_recommender, "predict_next_action", return_value=policy),
             patch.object(
                 lineup_recommender,
                 "sample_forced_draft_completions",
                 side_effect=completions,
-            ),
+            ) as sample,
             patch.object(
                 lineup_recommender,
                 "load_lineup_value_model",
@@ -189,6 +191,11 @@ class LineupRecommendationTest(unittest.TestCase):
         )
         self.assertEqual(result["candidate_gate"]["evaluated_candidate_count"], 2)
         load_value_model.assert_called_once_with("league")
+        prepare.assert_called_once_with("league", state, "stats")
+        self.assertEqual(sample.call_count, 2)
+        for call in sample.call_args_list:
+            self.assertIs(call.kwargs["_prepared_prediction"], prepared)
+            self.assertEqual(call.kwargs["seed"], 7 + call.kwargs["forced_first_hero_id"] * 1009)
 
 
 if __name__ == "__main__":

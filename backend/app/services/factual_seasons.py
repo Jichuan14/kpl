@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models import Battle, League, Match
@@ -33,30 +33,34 @@ def factual_seasons(db: Session, data_root: Path) -> list[dict]:
     leagues = db.scalars(select(League).order_by(
         League.year.desc(), League.season.desc(), League.start_time.desc(), League.id.desc()
     )).all()
-    matches_by_league: dict[str, list[Match]] = {}
-    for match in db.scalars(select(Match)).all():
-        matches_by_league.setdefault(match.league_id, []).append(match)
-    battles_by_league: dict[str, int] = {}
-    for league_id in db.scalars(select(Battle.league_id).where(Battle.win_camp.in_([1, 2]))).all():
-        battles_by_league[league_id] = battles_by_league.get(league_id, 0) + 1
+    match_counts = {
+        row.league_id: (row.match_count, row.completed_count)
+        for row in db.execute(select(
+            Match.league_id, func.count().label("match_count"),
+            func.sum(case((or_(Match.status == FINISHED_MATCH_STATUS, Match.win_camp.in_([1, 2])), 1), else_=0)).label("completed_count"),
+        ).group_by(Match.league_id))
+    }
+    teams_by_league = {}
+    # Retain latest fixture name per team, in the same insertion order as the
+    # former full Match scan, without materializing unused ORM match fields.
+    for match in db.execute(select(Match.league_id, Match.camp1_team_id, Match.camp1_team_name,
+                                   Match.camp2_team_id, Match.camp2_team_name).order_by(Match.id)):
+        teams = teams_by_league.setdefault(match.league_id, {})
+        for team_id, team_name in ((match.camp1_team_id, match.camp1_team_name), (match.camp2_team_id, match.camp2_team_name)):
+            if team_id and team_id != "0":
+                teams[team_id] = {"team_id": team_id, "team_name": team_name or team_id}
+    battles_by_league = dict(db.execute(select(Battle.league_id, func.count())
+        .where(Battle.win_camp.in_([1, 2])).group_by(Battle.league_id)).all())
     rows = []
     for league in leagues:
-        matches = matches_by_league.get(league.league_id, [])
-        teams = {}
-        for match in matches:
-            for team_id, team_name in ((match.camp1_team_id, match.camp1_team_name), (match.camp2_team_id, match.camp2_team_name)):
-                if team_id and team_id != "0":
-                    teams[team_id] = {"team_id": team_id, "team_name": team_name or team_id}
+        teams = teams_by_league.get(league.league_id, {})
+        match_count, completed_matches = match_counts.get(league.league_id, (0, 0))
         directory = data_root / league.league_id
-        completed_matches = sum(
-            match.status == FINISHED_MATCH_STATUS or match.win_camp in (1, 2)
-            for match in matches
-        )
         rankings_ready = season_rankings_ready(directory / "rankings.json", league.league_id)
         rows.append({
             "league_id": league.league_id, "league_name": league.league_name,
             "year": league.year, "season": league.season, "status": league.status,
-            "start_time": league.start_time, "match_count": len(matches),
+            "start_time": league.start_time, "match_count": match_count,
             "completed_match_count": completed_matches,
             "completed_battle_count": battles_by_league.get(league.league_id, 0),
             "fixture_teams": sorted(teams.values(), key=lambda team: team["team_name"]),

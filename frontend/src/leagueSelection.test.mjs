@@ -37,13 +37,28 @@ test("server default is authoritative if catalog response briefly lags", async (
   await state.loadSeasons(); assert.equal(state.selectedLeagueId.value, current.league_id);
 });
 
-test("late default and older catalog responses cannot overwrite a manual visit choice", async () => {
-  const first = deferred(), second = deferred(); let call = 0;
-  const state = createPublicSeasonState(() => ++call === 1 ? first.promise : second.promise, async () => ({ default_league_id: current.league_id }));
+test("concurrent startup shares requests and preserves a manual visit choice", async () => {
+  const first = deferred(); let catalogs = 0, defaults = 0;
+  const state = createPublicSeasonState(() => { catalogs++; return first.promise; }, async () => { defaults++; return { default_league_id: current.league_id }; });
   const early = state.loadSeasons(), later = state.loadSeasons();
+  assert.equal(early, later);
   state.selectLeague(old.league_id);
-  second.resolve([old, current]); await later;
-  first.resolve([old]); await early;
+  first.resolve([old, current]); await Promise.all([early, later]);
+  assert.equal(catalogs, 1); assert.equal(defaults, 1);
   assert.equal(state.selectedLeagueId.value, old.league_id);
-  assert.deepEqual(state.seasons.value, [old, current]);
+  await state.loadSeasons();
+  assert.equal(catalogs, 2); assert.equal(defaults, 1);
+});
+
+test("failed shared initialization can retry, and a deliberate save wins an in-flight default", async () => {
+  let calls = 0;
+  const preference = deferred();
+  const state = createPublicSeasonState(async () => { if (++calls === 1) throw Error('temporary'); return [old, current]; }, () => preference.promise);
+  await assert.rejects(state.loadSeasons(), /temporary/);
+  const retry = state.loadSeasons();
+  state.applySavedDefault(old.league_id);
+  preference.resolve({ default_league_id: current.league_id }); await retry;
+  assert.equal(state.selectedLeagueId.value, old.league_id);
+  assert.equal(state.savedDefaultLeagueId.value, old.league_id);
+  assert.equal(calls, 2);
 });

@@ -41,3 +41,18 @@ def test_zero_or_few_current_games_defers_before_training(tmp_path):
     train.assert_not_called()
     status=json.loads((tmp_path/'candidates/latest_status.json').read_text())
     assert status['status']=='DEFERRED' and status['active_model_version']=='incumbent'
+
+
+def test_reference_match_stream_decodes_once_and_keeps_season_selection_order(tmp_path):
+    source_a = tmp_path / 'a.jsonl'; source_b = tmp_path / 'b.jsonl'
+    source_a.write_text('\n{"match_id":"same","teams":[]}\n{"match_id":"excluded"}\n')
+    source_b.write_text('{"match_id":"same","teams":[]}\n')
+    value = {'source_files': {'S3': {'matches': str(source_a)}, 'S4': {'matches': str(source_b)}},
+             'source_seasons': ['S3','S4'], 'splits': {'train': []}, 'weighting': {}}
+    output = tmp_path / 'output'; output.mkdir()
+    original_loads = json.loads
+    with patch.object(rolling, 'corpus_rows', return_value=[]), patch.object(rolling, 'split_keys', return_value={('S4','same')}), patch.object(rolling, 'command'), patch.object(json, 'loads', wraps=original_loads) as decode:
+        rolling.build_references(value, output)
+        assert decode.call_count == 3
+    rows = [original_loads(line) for line in (output / 'references/matches.jsonl').read_text().splitlines()]
+    assert rows == [{'match_id':'same', 'teams':[]}]

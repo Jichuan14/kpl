@@ -1,4 +1,5 @@
 <script setup>
+import { createSeasonStartup } from "./seasonStartup.js";
 import ModelCoverageNote from "./ModelCoverageNote.vue";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { fetchActiveModel, fetchDraftModel } from "./api";
@@ -109,10 +110,11 @@ const loadModel = createFactualLoader({
   error() { model.value = null; },
   finish() { finishStartupLoading(); },
 });
-watch(selectedLeagueId, loadModel, { flush: "sync" });
+const seasonStartup = createSeasonStartup(loadSeasons, loadModel);
+watch(selectedLeagueId, seasonStartup.changed, { flush: "sync" });
 
 onMounted(async () => {
-  try { await loadSeasons(); await loadModel(); }
+  try { await seasonStartup.initialize(); }
   catch { finishStartupLoading(); }
   await nextTick();
   const hash = window.location.hash.slice(1);

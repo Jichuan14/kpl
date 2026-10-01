@@ -1,4 +1,6 @@
 import unittest
+from concurrent.futures import Future, ThreadPoolExecutor
+from threading import Event
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
@@ -129,6 +131,88 @@ class LiveMatchServiceTest(unittest.TestCase):
 
         self.assertFalse(state["is_finished"])
         self.assertIsNone(state["match"])
+
+
+class LiveMatchConcurrencyTest(unittest.TestCase):
+    def test_same_key_waiters_share_result_and_unrelated_reads_continue(self):
+        service = LiveMatchService(client=FakeKplClient())
+        entered, release, joined = Event(), Event(), Event()
+        class ObservedFuture(Future):
+            def result(self, *args, **kwargs):
+                joined.set()
+                return super().result(*args, **kwargs)
+        def fetch(league, teams, match):
+            if match == "blocked":
+                entered.set()
+                if not release.wait(3): raise TimeoutError("release")
+            return {"match": match, "teams": sorted(teams)}
+        with patch.object(service, "_fetch_state", side_effect=fetch), patch("app.services.live_match.Future", ObservedFuture), ThreadPoolExecutor(max_workers=3) as pool:
+            leader = pool.submit(service.get_match_state, "s4", "a", "b", "blocked")
+            try:
+                self.assertTrue(entered.wait(2))
+                waiter = pool.submit(service.refresh_match_state, "s4", "b", "a", "blocked")
+                self.assertTrue(joined.wait(2))
+                unrelated = pool.submit(service.get_match_state, "s4", "a", "b", "other")
+                self.assertEqual(unrelated.result(2)["match"], "other")
+                cached = pool.submit(service.get_match_state, "s4", "b", "a", "other")
+                self.assertFalse(cached.result(2)["official_refresh"]["performed"])
+            finally:
+                release.set()
+            self.assertTrue(leader.result(2)["official_refresh"]["performed"])
+            self.assertFalse(waiter.result(2)["official_refresh"]["performed"])
+        self.assertEqual(service._state_flights, {})
+
+    def test_ordinary_cache_read_during_failed_manual_refresh_and_retry(self):
+        service = LiveMatchService(client=FakeKplClient())
+        entered, release, joined = Event(), Event(), Event()
+        class ObservedFuture(Future):
+            def result(self, *args, **kwargs):
+                joined.set()
+                return super().result(*args, **kwargs)
+        def fail(*args):
+            entered.set()
+            if not release.wait(3): raise TimeoutError("release")
+            raise RuntimeError("upstream")
+        with patch("app.services.live_match.monotonic", return_value=0):
+            service.get_match_state("s4", "lgd", "hero", "live-1")
+        with patch("app.services.live_match.monotonic", return_value=60), patch("app.services.live_match.Future", ObservedFuture), patch.object(service, "_fetch_state", side_effect=fail), ThreadPoolExecutor(max_workers=2) as pool:
+            leader = pool.submit(service.refresh_match_state, "s4", "hero", "lgd", "live-1")
+            try:
+                self.assertTrue(entered.wait(2))
+                waiter = pool.submit(service.refresh_match_state, "s4", "lgd", "hero", "live-1")
+                self.assertTrue(joined.wait(2))
+                cached = service.get_match_state("s4", "lgd", "hero", "live-1")
+                self.assertEqual(cached["official_refresh"]["cache_age_seconds"], 60)
+                self.assertFalse(cached["official_refresh"]["performed"])
+            finally:
+                release.set()
+            for result in (leader, waiter):
+                with self.assertRaisesRegex(RuntimeError, "upstream"): result.result(2)
+        self.assertEqual(service._state_flights, {})
+        with patch("app.services.live_match.monotonic", return_value=61):
+            self.assertTrue(service.refresh_match_state("s4", "lgd", "hero", "live-1")["official_refresh"]["performed"])
+
+    def test_fixture_cache_is_raw_and_filters_independently_per_caller(self):
+        client = FakeKplClient()
+        service = LiveMatchService(client=client)
+        self.assertIsNone(service.get_current_fixture("s4", selectable_team_ids={"other"}))
+        self.assertEqual(service.get_current_fixture("s4", selectable_team_ids={"lgd", "hero"})["match_id"], "live-1")
+        self.assertEqual(client.matches_calls, 1)
+        # Same match with a different team pair cannot reuse the earlier state.
+        service.get_match_state("s4", "lgd", "hero", "live-1")
+        other = service.get_match_state("s4", "lgd", "other", "live-1")
+        self.assertIsNone(other["match"])
+        self.assertEqual(client.matches_calls, 3)
+
+    def test_slow_fetch_ttl_starts_at_publication_and_boundary_expires(self):
+        service = LiveMatchService(client=FakeKplClient(), cache_seconds=180)
+        with patch("app.services.live_match.monotonic", side_effect=[0, 200]):
+            first = service.get_match_state("s4", "lgd", "hero", "live-1")
+        with patch("app.services.live_match.monotonic", return_value=379):
+            self.assertFalse(service.get_match_state("s4", "lgd", "hero", "live-1")["official_refresh"]["performed"])
+        with patch("app.services.live_match.monotonic", return_value=380):
+            self.assertTrue(service.get_match_state("s4", "lgd", "hero", "live-1")["official_refresh"]["performed"])
+        self.assertTrue(first["official_refresh"]["performed"])
 
 
 class LiveMatchApiTest(unittest.TestCase):

@@ -1,4 +1,5 @@
 <script setup>
+import { createSeasonStartup } from "./seasonStartup.js";
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import {
   fetchMetaHistory,
@@ -303,10 +304,10 @@ async function loadMetaHistory() {
   }
 }
 
+const seasonStartup = createSeasonStartup(loadSeasons, loadPatterns);
 onMounted(async () => {
   try {
-    await loadSeasons();
-    await loadPatterns();
+    await seasonStartup.initialize();
     await loadMetaHistory();
   } catch (err) {
     error.value = err.message || "Could not load visualization data.";
@@ -315,7 +316,7 @@ onMounted(async () => {
   }
 });
 
-watch(leagueId, loadPatterns, { flush: "sync" });
+watch(leagueId, seasonStartup.changed, { flush: "sync" });
 watch([relation, context], loadPatterns);
 watch(search, (value) => {
   if (searchTimer) window.clearTimeout(searchTimer);

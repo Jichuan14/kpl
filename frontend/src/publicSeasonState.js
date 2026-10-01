@@ -16,7 +16,7 @@ export function createPublicSeasonState(fetchCatalog, fetchDefault) {
   const savedDefaultLeagueId = ref("");
   let initialized = false;
   let manualChoice = false;
-  let version = 0;
+  let pendingCatalog = null;
   function selectLeague(id) {
     selectedLeagueId.value = id;
     manualChoice = true;
@@ -30,12 +30,15 @@ export function createPublicSeasonState(fetchCatalog, fetchDefault) {
     // already in flight. Its catalog can still load without restoring the old ID.
     initialized = true;
   }
-  async function loadSeasons() {
-    const requestVersion = ++version;
+  function loadSeasons() {
+    if (pendingCatalog) return pendingCatalog;
+    pendingCatalog = readSeasons().finally(() => { pendingCatalog = null; });
+    return pendingCatalog;
+  }
+  async function readSeasons() {
     const [catalog, preference] = await Promise.all([
       fetchCatalog(), initialized ? null : fetchDefault(),
     ]);
-    if (requestVersion !== version) return seasons.value;
     seasons.value = catalog || [];
     if (!initialized) {
       const defaultId = preference?.default_league_id;

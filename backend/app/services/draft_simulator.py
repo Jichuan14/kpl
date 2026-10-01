@@ -1427,6 +1427,7 @@ def predict_next_action(
     *,
     model_type: str = "stats",
     limit: int = 5,
+    _prepared_prediction: tuple | None = None,
 ) -> dict[str, Any]:
     """Return the next legal BP distribution without running future rollouts."""
     if limit < 1:
@@ -1439,7 +1440,7 @@ def predict_next_action(
         _,
         next_step,
         probabilities,
-    ) = _prepare_prediction(
+    ) = _prepared_prediction if _prepared_prediction is not None else _prepare_prediction(
         league_id,
         state,
         model_type,
@@ -1470,6 +1471,7 @@ def sample_forced_draft_completions(
     rollouts: int,
     seed: int | None,
     model_type: str = "stats",
+    _prepared_prediction: tuple | None = None,
 ) -> dict[str, Any]:
     """Complete drafts after forcing one currently legal pick or ban.
 
@@ -1487,7 +1489,7 @@ def sample_forced_draft_completions(
         start_index,
         next_step,
         next_probabilities,
-    ) = _prepare_prediction(league_id, state, model_type)
+    ) = _prepared_prediction if _prepared_prediction is not None else _prepare_prediction(league_id, state, model_type)
     probability_by_hero = {
         int(row["hero_id"]): float(row["probability"])
         for row in next_probabilities

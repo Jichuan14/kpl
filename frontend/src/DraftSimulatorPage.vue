@@ -1,4 +1,5 @@
 <script setup>
+import { createSeasonStartup } from "./seasonStartup.js";
 import ModelCoverageNote from "./ModelCoverageNote.vue";
 import { computed, onBeforeUnmount, onMounted, ref, toRaw, watch } from "vue";
 import {
@@ -1694,10 +1695,10 @@ function resistMobileBoardWheel(event) {
   window.scrollBy(0, event.deltaY - resistedAmount + resistedAmount * 0.18);
 }
 
+const seasonStartup = createSeasonStartup(loadSeasons, loadModel);
 onMounted(async () => {
   try {
-    await loadSeasons();
-    await loadModel();
+    await seasonStartup.initialize();
   } catch (err) {
     error.value = err.message || "Could not load the draft simulator.";
   } finally {
@@ -1705,7 +1706,7 @@ onMounted(async () => {
   }
 });
 
-watch(leagueId, loadModel, { flush: "sync" });
+watch(leagueId, seasonStartup.changed, { flush: "sync" });
 watch(
   selectedTeamIds,
   async () => {

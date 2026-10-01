@@ -149,12 +149,12 @@ def _team_from_row(row: Any) -> dict[str, Any]:
     }
 
 
-def load_camp_teams(conn, battle_id: str) -> dict[int, dict[str, Any]]:
+def load_camp_teams(conn, battle_id: str, *, rows=None) -> dict[int, dict[str, Any]]:
     """Map raw API camp 1/2 to the actual team in one battle."""
-    if not _has_table(conn, "battle_players"):
+    if rows is None and not _has_table(conn, "battle_players"):
         return {}
 
-    rows = conn.execute(
+    rows = rows if rows is not None else conn.execute(
         """
         SELECT
             camp,
@@ -171,11 +171,11 @@ def load_camp_teams(conn, battle_id: str) -> dict[int, dict[str, Any]]:
     return {int(row["camp"]): _team_from_row(row) for row in rows}
 
 
-def load_players(conn, battle_id: str) -> list[dict[str, Any]]:
-    if not _has_table(conn, "battle_players"):
+def load_players(conn, battle_id: str, *, rows=None) -> list[dict[str, Any]]:
+    if rows is None and not _has_table(conn, "battle_players"):
         return []
 
-    columns = _table_columns(conn, "battle_players")
+    columns = _table_columns(conn, "battle_players") if rows is None else set()
     performance_columns = (
         "performance_data_available",
         "kill_num",
@@ -200,7 +200,7 @@ def load_players(conn, battle_id: str) -> list[dict[str, Any]]:
         name if name in columns else f"0 AS {name}"
         for name in performance_columns
     )
-    rows = conn.execute(
+    rows = rows if rows is not None else conn.execute(
         f"""
         SELECT
             team_id,
@@ -219,6 +219,7 @@ def load_players(conn, battle_id: str) -> list[dict[str, Any]]:
         """,
         (battle_id,),
     ).fetchall()
+    rows = [{**dict.fromkeys(performance_columns, 0), **dict(row)} for row in rows]
     return [
         {
             "team_id": row["team_id"] or "",
@@ -265,8 +266,9 @@ def load_bp_actions(
     conn,
     battle_id: str,
     camp_teams: dict[int, dict[str, Any]],
+    *, rows=None,
 ) -> list[dict[str, Any]]:
-    rows = conn.execute(
+    rows = rows if rows is not None else conn.execute(
         """
         SELECT
             bp_order,
@@ -346,11 +348,12 @@ def battle_quality_flags(
     return flags
 
 
-def export_battle(conn, battle: Any) -> dict[str, Any]:
+def export_battle(conn, battle: Any, *, detail=None) -> dict[str, Any]:
     battle_id = battle["battle_id"]
-    camp_teams = load_camp_teams(conn, battle_id)
-    players = load_players(conn, battle_id)
-    actions = load_bp_actions(conn, battle_id, camp_teams)
+    detail = detail or {}
+    camp_teams = load_camp_teams(conn, battle_id, rows=detail.get("camps"))
+    players = load_players(conn, battle_id, rows=detail.get("players"))
+    actions = load_bp_actions(conn, battle_id, camp_teams, rows=detail.get("actions"))
     win_camp = int(battle["win_camp"] or 0)
     winner = camp_teams.get(win_camp, {})
 
@@ -372,8 +375,8 @@ def export_battle(conn, battle: Any) -> dict[str, Any]:
     }
 
 
-def export_match(conn, match: Any) -> dict[str, Any]:
-    battles = conn.execute(
+def export_match(conn, match: Any, *, battles=None, details=None) -> dict[str, Any]:
+    battles = battles if battles is not None else conn.execute(
         """
         SELECT battle_id, battle_seq, win_camp, game_duration, status
         FROM battles
@@ -417,7 +420,7 @@ def export_match(conn, match: Any) -> dict[str, Any]:
                 "team_name": match["camp2_team_name"] or "",
             },
         ],
-        "battles": [export_battle(conn, battle) for battle in battles],
+        "battles": [export_battle(conn, battle, detail=(details or {}).get(battle["battle_id"])) for battle in battles],
     }
 
 
@@ -446,19 +449,47 @@ def list_matches(
     return rows
 
 
+def _batch_details(conn, battle_ids, has_players):
+    details = {id: {"camps": [], "players": [], "actions": []} for id in battle_ids}
+    for offset in range(0, len(battle_ids), 500):
+        ids = battle_ids[offset:offset + 500]
+        placeholders = ",".join("?" for _ in ids)
+        if has_players:
+            camps = conn.execute(f"""SELECT battle_id, camp, team_id, MAX(team_name) AS team_name,
+                match_camp FROM battle_players WHERE battle_id IN ({placeholders})
+                GROUP BY battle_id, camp, team_id, match_camp ORDER BY camp""", ids)
+            for row in camps:
+                details[row["battle_id"]]["camps"].append(row)
+            players = conn.execute(f"SELECT * FROM battle_players WHERE battle_id IN ({placeholders}) ORDER BY camp, position, player_name", ids)
+            for row in players:
+                details[row["battle_id"]]["players"].append(row)
+        actions = conn.execute(f"SELECT * FROM battle_bps WHERE battle_id IN ({placeholders}) ORDER BY bp_order", ids)
+        for row in actions:
+            details[row["battle_id"]]["actions"].append(row)
+    return details
+
+
 def write_jsonl(
     conn,
     matches: list[Any],
     output_path: Path,
 ) -> int:
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    has_players = bool(_table_columns(conn, "battle_players"))
     with output_path.open("w", encoding="utf-8") as output:
-        for match in matches:
-            record = export_match(conn, match)
-            output.write(
-                json.dumps(record, ensure_ascii=False, separators=(",", ":"))
-            )
-            output.write("\n")
+        for offset in range(0, len(matches), 100):
+            batch = matches[offset:offset + 100]
+            ids = [match["match_id"] for match in batch]
+            placeholders = ",".join("?" for _ in ids)
+            battles = conn.execute(f"SELECT * FROM battles WHERE match_id IN ({placeholders}) ORDER BY battle_seq", ids).fetchall()
+            grouped = {id: [] for id in ids}
+            for battle in battles:
+                grouped[battle["match_id"]].append(battle)
+            details = _batch_details(conn, [battle["battle_id"] for battle in battles], has_players)
+            for match in batch:
+                record = export_match(conn, match, battles=grouped[match["match_id"]], details=details)
+                output.write(json.dumps(record, ensure_ascii=False, separators=(",", ":")))
+                output.write("\n")
     return len(matches)
 
 

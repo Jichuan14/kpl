@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 from collections import Counter, defaultdict
 from itertools import combinations
 from pathlib import Path
 from typing import Any, Iterable
+
+from statistical_helpers import read_jsonl, wilson_interval
 
 from common import CURRENT_LEAGUE_ID, REPO_ROOT
 
@@ -17,46 +18,12 @@ DEFAULT_OUTPUT_DIR = REPO_ROOT / "analysis" / "outputs" / CURRENT_LEAGUE_ID
 DEFAULT_RECENT_MATCHES = 5
 
 
-def read_jsonl(path: Path) -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = []
-    with path.open(encoding="utf-8") as source:
-        for line_number, line in enumerate(source, 1):
-            if not line.strip():
-                continue
-            try:
-                row = json.loads(line)
-            except json.JSONDecodeError as exc:
-                raise ValueError(f"Invalid JSON in {path}:{line_number}") from exc
-            if not isinstance(row, dict):
-                raise ValueError(f"Expected an object in {path}:{line_number}")
-            rows.append(row)
-    return rows
-
-
 def write_jsonl(path: Path, rows: Iterable[dict[str, Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as output:
         for row in rows:
             output.write(json.dumps(row, ensure_ascii=False, separators=(",", ":")))
             output.write("\n")
-
-
-def wilson_interval(successes: int, trials: int) -> tuple[float, float]:
-    if trials <= 0:
-        return 0.0, 0.0
-    z = 1.959963984540054
-    probability = successes / trials
-    denominator = 1 + z * z / trials
-    center = (probability + z * z / (2 * trials)) / denominator
-    margin = (
-        z
-        * math.sqrt(
-            probability * (1 - probability) / trials
-            + z * z / (4 * trials * trials)
-        )
-        / denominator
-    )
-    return max(0.0, center - margin), min(1.0, center + margin)
 
 
 def normal_decisions(decisions: list[dict[str, Any]]) -> list[dict[str, Any]]:

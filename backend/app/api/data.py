@@ -338,11 +338,13 @@ def data_status(
         and sequence_draft_model_path.stat().st_mtime >= decision_mtime
         and all(path.is_file() and path.stat().st_mtime >= decision_mtime for path in sequence_support_paths)
     )
+    sequence_model_source = None
     if sequence_draft_model["exists"]:
         try:
             with sequence_draft_model_path.open(encoding="utf-8") as source:
+                sequence_model_source = json.load(source)
                 sequence_draft_model["records"] = int(
-                    json.load(source).get("base_artifact", {}).get("training", {}).get(
+                    sequence_model_source.get("base_artifact", {}).get("training", {}).get(
                         "training_decisions", 0
                     )
                 )
@@ -354,7 +356,7 @@ def data_status(
     feature_space["ready"] = False
     if sequence_draft_model["ready"] and feature_space_path.is_file():
         try:
-            model_source = json.loads(sequence_draft_model_path.read_text(encoding="utf-8"))
+            model_source = sequence_model_source
             space_source = json.loads(feature_space_path.read_text(encoding="utf-8"))
             if not isinstance(model_source, dict) or not isinstance(space_source, dict):
                 raise ValueError("Invalid model/map root")

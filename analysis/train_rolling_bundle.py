@@ -99,10 +99,15 @@ def build_references(manifest: dict, output: Path) -> None:
     train=corpus_rows(manifest,('train',))
     merged=work/'bp_decisions.jsonl'; merged.write_text(''.join(json.dumps(r,ensure_ascii=False)+'\n' for r in train))
     merged_matches=work/'matches.jsonl'; keys=split_keys(manifest,'train')
-    selected=[]
-    for season,source in manifest['source_files'].items():
-        selected.extend(json.loads(line) for line in Path(source['matches']).read_text().splitlines() if line.strip() and (season,str(json.loads(line)['match_id'])) in keys)
-    merged_matches.write_text(''.join(json.dumps(r,ensure_ascii=False)+'\n' for r in selected))
+    with merged_matches.open('w', encoding='utf-8') as destination:
+        for season, source in manifest['source_files'].items():
+            with Path(source['matches']).open(encoding='utf-8') as stream:
+                for line in stream:
+                    if not line.strip():
+                        continue
+                    row = json.loads(line)
+                    if (season, str(row['match_id'])) in keys:
+                        destination.write(json.dumps(row, ensure_ascii=False) + '\n')
     command('compute_bp_statistics.py','--input',merged,'--output-dir',output)
     command('compute_meta_heroes.py','--input',merged,'--output',output/'meta_hero_stats.jsonl')
     command('compute_team_synergies.py','--input',merged,'--output',output/'team_synergy_stats.jsonl')

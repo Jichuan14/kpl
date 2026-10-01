@@ -499,7 +499,7 @@ class PredictNextActionTest(unittest.TestCase):
             ],
         )
         with (
-            patch.object(draft_simulator, "_prepare_prediction", return_value=prepared),
+            patch.object(draft_simulator, "_prepare_prediction", return_value=prepared) as prepare,
             patch.object(
                 draft_simulator,
                 "_predict",
@@ -515,6 +515,19 @@ class PredictNextActionTest(unittest.TestCase):
                 rollouts=2,
                 seed=1,
             )
+
+            prepare.reset_mock()
+            reused = draft_simulator.sample_forced_draft_completions(
+                "league-1", state, forced_first_hero_id=101, rollouts=2, seed=1,
+                _prepared_prediction=prepared,
+            )
+            prepare.assert_not_called()
+            self.assertEqual(reused, result)
+            with self.assertRaisesRegex(ValueError, "not legal"):
+                draft_simulator.sample_forced_draft_completions(
+                    "league-1", state, forced_first_hero_id=999, rollouts=2, seed=1,
+                    _prepared_prediction=prepared,
+                )
 
         self.assertEqual(result["forced_policy_probability"], 0.7)
         self.assertEqual(len(result["completions"]), 2)

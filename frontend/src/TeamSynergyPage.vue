@@ -1,4 +1,5 @@
 <script setup>
+import { createSeasonStartup } from "./seasonStartup.js";
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import {
   fetchTeamSynergies,
@@ -138,10 +139,10 @@ const loadTeamSynergies = createFactualLoader({
 });
 onBeforeUnmount(() => loadTeamSynergies.cancel());
 
+const seasonStartup = createSeasonStartup(loadSeasons, loadTeamSynergies);
 onMounted(async () => {
   try {
-    await loadSeasons();
-    await loadTeamSynergies();
+    await seasonStartup.initialize();
   } catch (err) {
     error.value = err.message || "Could not load team synergy data.";
   } finally {
@@ -149,7 +150,7 @@ onMounted(async () => {
   }
 });
 
-watch(leagueId, loadTeamSynergies, { flush: "sync" });
+watch(leagueId, seasonStartup.changed, { flush: "sync" });
 </script>
 
 <template>

@@ -1,4 +1,5 @@
 <script setup>
+import { createSeasonStartup } from "./seasonStartup.js";
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import { fetchPowerRankings } from "./api";
 import { createFactualLoader, hasSeasonObservations, neutralSeasonRankings, isSeasonOnlyRanking } from "./factualResource.js";
@@ -142,10 +143,10 @@ const loadRankings = createFactualLoader({
 });
 onBeforeUnmount(() => loadRankings.cancel());
 
+const seasonStartup = createSeasonStartup(loadSeasons, loadRankings);
 onMounted(async () => {
   try {
-    await loadSeasons();
-    await loadRankings();
+    await seasonStartup.initialize();
   } catch (err) {
     error.value = err.message || "Could not load ranking data.";
   } finally {
@@ -153,7 +154,7 @@ onMounted(async () => {
   }
 });
 
-watch(leagueId, loadRankings, { flush: "sync" });
+watch(leagueId, seasonStartup.changed, { flush: "sync" });
 </script>
 
 <template>

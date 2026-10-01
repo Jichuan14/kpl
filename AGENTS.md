@@ -25,8 +25,8 @@ Generated artifact locations and Git policy: `ARTIFACTS.md`
 | Question or task | Start here | Related locations |
 | --- | --- | --- |
 | App routes, navigation, season selection, management UI | `frontend/src/App.vue` | `frontend/src/selectedLeague.js`, `frontend/src/managementSeasonState.js`, `backend/app/services/site_settings.py`, `frontend/src/style.css` |
-| Frontend routing and shared async behavior | `frontend/src/router.js` | `frontend/src/composables/`, `frontend/src/storage.js` |
-| Hero comparison, matchup recommendations, feature space | `frontend/src/HeroFeatureSpacePage.vue` | `frontend/src/LineupAnalyzerWidget.vue`, `frontend/src/heroAssets.js` |
+| Frontend routing and shared async behavior | `frontend/src/router.js` | `frontend/src/composables/`, `frontend/src/seasonStartup.js`, `frontend/src/storage.js` |
+| Hero comparison, matchup recommendations, feature space | `frontend/src/HeroFeatureSpacePage.vue` | `frontend/src/LineupAnalyzerWidget.vue`, `frontend/src/lineupRelationships.js`, `frontend/src/heroAssets.js` |
 | BP relationship evidence and season priorities | `frontend/src/VisualizationPage.vue` | `frontend/src/api.js`, `CALCULATION_METHODOLOGY.md` sections 3–6 |
 | BP simulator | `frontend/src/DraftSimulatorPage.vue` | `frontend/src/DraftCoachPanel.vue`, `backend/app/api/simulation.py`, `backend/app/services/draft_simulator.py` |
 | Team pair analysis | `frontend/src/TeamSynergyPage.vue` | `analysis/compute_team_synergies.py`, `backend/app/api/visualization.py` |
@@ -38,7 +38,7 @@ Generated artifact locations and Git policy: `ARTIFACTS.md`
 | Syncing official KPL data | `backend/app/api/sync.py` | `backend/app/services/sync.py`, `backend/app/clients/kpl_api.py` |
 | Queue-backed update jobs and 03:00 China-time refresh | `backend/app/services/pipeline_jobs.py` | `backend/app/api/jobs.py`, `deploy/kpl-refresh`, `docker-compose.production.yml` |
 | Analysis and publishing pipeline | `backend/app/services/analysis_pipeline.py` | `backend/app/api/pipeline.py`, `backend/app/services/static_publisher.py` |
-| Hero relationship statistics | `analysis/compute_bp_statistics.py` | `analysis/build_bp_decisions.py`, `analysis/common.py` |
+| Hero relationship statistics | `analysis/compute_bp_statistics.py` | `analysis/build_bp_decisions.py`, `analysis/common.py`, `analysis/statistical_helpers.py` |
 | Researching ban/pick intentions | `analysis/DRAFT_INTENTION_RESEARCH.md` | `analysis/explore_draft_intentions.py`, `analysis/run_intention_case_study.py` (offline; no model changes) |
 | Historical BP evidence dossiers and simulator move evidence | `analysis/DRAFT_EVIDENCE_SPEC.md` | `analysis/build_draft_evidence.py`, `analysis/draft_evidence/`, `backend/app/services/draft_evidence.py`, `frontend/src/DraftEvidenceExplorer.vue` |
 | Draft models and calibration | `analysis/train_rolling_bundle.py`, `backend/app/services/model_registry.py` | `analysis/production_all_data.py`, `analysis/rolling_corpus.py`, `analysis/backtest_rolling_bundle.py`, `analysis/train_production_draft_policy.py`, `analysis/sequence_training/` |

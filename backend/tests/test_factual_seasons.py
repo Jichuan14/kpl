@@ -66,6 +66,24 @@ class FactualSeasonTests(unittest.TestCase):
         self.assertEqual(rows[0]["completed_battle_count"], 0)
         self.assertEqual(rows[1]["completed_battle_count"], 1)
 
+    def test_aggregates_count_completion_once_and_keep_latest_fixture_names(self):
+        self.db.add_all([
+            Match(match_id="first", league_id="20260004", status=2, win_camp=1,
+                  camp1_team_id="a", camp1_team_name="Old", camp2_team_id="0"),
+            Match(match_id="second", league_id="20260004", win_camp=2,
+                  camp1_team_id="a", camp1_team_name="New", camp2_team_id="b"),
+            Match(match_id="pending", league_id="20260004"),
+            Battle(battle_id="known", match_id="first", league_id="20260004", win_camp=2),
+            Battle(battle_id="unknown", match_id="first", league_id="20260004", win_camp=0),
+        ])
+        self.db.commit()
+        row = factual_seasons(self.db, self.root)[0]
+        self.assertEqual((row["match_count"], row["completed_match_count"], row["completed_battle_count"]), (3, 2, 1))
+        self.assertEqual(row["fixture_teams"], [{"team_id": "a", "team_name": "New"}, {"team_id": "b", "team_name": "b"}])
+        self.db.get(Match, 3).win_camp = 1
+        self.db.commit()
+        self.assertEqual(factual_seasons(self.db, self.root)[0]["completed_match_count"], 3)
+
     def test_only_versioned_season_only_rankings_are_available(self):
         directory = self.root / "20260004"
         directory.mkdir()
