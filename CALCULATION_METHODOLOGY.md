@@ -437,3 +437,35 @@ game number, action, side, order, and visible pick counts, then compared with
 all compatible local seasons. Up to five continuation candidates per side are
 shown, ranked by how often they are picked later in compatible battles. It is
 not inserted into the historical sample.
+
+## Season-only factual rankings
+
+`compute_power_rankings.py` emits schema 3 with `evidence_scope=season_only`.
+Every season resets team Elo to 1500 and uses only its own results for team,
+player-on-hero and player-by-position boards. Within-season formulas retain
+K=24, Elo regression toward 1500, a 180-day evidence half-life, team weighting
+of 72% Elo and 28% Bayesian decayed win rate, and existing role normalization
+and four-effective-game player shrinkage. Those priors regularize observed
+results; absent player observations do not produce a score of 50.
+
+Teams known only from actual selected-season fixtures remain unranked at 1500,
+with unavailable power scores, win rates and recent form. No roster is invented
+when fixtures are unknown. A missing artifact for a season with results is
+unavailable rather than an initial neutral board. Legacy cross-season ranking
+artifacts need a targeted ranking rebuild and publication before factual display.
+This presentation policy does not change the separate model-serving Elo or any
+hero, recommendation, lineup or simulator calculation.
+
+## Shared rolling production bundle
+
+Model scope is independent of factual season scope. A pinned bundle labels its actual historical sources. Season 4 observed counts, fixtures, rankings and descriptive Coach statistics remain Season 4 only. Historical seed artifacts retain their original coverage and limitations.
+
+Production admits complete resolved series: unique downloaded battles reproduce the final score by actual team identity across side swaps, and each standard battle has a complete legal quality-checked BP schedule. Orphan battle decisions invalidate the series. Peak/game-seven results count toward the score but are excluded from standard BP features consistently across all components. Naive official timestamps mean China time and are normalized to UTC; player familiarity uses the China calendar date. Every training example uses context strictly from earlier dates. The serving snapshot uses the exclusive next China date after the latest completed series, so that day's finished games are included without admitting future data.
+
+Production fits all eligible data without a holdout or evaluation gate. The .65 season-recency example weights give the latest observed source season the highest weight; winning-pick multiplier is 1.0. Reports record total weights and effective sample size. Fresh bag, GRU and familiarity stages use a fixed 30-epoch recipe. Lineup uses the established fixed configuration: Elo K16, historical-state season decay .55, familiarity prior64, synergy prior96, counter prior40, team-pair prior30 and L2=12. Historical-state decay is distinct from loss weights; normalization, objective, gradient, Hessian and intercept consistently use those loss weights. No production parameter search runs.
+
+Production refits invalidate previous independent calibration. New weights therefore use explicitly uncalibrated temperature1 with exact policy, legality and context lineage. Compatibility and finite-value checks guard activation; predictive evaluation does not block adding the first complete new-season series. There is no claim of independent calibration or current-season accuracy from an all-data fit. Ban ranks and lineup values remain ranking tools, not causal win effects.
+
+A canonical content fingerprint covers eligible records, maintained inputs and the fixed recipe. Upcoming or incomplete fixture changes alone do not retrain; usable corrections, new complete series, hero-vocabulary or recipe changes do. New hero traits unavailable from verified sources use zero/unknown feature encoding, distinct from known absence of a capability. Mechanics coverage excludes unknown pairs. Lanes use observed roster or official evidence; unavailable lane evidence fails explicitly.
+
+Optional historical backtests retain separate complete-series training, validation, calibration and evaluation windows, at least ten each, with equal-time groups in one fold. They retrain each cutoff from scratch and can compare season-recency against date or bounded-window weights. Historical feature vintages are unavailable and this limitation is recorded. Evaluated candidate promotion remains an explicit research mode with its original gates. Low-budget and backtest artifacts cannot activate or establish Season 4 validity.

@@ -22,7 +22,7 @@ its sample size, baseline, and confidence information.
 - A season-aware Draft Atlas with hero relationships and meta signals
 - An interactive BP simulator with statistical and learnable draft models
 - Team Synergy Lab for team-specific hero pair tendencies
-- Hero feature-space explorer produced by the learnable model
+- Hero feature-space explorer exported from the active production policy’s frozen bag representation
 - An evidence-backed Kimi Draft Coach (optional; the key stays on the backend)
 - A repeatable data pipeline: sync → export → model/analysis → publish
 
@@ -80,8 +80,20 @@ docker run --rm --name kpl-rabbitmq -p 127.0.0.1:5672:5672 rabbitmq:4.3.6-alpine
 Then start one worker from `backend/` using the same virtual environment:
 
 ```bash
-celery -A app.services.pipeline_jobs:celery_app worker --beat --pool=solo --concurrency=1 --loglevel=INFO
+celery -A app.services.pipeline_jobs:celery_app worker --pool=solo --concurrency=1 --without-mingle --without-gossip --loglevel=INFO
 ```
+
+In another terminal with the same backend virtual environment, start the
+recovery scheduler:
+
+```bash
+celery -A app.services.pipeline_jobs:celery_app beat --loglevel=INFO
+```
+
+Run the scheduler separately during local development: embedded `--beat`
+can fail under macOS process spawning. The Linux production container embeds
+it in its worker. `npm run dev` starts only the website; keep the API, RabbitMQ,
+worker, and recovery scheduler running for management actions.
 
 The local default broker URL uses RabbitMQ's loopback-only `guest` account.
 Production uses the private Compose network and credentials in `.env.production`.
@@ -109,12 +121,11 @@ the production Compose file runs both. Maintenance mutation calls return HTTP
 202 with a job ID and `status_url` to poll.
 
 The daily 03:00 China-time job refreshes the official league catalog and picks
-the newest started competition with a completed match. New visitors open the
-newest **published** season; an intentionally chosen season stays selected if
-it remains available. An older browser record holding the former hard-coded
-default `20260003` cannot be distinguished from an automatic default, so it is
-migrated to automatic selection. Visitors who want that season fixed can select
-it again in the season control.
+the newest started competition with a completed match. This job policy is
+independent of the website default. New visits open the season saved by
+Management, or the newest full locally synced season before a default is saved.
+More changes the season for that visit across public pages; reloads start again
+from the site default. Older browser season preferences are ignored.
 
 For a small API smoke sync instead:
 
@@ -151,7 +162,7 @@ performance data. Historical all-zero API placeholders are retained with
 | `/` | Multi-season Draft Atlas relationship explorer |
 | `/simulator` | Live draft board, recommendations, and Draft Coach |
 | `/teams` | Team-specific synergy patterns and draft tendencies |
-| `/rankings` | Time-decayed team Elo plus player rankings by position and hero |
+| `/rankings` | Season-only team Elo plus player rankings by position and hero |
 | `/feature-space` | Learned hero representation plus favorite-aware, multi-opponent hero recommendations |
 | `/methodology` | Definitions, caveats, and calculation explanations |
 | `/management` | Local data sync, analysis, and asset publishing |
@@ -184,11 +195,24 @@ analysis/published/data/
 
 The derived statistics include ban responses, pick synergies, counter-picks,
 counter-bans, opening-priority meta heroes, team-specific combinations, and
-cross-season power rankings. Rankings use a 180-day evidence half-life: team
+season-only power rankings. Each season resets team Elo to 1500; no earlier
+season contributes to team or player boards. Rankings retain a 180-day
+evidence half-life within the selected season: team
 scores blend opponent-adjusted Elo with a decayed Bayesian win rate, while
 player scores blend role-normalized KDA and performance metrics with
 small-sample shrinkage. Player boards are available both by position across all
 heroes and by individual hero.
+Management’s year and season controls immediately save the site-wide default in SQLite. New visits and full reloads start from that setting, ignoring older browser season preferences. Before a default has been saved, the newest season in the full locally synced league catalog is selected, including seasons with zero artifacts.
+
+More is the only public season selector. Its choice is temporary for that page-load session and shared by hero, lineup, simulator, Rankings, BP Data, and Teams pages. It does not save the default or change Management’s independent operational target. A successful Management save immediately updates the public selection in that same tab, including a previous More choice. Visitors in other tabs or sessions keep their current selection until their next visit. Initialization, refreshes, and job completion never save a default; submitted jobs retain their original season.
+
+The uncached public read `/api/site-default` is independent of analysis publication. Management writes `/api/leagues/site-default` through the existing authenticated production Nginx boundary. Public season options use the uncached live `/api/leagues?factual=true` full catalog; the ordinary league response is unchanged. Missing factual observations or published artifacts still show “No current information,” and season-only ranking calculations remain unchanged. Model algorithms and source seasons are unchanged.
+
+Unplayed fixture teams are unranked at 1500 Elo, with no invented scores or win
+rates. Unknown rosters remain empty. Legacy cross-season ranking artifacts are
+unavailable in factual views until that season's `power_rankings` step is rerun
+and its frontend assets are published; no model retraining is required.
+
 Candidate rates use legal opportunities as their denominator, with smoothing
 and confidence intervals so sparse observations remain visible as sparse.
 
@@ -337,3 +361,41 @@ backups, and update procedure.
 KPL source availability and completeness can vary by season. Treat the app's
 outputs as exploratory, season-scoped evidence, and inspect sample sizes and
 quality indicators before drawing conclusions.
+
+### Active-model management updates
+
+Full Management updates synchronize the selected operational season, rebuild and publish its factual display statistics, then update one shared rolling production bundle. Model scope is independent of the public season selector. A failed model update leaves published facts and the active bundle intact.
+
+Production trains all eligible complete series across available exports. There are no reserved evaluation windows or minimum number of new Season 4 games: the first complete usable series enters the next update. The established .65 season-recency weights give the newest observed season the highest weight. Bag, GRU and familiarity stages use fixed 30-epoch training; lineup fitting uses the established fixed configuration, without a parameter search. Ban, player context, references, map and all neural components share the pinned complete-series corpus. Unchanged eligible content, maintained inputs and recipe produce `NO_CHANGE` and skip retraining.
+
+Initialize from an existing verified compatible historical collection if needed:
+
+```sh
+python analysis/seed_model_bundle.py --league-id 20260003 --version historical-seed-20260003 --activate
+```
+
+Run the normal all-data update:
+
+```sh
+python analysis/train_rolling_bundle.py --activate
+```
+
+The bundle validates exact component lineage, hashes, vocabulary, lane legality, finite numeric inputs and calibration contracts before atomic publication. Activation uses an incumbent comparison under a process lock; previously activated versions remain available for rollback and pinned sessions. Refitted production probabilities are explicitly **uncalibrated, temperature 1**. Historical temperatures are never transferred to new weights. Factual Season 4 counts and fixtures remain Season 4 only.
+
+New observed/legal hero IDs expand the maintained feature vocabulary automatically. Missing verified capability traits use an explicitly unknown neutral encoding, with reduced mechanics coverage. Catalog lanes come from pinned completed rosters and official Tencent lane data. Missing ban-only lane evidence triggers a bounded official-catalog refresh; unavailable authoritative lanes produce a clear failed update while preserving the active version. Existing hero vectors and old immutable bundles are preserved.
+
+`/api/simulations/active-model` reports version, sources, cutoffs and calibration status. Each mounted tool pins one version through recommendations, scoring, Coach and what-if requests. Explicit unversioned legacy APIs and season trainers remain supported.
+
+Historical evaluation remains an optional offline research path:
+
+```sh
+python analysis/backtest_rolling_bundle.py --cutoff '2026-04-01 23:59:59' --output-root /tmp/rolling-backtest --epochs 1 --trials 1 --threads 1 --alternative date_half_life --half-life-days 120
+```
+
+The prior evaluated-candidate command is available through `train_rolling_bundle.py --evaluation-mode`. These paths retain separate chronological windows and comparison gates. Low-budget runs are experimental and cannot activate. To exercise the all-data path separately:
+
+```sh
+python analysis/train_rolling_bundle.py --output-root /tmp/all-data-smoke --epochs 1 --threads 1 --smoke
+```
+
+A smoke run checks execution and component consistency; it establishes neither model quality nor Season 4 validation. The learned map describes the bag branch, while displayed pick/ban counts use only selected-season observations.

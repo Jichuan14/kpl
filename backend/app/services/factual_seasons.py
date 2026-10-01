@@ -1,0 +1,68 @@
+"""Catalog and observation availability for factual views, independent of models."""
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.models import Battle, League, Match
+from app.services.sync import FINISHED_MATCH_STATUS
+
+RANKING_SCOPE = "season_only"
+RANKING_SCHEMA_VERSION = 3
+
+
+def season_rankings_ready(path: Path, league_id: str) -> bool:
+    if not path.is_file():
+        return False
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+        return (
+            value.get("schema_version") == RANKING_SCHEMA_VERSION
+            and value.get("evidence_scope") == RANKING_SCOPE
+            and value.get("league", {}).get("league_id") == league_id
+            and value.get("history_league_ids") == [league_id]
+        )
+    except (OSError, ValueError, TypeError, AttributeError):
+        return False
+
+
+def factual_seasons(db: Session, data_root: Path) -> list[dict]:
+    leagues = db.scalars(select(League).order_by(
+        League.year.desc(), League.season.desc(), League.start_time.desc(), League.id.desc()
+    )).all()
+    matches_by_league: dict[str, list[Match]] = {}
+    for match in db.scalars(select(Match)).all():
+        matches_by_league.setdefault(match.league_id, []).append(match)
+    battles_by_league: dict[str, int] = {}
+    for league_id in db.scalars(select(Battle.league_id).where(Battle.win_camp.in_([1, 2]))).all():
+        battles_by_league[league_id] = battles_by_league.get(league_id, 0) + 1
+    rows = []
+    for league in leagues:
+        matches = matches_by_league.get(league.league_id, [])
+        teams = {}
+        for match in matches:
+            for team_id, team_name in ((match.camp1_team_id, match.camp1_team_name), (match.camp2_team_id, match.camp2_team_name)):
+                if team_id and team_id != "0":
+                    teams[team_id] = {"team_id": team_id, "team_name": team_name or team_id}
+        directory = data_root / league.league_id
+        completed_matches = sum(
+            match.status == FINISHED_MATCH_STATUS or match.win_camp in (1, 2)
+            for match in matches
+        )
+        rankings_ready = season_rankings_ready(directory / "rankings.json", league.league_id)
+        rows.append({
+            "league_id": league.league_id, "league_name": league.league_name,
+            "year": league.year, "season": league.season, "status": league.status,
+            "start_time": league.start_time, "match_count": len(matches),
+            "completed_match_count": completed_matches,
+            "completed_battle_count": battles_by_league.get(league.league_id, 0),
+            "fixture_teams": sorted(teams.values(), key=lambda team: team["team_name"]),
+            "statistics_ready": (directory / "overview.json").is_file(),
+            "team_synergy_ready": (directory / "team-synergies.json").is_file(),
+            "rankings_ready": rankings_ready,
+            "ranking_status": "season_only" if rankings_ready else "unavailable",
+        })
+    return rows

@@ -122,7 +122,7 @@ class CoachDraftState(BaseModel):
 
     model_config = {"extra": "forbid"}
 
-    model_type: Literal["stats", "learnable", "sequence"] = "stats"
+    model_type: Literal["stats", "learnable", "sequence", "personalized"] = "stats"
     blue_team_id: str = Field(min_length=1, max_length=32)
     blue_team_name: str = Field(min_length=1, max_length=64)
     red_team_id: str = Field(min_length=1, max_length=32)
@@ -154,6 +154,7 @@ class CoachInput(BaseModel):
     model_config = {"extra": "forbid"}
 
     message: str = Field(min_length=1, max_length=4000)
+    model_version: str | None = Field(default=None, min_length=1, max_length=128)
     league_id: str = Field(
         min_length=1,
         max_length=32,

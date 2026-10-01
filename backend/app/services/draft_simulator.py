@@ -13,6 +13,7 @@ from typing import Any
 import numpy as np
 
 from app.services.analysis_pipeline import ANALYSIS_DIR, OUTPUT_ROOT, REPO_ROOT
+from app.services.model_registry import component_path, current_bundle, model_output_root
 from app.services.draft_calibration import (
     CALIBRATION_FILENAME,
     CalibrationResolution,
@@ -83,7 +84,7 @@ POSITION_LANES = {
 def model_path(league_id: str) -> Path:
     if not league_id or not all(character.isalnum() or character in "-_" for character in league_id):
         raise ValueError("Invalid league id")
-    return OUTPUT_ROOT / league_id / "draft_model.json"
+    return component_path("draft_model.json", OUTPUT_ROOT / league_id / "draft_model.json")
 
 
 def learnable_model_path(league_id: str) -> Path:
@@ -105,15 +106,15 @@ def sequence_calibration_path(league_id: str) -> Path:
 def personalized_model_path(league_id: str) -> Path:
     if not league_id or not all(character.isalnum() or character in "-_" for character in league_id):
         raise ValueError("Invalid league id")
-    return OUTPUT_ROOT / league_id / "personalized_draft_choice_model.json"
+    return component_path("personalized_draft_choice_model.json", OUTPUT_ROOT / league_id / "personalized_draft_choice_model.json")
 
 
 def personalized_context_path(league_id: str) -> Path:
-    return OUTPUT_ROOT / league_id / "player_draft_context.json"
+    return component_path("player_draft_context.json", OUTPUT_ROOT / league_id / "player_draft_context.json")
 
 
 def personalized_calibration_path(league_id: str) -> Path:
-    return OUTPUT_ROOT / league_id / "personalized_draft_probability_calibration.json"
+    return component_path("personalized_draft_probability_calibration.json", OUTPUT_ROOT / league_id / "personalized_draft_probability_calibration.json")
 
 
 def load_personalized_model(league_id: str) -> dict[str, Any]:
@@ -125,7 +126,7 @@ def load_personalized_model(league_id: str) -> dict[str, Any]:
     signature=(path.stat().st_mtime_ns,context_path.stat().st_mtime_ns if context_path.is_file() else -1,calibration_path.stat().st_mtime_ns if calibration_path.is_file() else -1);cached=_PERSONALIZED_CACHE.get(path)
     if cached and cached[0]==signature: return cached[1]
     model=json.loads(path.read_text(encoding="utf-8"))
-    if str(model.get("base_artifact",{}).get("target_season"))!=league_id: raise ValueError("Personalized base target season mismatch")
+    if current_bundle() is None and str(model.get("base_artifact",{}).get("target_season"))!=league_id: raise ValueError("Personalized base target season mismatch")
     feature_matrix=np.asarray(model.get("hero_feature_matrix",[]),dtype=np.float32);base=dict(model["base_artifact"])
     hero_ids=[int(v) for v in base.get("hero_ids",[])];team_ids=[str(v) for v in base.get("team_ids",[])]
     if feature_matrix.shape!=(len(hero_ids),len(base.get("feature_names",[]))): raise ValueError("Personalized feature matrix is malformed")
@@ -141,7 +142,7 @@ def load_personalized_model(league_id: str) -> dict[str, Any]:
 def feature_space_path(league_id: str) -> Path:
     if not league_id or not all(character.isalnum() or character in "-_" for character in league_id):
         raise ValueError("Invalid league id")
-    return OUTPUT_ROOT / league_id / "learned_hero_feature_space.json"
+    return component_path("learned_hero_feature_space.json", OUTPUT_ROOT / league_id / "learned_hero_feature_space.json")
 
 
 def feature_artifact_path(model: dict[str, Any]) -> Path:
@@ -178,7 +179,7 @@ def parse_official_lane_ids(value: Any) -> list[int]:
 
 def official_hero_positions(path: Path | None = None) -> dict[int, list[int]]:
     """Majority and optional secondary lanes from the official herolist catalog."""
-    source = path or OFFICIAL_HEROLIST_PATH
+    source = path or component_path("herolist.json", OFFICIAL_HEROLIST_PATH)
     if not source.is_file():
         return {}
     catalog = json.loads(source.read_text(encoding="utf-8"))
@@ -232,9 +233,8 @@ def load_model(league_id: str) -> dict[str, Any]:
     if not path.is_file():
         raise FileNotFoundError(f"No draft model has been generated for {league_id}")
     modified = path.stat().st_mtime_ns
-    official_modified = (
-        OFFICIAL_HEROLIST_PATH.stat().st_mtime_ns if OFFICIAL_HEROLIST_PATH.is_file() else 0
-    )
+    official_path = component_path("herolist.json", OFFICIAL_HEROLIST_PATH)
+    official_modified = official_path.stat().st_mtime_ns if official_path.is_file() else 0
     cache_key = (modified, official_modified)
     cached = _CACHE.get(path)
     if cached and cached[0] == cache_key:
@@ -243,7 +243,7 @@ def load_model(league_id: str) -> dict[str, Any]:
         model = json.load(source)
     if model.get("schema_version") != 1:
         raise ValueError("Unsupported draft model version")
-    model["_league_id"] = league_id
+    model["_league_id"] = current_bundle().version if current_bundle() else league_id
     model["_base_index"] = {
         (row["context"], int(row["hero_id"])): row for row in model.get("base", [])
     }
@@ -485,13 +485,13 @@ def learned_feature_space(league_id: str) -> dict[str, Any]:
     signature = (path.stat().st_mtime_ns, catalog_path.stat().st_mtime_ns)
     cached = _FEATURE_SPACE_CACHE.get(path)
     if cached and cached[0] == signature:
-        return cached[1]
+        return _feature_space_with_facts(cached[1], league_id)
     with path.open(encoding="utf-8") as source:
         feature_space = json.load(source)
     if (
         feature_space.get("schema_version") != 1
         or feature_space.get("projection") != "pca"
-        or str(feature_space.get("target_season")) != league_id
+        or (current_bundle() is None and str(feature_space.get("target_season")) != league_id)
     ):
         raise ValueError("Unsupported learned hero feature space version")
     model = load_model(league_id)
@@ -520,24 +520,45 @@ def learned_feature_space(league_id: str) -> dict[str, Any]:
         "rows": rows,
     }
     _FEATURE_SPACE_CACHE[path] = (signature, prepared)
-    return prepared
+    return _feature_space_with_facts(prepared, league_id)
+
+
+def _feature_space_with_facts(prepared: dict[str, Any], league_id: str) -> dict[str, Any]:
+    if current_bundle() is None:
+        return prepared
+    from collections import Counter
+    picks, bans = Counter(), Counter()
+    path = ANALYSIS_DIR / "exports" / league_id / "bp_decisions.jsonl"
+    if path.is_file():
+        for line in path.read_text().splitlines():
+            if not line.strip(): continue
+            row=json.loads(line)
+            if row.get("action") in {"pick", "ban"} and row.get("selected_hero_id"):
+                (picks if row["action"]=="pick" else bans)[int(row["selected_hero_id"])]+=1
+    return {**prepared,"counts_scope":"target_season_observed_decisions","observation_season":league_id,
+            "rows":[{**row,"pick_count":picks[int(row["hero_id"])],"ban_count":bans[int(row["hero_id"])],
+                     "bp_action_count":picks[int(row["hero_id"])]+bans[int(row["hero_id"])],
+                     "weighted_bp_action_count":float(picks[int(row["hero_id"])]+bans[int(row["hero_id"])])} for row in prepared["rows"]]}
 
 
 def metadata(league_id: str) -> dict[str, Any]:
     model = load_model(league_id)
-    learnable_ready = (
+    learnable_ready = current_bundle() is None and (
         learnable_model_path(league_id).is_file()
         and (
             DRAFT_FEATURES_PATH.is_file()
             or LEGACY_SPECIALTY_FEATURES_PATH.is_file()
         )
     )
-    sequence_ready = (
+    sequence_ready = current_bundle() is None and (
         sequence_model_path(league_id).is_file()
         and DRAFT_FEATURES_PATH.is_file()
     )
     personalized_ready = personalized_model_path(league_id).is_file()
+    handle = current_bundle()
+    reference_teams = json.loads(handle.path("lineup_value_model.json").read_text()).get("team_names", {}) if handle else {}
     return {
+        "model_reference_teams": [{"team_id": key, "team_name": name, "evidence_scope": "model_reference_coverage"} for key, name in reference_teams.items()],
         "league_id": league_id,
         "generated_at": model["generated_at"],
         "training_inputs": model["training_inputs"],
@@ -1141,7 +1162,7 @@ def _load_team_tendency_index(
     dict[tuple[str, str, str, str, int, str], dict[int, dict[str, Any]]],
     str,
 ]:
-    path = OUTPUT_ROOT / league_id / "team_action_tendencies.jsonl"
+    path = component_path("team_action_tendencies.jsonl", OUTPUT_ROOT / league_id / "team_action_tendencies.jsonl")
     modified = path.stat().st_mtime_ns
     cached = _TEAM_TENDENCY_CACHE.get(path)
     if cached and cached[0] == modified:
@@ -1294,6 +1315,8 @@ def _prepare_prediction(
     list[dict[str, Any]],
 ]:
     """Validate one draft state and calculate its next-action distribution."""
+    if current_bundle() and model_type not in {"stats", "personalized"}:
+        raise ValueError("Pinned bundles cannot load legacy policy variants")
     model = load_model(league_id)
     if model_type not in {"stats", "learnable", "sequence", "personalized"}:
         raise ValueError(f"Unsupported draft model type: {model_type}")
@@ -1342,7 +1365,7 @@ def _prepare_prediction(
         sequence_model["_candidate_policy_fingerprint"] = policy_fingerprint
         sequence_model["_calibration"] = resolve_calibration(
             sequence_model["_calibration_path"],
-            enabled_mode="eligible",
+            enabled_mode="experimental" if current_bundle() and current_bundle().manifest.get("promotion_status")=="experimental" else "eligible",
             policy_model_type="personalized",
             model_fingerprint=str(sequence_model.get("model_fingerprint") or ""),
             candidate_policy_id=GAME_AVAILABILITY_POLICY_ID,

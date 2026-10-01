@@ -1,47 +1,14 @@
 <script setup>
 import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { RouterView, useRoute, useRouter } from "vue-router";
-const DailyPredictionsModal = defineAsyncComponent(() => import("./DailyPredictionsModal.vue"));
-const DailyMatchesWidget = defineAsyncComponent(() => import("./DailyMatchesWidget.vue"));
-import {
-  fetchDataStatus,
-  fetchCoachUsage,
-  fetchDailyMatches,
-  fetchVisitorStats,
-  fetchVisualizationSeasons,
-  updateCoachLimits,
-  fetchLeagues,
-  publishFrontendAssets,
-  runAnalysisStep,
-  syncLeagueBp,
-  syncLeagues,
-  trackVisitor,
-} from "./api";
-import { selectAvailableLeague, selectedLeagueId } from "./selectedLeague";
+import { fetchDailyMatches, trackVisitor } from "./api";
+import { selectPublicLeague, selectedLeagueId } from "./selectedLeague";
+import { useSeasonCatalog } from "./composables/useSeasonCatalog";
 import { language } from "./i18n";
 import { finishStartupLoading, startupLoading } from "./startupLoader";
 import { getStored, setStored } from "./storage";
-import { usePolling } from "./composables/usePolling";
-
-const leagues = ref([]);
-const availableSeasons = ref([]);
-const leagueId = selectedLeagueId;
-const selectedYear = ref("");
-const dataStatus = ref(null);
-const coachUsage = ref(null);
-const visitorAnalytics = ref(null);
-const coachLimits = ref(null);
-const savingCoachLimits = ref(false);
-const loading = ref(false);
-const syncing = ref(false);
-const syncingCatalog = ref(false);
-const syncMode = ref("");
-const syncElapsed = ref(0);
-const processingStep = ref("");
-const processingElapsed = ref(0);
-const error = ref("");
-const notice = ref("");
-const apiConnected = ref(false);
+const DailyPredictionsModal = defineAsyncComponent(() => import("./DailyPredictionsModal.vue"));
+const DailyMatchesWidget = defineAsyncComponent(() => import("./DailyMatchesWidget.vue"));
 const rightsContactEmail = "jichuan1625@gmail.com";
 const firstVisitKey = "draft-atlas-notice-seen";
 const visitorIdKey = "draft-atlas-visitor-id";
@@ -52,153 +19,20 @@ const showDailyPredictions = ref(false);
 const predictionRefresh = ref(0);
 const showProjectNotice = ref(getStored(firstVisitKey) !== "true");
 const utilityMenu = ref(null);
-let syncTimer = null;
-let processingTimer = null;
 let startupFallbackTimer = null;
 const route = useRoute();
 const router = useRouter();
 const routePath = computed(() => route.path);
-
 const isManagement = computed(() => routePath.value.startsWith("/management"));
 const isMethodology = computed(() => routePath.value.startsWith("/methodology"));
 const isTeams = computed(() => routePath.value.startsWith("/teams"));
 const isSimulator = computed(() => routePath.value.startsWith("/simulator"));
-const isFeatureSpace = computed(
-  () => routePath.value === "/" || routePath.value.startsWith("/feature-space")
-);
+const isFeatureSpace = computed(() => routePath.value === "/" || routePath.value.startsWith("/feature-space"));
 const isRankings = computed(() => routePath.value.startsWith("/rankings"));
 const isBpData = computed(() => routePath.value.startsWith("/bp-data"));
-
-function dismissProjectNotice() {
-  setStored(firstVisitKey, "true");
-  showProjectNotice.value = false;
-}
-
-const selectedLeague = computed(() =>
-  leagues.value.find((league) => league.league_id === leagueId.value)
-);
-
-const years = computed(() =>
-  [...new Set(leagues.value.map((league) => league.year).filter(Boolean))].sort(
-    (a, b) => b - a
-  )
-);
-
-const seasonLeagues = computed(() =>
-  leagues.value.filter(
-    (league) => !selectedYear.value || String(league.year) === selectedYear.value
-  )
-);
-
-const analysisPipeline = computed(() =>
-  (dataStatus.value?.pipeline || []).filter(
-    (stage) => !["download", "players"].includes(stage.key)
-  )
-);
-const readyStages = computed(
-  () => analysisPipeline.value.filter((stage) => stage.ready).length
-);
-const totalStages = computed(() => analysisPipeline.value.length);
-const frontendAssets = computed(() => dataStatus.value?.frontend_assets || []);
-const frontendAssetsReady = computed(
-  () => frontendAssets.value.filter((item) => item.ready).length
-);
-
-const artifacts = computed(() => {
-  if (!dataStatus.value?.artifacts) return [];
-  const {
-    exports = [],
-    statistics = [],
-    meta,
-    team_synergy: teamSynergy,
-    team_profiles: teamProfiles = [],
-    power_rankings: powerRankings,
-    draft_model: draftModel,
-    learnable_draft_model: learnableDraftModel,
-    sequence_draft_model: sequenceDraftModel,
-    lineup_value_model: lineupValueModel,
-    ban_value_model: banValueModel,
-  } = dataStatus.value.artifacts;
-  return [
-    ...exports,
-    ...statistics,
-    ...(meta ? [meta] : []),
-    ...(teamSynergy ? [teamSynergy] : []),
-    ...teamProfiles,
-    ...(powerRankings ? [powerRankings] : []),
-    ...(draftModel ? [draftModel] : []),
-    ...(learnableDraftModel ? [learnableDraftModel] : []),
-    ...(sequenceDraftModel ? [sequenceDraftModel] : []),
-    ...(lineupValueModel ? [lineupValueModel] : []),
-    ...(banValueModel ? [banValueModel] : []),
-  ];
-});
-
-async function loadLeagues() {
-  const rows = await fetchLeagues();
-  leagues.value = rows || [];
-  apiConnected.value = true;
-  const initial = leagues.value.find(
-    (league) => league.league_id === leagueId.value
-  );
-  selectedYear.value = String(initial?.year || "");
-}
-
-async function loadAvailableSeasons() {
-  try {
-    availableSeasons.value = (await fetchVisualizationSeasons()) || [];
-    selectAvailableLeague(availableSeasons.value);
-  } catch {
-    availableSeasons.value = [];
-  }
-}
-
-async function loadStatus() {
-  if (!leagueId.value) {
-    dataStatus.value = null;
-    return;
-  }
-  loading.value = true;
-  error.value = "";
-  try {
-    dataStatus.value = await fetchDataStatus(leagueId.value);
-    apiConnected.value = true;
-  } catch (err) {
-    dataStatus.value = null;
-    error.value = err.message || "Could not load local data status.";
-  } finally {
-    loading.value = false;
-  }
-}
-
-async function loadCoachUsage() {
-  try {
-    coachUsage.value = await fetchCoachUsage();
-    if (!savingCoachLimits.value) {
-      coachLimits.value = {
-        ip_requests_per_minute: coachUsage.value.per_ip.per_minute_limit,
-        ip_requests_per_day: coachUsage.value.per_ip.per_24_hours_limit,
-        server_requests_per_minute: coachUsage.value.server.per_minute_limit,
-        server_requests_per_day: coachUsage.value.server.per_24_hours_limit,
-        ip_max_active_requests: coachUsage.value.per_ip.max_active_requests,
-        server_max_active_requests: coachUsage.value.server.max_active_requests,
-      };
-    }
-  } catch {
-    // The monitoring card remains unavailable when an older API is deployed.
-    coachUsage.value = null;
-  }
-}
-
-async function loadVisitorAnalytics() {
-  try {
-    visitorAnalytics.value = await fetchVisitorStats();
-  } catch {
-    // The card remains unavailable until the analytics API is deployed.
-    visitorAnalytics.value = null;
-  }
-}
-
+const { seasons: utilitySeasons, loadSeasons } = useSeasonCatalog();
+const utilityLeagueId = computed({ get: () => selectedLeagueId.value, set: selectPublicLeague });
+function dismissProjectNotice() { setStored(firstVisitKey, "true"); showProjectNotice.value = false; }
 function anonymousVisitorId() {
   try {
     const stored = window.localStorage.getItem(visitorIdKey);
@@ -251,230 +85,6 @@ function openMatchPrediction({ date, matches }) {
   showDailyPredictions.value = true;
 }
 
-async function saveCoachLimits() {
-  if (!coachLimits.value || savingCoachLimits.value) return;
-  savingCoachLimits.value = true;
-  try {
-    coachUsage.value = await updateCoachLimits(coachLimits.value);
-    notice.value = "AI Coach limits updated for this server process.";
-  } catch (err) {
-    error.value = err.message || "Could not update AI Coach limits.";
-  } finally {
-    savingCoachLimits.value = false;
-  }
-}
-
-const coachUsagePolling = usePolling(loadCoachUsage, 15_000);
-const visitorAnalyticsPolling = usePolling(loadVisitorAnalytics, 30_000);
-function startCoachUsageMonitor() { coachUsagePolling.start(); }
-function startVisitorAnalyticsMonitor() { visitorAnalyticsPolling.start(); }
-function stopCoachUsageMonitor() { coachUsagePolling.stop(); }
-function stopVisitorAnalyticsMonitor() { visitorAnalyticsPolling.stop(); }
-
-async function refreshLeagueCatalog() {
-  if (syncingCatalog.value) return;
-  syncingCatalog.value = true;
-  error.value = "";
-  notice.value = "Downloading the latest league catalog from the KPL API…";
-  try {
-    const result = await syncLeagues();
-    await loadLeagues();
-    await loadStatus();
-    notice.value =
-      `League catalog updated · ${result.inserted || 0} added · ` +
-      `${result.updated || 0} refreshed`;
-  } catch (err) {
-    notice.value = "";
-    error.value = err.message || "League catalog download failed.";
-  } finally {
-    syncingCatalog.value = false;
-  }
-}
-
-async function runDownload({ matchLimit = null, mode = "all" } = {}) {
-  if (!leagueId.value || syncing.value) return;
-  syncing.value = true;
-  syncMode.value = mode;
-  syncElapsed.value = 0;
-  error.value = "";
-  notice.value =
-    mode === "all"
-      ? "Downloading every finished match and its battle BP data…"
-      : "Downloading a five-match sample from the KPL API…";
-  syncTimer = window.setInterval(() => {
-    syncElapsed.value += 1;
-  }, 1000);
-
-  try {
-    const result = await syncLeagueBp({
-      leagueId: leagueId.value,
-      matchLimit,
-    });
-    const downloadSummary =
-      `Download complete · ${result.finished_matches_processed || 0} matches · ` +
-      `${result.battles_upserted || 0} battles · ` +
-      `${result.bp_rows_written || 0} BP actions · ` +
-      `${result.battle_player_rows_written || 0} player mappings · ` +
-      `${result.heroes_upserted || 0} heroes`;
-    notice.value = `${downloadSummary} · local source data refreshed`;
-    await loadStatus();
-  } catch (err) {
-    notice.value = "";
-    error.value = err.message || "KPL data download failed.";
-  } finally {
-    if (syncTimer) window.clearInterval(syncTimer);
-    syncTimer = null;
-    syncing.value = false;
-    syncMode.value = "";
-  }
-}
-
-async function runFullUpdate() {
-  if (!leagueId.value || syncing.value || processingStep.value) return;
-  syncing.value = true;
-  processingStep.value = "full_update";
-  processingElapsed.value = 0;
-  error.value = "";
-  processingTimer = window.setInterval(() => {
-    processingElapsed.value += 1;
-  }, 1000);
-
-  try {
-    notice.value = "Downloading finished matches and BP data…";
-    const download = await syncLeagueBp({
-      leagueId: leagueId.value,
-      matchLimit: null,
-      runAnalysis: false,
-    });
-    syncing.value = false;
-
-    notice.value = "Download complete · rebuilding analysis and both draft models…";
-    const analysis = await runAnalysisStep({
-      leagueId: leagueId.value,
-      step: "all",
-    });
-    const duration = (analysis.steps || []).reduce(
-      (sum, item) => sum + Number(item.duration_seconds || 0),
-      0
-    );
-
-    notice.value = "Analysis complete · publishing browser-ready assets…";
-    const published = await publishFrontendAssets(leagueId.value);
-    notice.value =
-      `Full update complete · ${download.finished_matches_processed || 0} matches checked · ` +
-      `${duration.toFixed(1)}s analysis · ${(published.files || []).length} public files published`;
-    await loadStatus();
-  } catch (err) {
-    notice.value = "";
-    error.value = err.message || "Full update failed.";
-  } finally {
-    if (processingTimer) window.clearInterval(processingTimer);
-    processingTimer = null;
-    syncing.value = false;
-    processingStep.value = "";
-  }
-}
-
-async function publishAssets() {
-  if (!leagueId.value || processingStep.value || syncing.value) return;
-  processingStep.value = "publish";
-  processingElapsed.value = 0;
-  error.value = "";
-  notice.value = "Writing browser-ready assets from local analysis…";
-  processingTimer = window.setInterval(() => {
-    processingElapsed.value += 1;
-  }, 1000);
-  try {
-    const result = await publishFrontendAssets(leagueId.value);
-    notice.value =
-      `Frontend assets published for ${leagueId.value} · ` +
-      `${(result.files || []).length} files written`;
-    await loadStatus();
-  } catch (err) {
-    notice.value = "";
-    error.value = err.message || "Could not publish frontend assets.";
-  } finally {
-    if (processingTimer) window.clearInterval(processingTimer);
-    processingTimer = null;
-    processingStep.value = "";
-  }
-}
-
-function pipelineReady(key) {
-  return Boolean(
-    dataStatus.value?.pipeline?.find((stage) => stage.key === key)?.ready
-  );
-}
-
-async function runPipeline(step) {
-  if (!leagueId.value || processingStep.value || syncing.value) return;
-  processingStep.value = step;
-  processingElapsed.value = 0;
-  error.value = "";
-  notice.value =
-    step === "all"
-      ? "Running the complete season analysis pipeline…"
-      : `Running ${step} for the selected season…`;
-  processingTimer = window.setInterval(() => {
-    processingElapsed.value += 1;
-  }, 1000);
-  try {
-    const result = await runAnalysisStep({
-      leagueId: leagueId.value,
-      step,
-    });
-    const duration = (result.steps || []).reduce(
-      (sum, item) => sum + Number(item.duration_seconds || 0),
-      0
-    );
-    notice.value =
-      `${step === "all" ? "Complete pipeline" : step} finished for ` +
-      `${leagueId.value} in ${duration.toFixed(1)}s`;
-    await loadStatus();
-  } catch (err) {
-    notice.value = "";
-    error.value = err.message || `${step} failed.`;
-  } finally {
-    if (processingTimer) window.clearInterval(processingTimer);
-    processingTimer = null;
-    processingStep.value = "";
-  }
-}
-
-function number(value) {
-  return Number(value || 0).toLocaleString(language.value);
-}
-
-function bytes(value) {
-  const size = Number(value || 0);
-  if (!size) return "—";
-  if (size < 1024) return `${size} B`;
-  if (size < 1024 ** 2) return `${(size / 1024).toFixed(1)} KB`;
-  return `${(size / 1024 ** 2).toFixed(1)} MB`;
-}
-
-function dateTime(value) {
-  if (!value) return "Never";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime())
-    ? value
-    : new Intl.DateTimeFormat(language.value, {
-        dateStyle: "medium",
-        timeStyle: "short",
-      }).format(date);
-}
-
-async function loadManagement() {
-  try {
-    await Promise.all([loadLeagues(), loadCoachUsage(), loadVisitorAnalytics()]);
-    await loadStatus();
-  } catch (err) {
-    error.value = err.message || "Could not connect to the local API.";
-  } finally {
-    finishStartupLoading();
-  }
-}
-
 function closeUtilityMenu(event) {
   if (utilityMenu.value && !utilityMenu.value.contains(event.target)) {
     utilityMenu.value.open = false;
@@ -488,42 +98,16 @@ function navigate(path) {
 
 onMounted(() => {
   window.addEventListener("click", closeUtilityMenu);
-  loadAvailableSeasons();
-  if (!isManagement.value) {
-    trackCurrentPublicPage();
-    loadDailyPredictions();
-  }
+  loadSeasons().catch(() => {});
+  if (!isManagement.value) { trackCurrentPublicPage(); loadDailyPredictions(); }
   startupFallbackTimer = window.setTimeout(finishStartupLoading, 12000);
 });
-
 onBeforeUnmount(() => {
   window.removeEventListener("click", closeUtilityMenu);
   if (startupFallbackTimer) window.clearTimeout(startupFallbackTimer);
-  stopCoachUsageMonitor();
-  stopVisitorAnalyticsMonitor();
-});
-
-watch(leagueId, () => {
-  const selected = leagues.value.find(
-    (league) => league.league_id === leagueId.value
-  );
-  if (selected) selectedYear.value = String(selected.year || "");
-  if (isManagement.value) loadStatus();
-});
-watch(selectedYear, () => {
-  if (
-    !seasonLeagues.value.some((league) => league.league_id === leagueId.value)
-  ) {
-    leagueId.value = seasonLeagues.value[0]?.league_id || "";
-  }
 });
 watch(() => route.path, () => {
-  if (!isManagement.value) {
-    stopCoachUsageMonitor();
-    stopVisitorAnalyticsMonitor();
-    trackCurrentPublicPage();
-    loadDailyPredictions();
-  }
+  if (!isManagement.value) { trackCurrentPublicPage(); loadDailyPredictions(); }
 });
 </script>
 
@@ -611,12 +195,12 @@ watch(() => route.path, () => {
         <summary>{{ $t("More") }}</summary>
         <div id="site-navigation-links" class="utility-links">
           <p class="utility-menu-title">{{ $t("Workspace options") }}</p>
-          <label class="utility-control season-switcher">
+          <label v-if="!isManagement" class="utility-control season-switcher">
             <span>{{ $t("Season") }}</span>
-            <select v-model="leagueId" :aria-label="$t('Season')" :disabled="!availableSeasons.length">
-              <option v-if="!availableSeasons.length" value="">{{ $t("Loading analyzed seasons…") }}</option>
+            <select v-model="utilityLeagueId" :aria-label="$t('Season')" :disabled="!utilitySeasons.length">
+              <option v-if="!utilitySeasons.length" value="">{{ $t("Loading seasons…") }}</option>
               <option
-                v-for="league in availableSeasons"
+                v-for="league in utilitySeasons"
                 :key="league.league_id"
                 :value="league.league_id"
               >

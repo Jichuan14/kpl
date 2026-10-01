@@ -1,7 +1,8 @@
 <script setup>
+import ModelCoverageNote from "./ModelCoverageNote.vue";
 import { computed, onBeforeUnmount, onMounted, ref, toRaw, watch } from "vue";
 import {
-  fetchDraftModel,
+  fetchActiveModel,  fetchDraftModel,
   fetchDraftMoveEvidence,
   fetchLiveMatch,
   fetchLiveWinnerPredictions,
@@ -10,7 +11,6 @@ import {
   fetchSelectionCommentary,
   fetchSeasonTeams,
   fetchUpcomingMatch,
-  fetchVisualizationSeasons,
   recommendLineup,
   scoreLineup,
   simulateDraft,
@@ -22,7 +22,9 @@ import DraftScenarioPanel from "./DraftScenarioPanel.vue";
 import DraftVersionTree from "./DraftVersionTree.vue";
 import WhatIfWorkspaceModal from "./WhatIfWorkspaceModal.vue";
 import TeamCombobox from "./TeamCombobox.vue";
-import { selectAvailableLeague, selectedLeagueId } from "./selectedLeague";
+import { createModelSession } from "./modelSession";
+import { selectedLeagueId } from "./selectedLeague";
+import { useSeasonCatalog } from "./composables/useSeasonCatalog";
 import { heroAsset } from "./heroAssets";
 import { messages, t as uiT } from "./i18n";
 import { finishStartupLoading } from "./startupLoader";
@@ -30,7 +32,9 @@ import { MAX_SCENARIO_NODES, nextScenarioNode, snapshotDraft } from "./composabl
 import { actionsSinceCheckpoint, appendVersionCheckpoint, createVersionCheckpoint, findDeepestVersionPrefix, findVersionCheckpoint, restoreVersionTree, sameVersionHistory, snapshotVersionState } from "./composables/draftVersionTree";
 
 const leagueId = selectedLeagueId;
-const seasons = ref([]);
+const modelSession = createModelSession(fetchActiveModel);
+const modelVersion = ref("");
+const { seasons, loadSeasons } = useSeasonCatalog();
 const model = ref(null);
 const result = ref(null);
 const recommendationResult = ref(null);
@@ -284,6 +288,7 @@ const whatIfSimulationContext = computed(() => {
   if (!blueTeam || !redTeam) return null;
   return {
     leagueId: leagueId.value,
+    modelVersion: modelVersion.value,
     modelType,
     blueTeam,
     redTeam,
@@ -977,13 +982,11 @@ function stopFollowingLiveMatch({ forget = true } = {}) {
   if (forget) clearLiveFollowPreference();
 }
 
-async function loadSeasons() {
-  seasons.value = (await fetchVisualizationSeasons()) || [];
-  selectAvailableLeague(seasons.value);
-}
-
+let modelLoadVersion = 0;
 async function loadModel() {
-  if (!leagueId.value) return;
+  const version = ++modelLoadVersion;
+  const operationLeagueId = leagueId.value;
+  if (!operationLeagueId) return;
   loading.value = true;
   error.value = "";
   result.value = null;
@@ -1013,11 +1016,14 @@ async function loadModel() {
   resetSeriesTeams();
   pickerTarget.value = "draft";
   try {
-    const [draftModel, teams, fixture] = await Promise.all([
-      fetchDraftModel(leagueId.value),
-      fetchSeasonTeams(leagueId.value),
-      fetchUpcomingMatch(leagueId.value),
+    modelVersion.value = await modelSession.version();
+    const [draftModel, factualTeams, fixture] = await Promise.all([
+      fetchDraftModel(operationLeagueId, modelVersion.value),
+      fetchSeasonTeams(operationLeagueId),
+      fetchUpcomingMatch(operationLeagueId),
     ]);
+    if (version !== modelLoadVersion || operationLeagueId !== leagueId.value) return;
+    const teams = factualTeams.length ? factualTeams : (draftModel.model_reference_teams || []).map((team) => ({ ...team, team_name: `${team.team_name} · ${t("Historical model context")}` }));
     model.value = draftModel;
     upcomingMatch.value = fixture;
     if ([5, 7].includes(Number(fixture?.bo))) bestOf.value = Number(fixture.bo);
@@ -1041,10 +1047,11 @@ async function loadModel() {
       };
     }
   } catch (err) {
+    if (version !== modelLoadVersion || operationLeagueId !== leagueId.value) return;
     model.value = null;
     error.value = err.message || "Could not load this season's draft model.";
   } finally {
-    loading.value = false;
+    if (version === modelLoadVersion) loading.value = false;
   }
 }
 
@@ -1087,6 +1094,7 @@ async function forecast() {
   try {
     result.value = await simulateDraft({
       league_id: leagueId.value,
+      model_version: modelVersion.value,
       model_type: modelType,
       blue_team_id: String(blue.team_id),
       blue_team_name: blue.team_name,
@@ -1117,6 +1125,7 @@ async function scoreCompletedLineup() {
   try {
     const score = await scoreLineup({
       league_id: leagueId.value,
+      model_version: modelVersion.value,
       blue_team_id: String(blue.team_id),
       red_team_id: String(red.team_id),
       blue_hero_ids: [...board.value.blue_picks],
@@ -1144,6 +1153,7 @@ async function recommendCurrentDraft() {
   try {
     const recommendations = await recommendLineup({
       league_id: leagueId.value,
+      model_version: modelVersion.value,
       model_type: modelType,
       blue_team_id: String(blue.team_id),
       blue_team_name: blue.team_name,
@@ -1184,6 +1194,7 @@ async function loadMoveEvidence(preSelectionState, step, heroId, expectedHistory
   try {
     const payload = await fetchDraftMoveEvidence({
       league_id: leagueId.value,
+      model_version: modelVersion.value,
       schedule: model.value?.draft_sequence?.length === 20 ? "standard_20" : "standard_18",
       battle_seq: Number(seriesGame.value),
       bp_order: Number(step.bp_order),
@@ -1248,6 +1259,7 @@ async function chooseHero(heroId) {
     commentaryLoading.value = true;
     fetchSelectionCommentary({
       league_id: leagueId.value,
+      model_version: modelVersion.value,
       ...preSelectionState,
       action: currentStep.value.action,
       side: currentStep.value.side,
@@ -1298,7 +1310,8 @@ async function expandScenario(hero, parent = null) {
   scenarioLoadingId.value = node.id;
   scenarioError.value = "";
   try {
-    const result = await simulateDraftScenario({ league_id: leagueId.value, ...node.state, forced_hero_id: Number(hero.hero_id) }, { signal: controller.signal });
+    const result = await simulateDraftScenario({ league_id: leagueId.value,
+      model_version: modelVersion.value, ...node.state, forced_hero_id: Number(hero.hero_id) }, { signal: controller.signal });
     if (requestNumber === scenarioRequestNumber && !scenarioStale.value) {
       scenarioNodes.value = scenarioNodes.value.map((item) => item.id === node.id ? { ...item, result } : item);
     }
@@ -1692,7 +1705,7 @@ onMounted(async () => {
   }
 });
 
-watch(leagueId, loadModel);
+watch(leagueId, loadModel, { flush: "sync" });
 watch(
   selectedTeamIds,
   async () => {
@@ -1741,13 +1754,7 @@ onBeforeUnmount(() => {
       </div>
       <div class="simulator-header-controls">
         <div class="simulator-season">
-          <label for="simulator-season-select">赛事</label>
           <div class="simulator-control-row">
-            <select id="simulator-season-select" v-model="leagueId" :disabled="loading">
-              <option v-for="season in seasons" :key="season.league_id" :value="season.league_id">
-                {{ season.year }} · {{ season.league_name }}{{ $t("· S") }}{{ season.season }}
-              </option>
-            </select>
             <div class="simulator-settings">
               <button
                 type="button"
@@ -1783,6 +1790,7 @@ onBeforeUnmount(() => {
               </div>
             </div>
           </div>
+          <ModelCoverageNote :metadata="model" />
           <small v-if="model">{{ number(model.training_decisions) }}{{ $t("条历史 BP 操作") }}</small>
         </div>
       </div>
@@ -2293,6 +2301,7 @@ onBeforeUnmount(() => {
             <div v-show="assistantTab === 'coach'" class="assistant-view coach-view" role="tabpanel">
               <DraftCoachPanel
                 :league-id="leagueId"
+                :model-version="modelVersion"
                 :season-name="selectedSeason?.league_name || leagueId"
                 :draft-state="coachDraftState"
                 :force-chinese="true"

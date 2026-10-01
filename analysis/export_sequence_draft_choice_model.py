@@ -76,6 +76,8 @@ def _team_training_decisions(
             *experiment.get("excluded_future_match_ids", []),
         }
     )
+    manifest_path = experiment.get("config", {}).get("split_manifest")
+    train_keys = {(str(r["season"]), str(r["match_id"])) for r in json.loads(Path(manifest_path).read_text())["splits"]["train"]} if manifest_path else None
     counts: Counter[str] = Counter()
     for season in experiment.get("training_seasons", []):
         path = repo_root / "analysis" / "exports" / str(season) / "bp_decisions.jsonl"
@@ -86,6 +88,8 @@ def _team_training_decisions(
                 if not line.strip():
                     continue
                 row = json.loads(line)
+                if train_keys is not None and (str(season), str(row.get("match_id"))) not in train_keys:
+                    continue
                 if (
                     row.get("is_peak_battle")
                     or not row.get("acting_team_id")

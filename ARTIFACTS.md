@@ -50,10 +50,10 @@ rebuild. See `deploy/README.md` for broker and worker recovery.
 | `analysis/outputs/{league_id}/team_combo_performance.jsonl` | `compute_team_draft_profiles.py` (`team_profiles`) | Team-profile tools and Draft Coach |
 | `analysis/outputs/{league_id}/player_hero_pools.jsonl` | `compute_team_draft_profiles.py` (`team_profiles`) | Player-pool tools and Draft Coach |
 | `analysis/outputs/{league_id}/team_recent_trends.jsonl` | `compute_team_draft_profiles.py` (`team_profiles`) | Recent-form context in Draft Coach |
-| `analysis/outputs/{league_id}/power_rankings.json` | `compute_power_rankings.py` (`power_rankings`) | Source for the Rankings page's team Elo and player-by-position and player-by-hero boards |
+| `analysis/outputs/{league_id}/power_rankings.json` | `compute_power_rankings.py` (`power_rankings`) | Season-only schema 3 source for team Elo and player boards; legacy cross-season schemas need this season step rerun before factual presentation |
 | `analysis/outputs/{league_id}/draft_model.json` | `build_draft_model.py` (`draft_model`) | Draft Simulator and published draft-model metadata |
-| `analysis/outputs/{league_id}/learnable_draft_choice_model.json` | `train_learnable_draft_choice_model.py` (`learnable_draft_model`) | Learned scoring in Draft Simulator and model-status API |
-| `analysis/outputs/{league_id}/learned_hero_feature_space.json` | `train_learnable_draft_choice_model.py` (`learnable_draft_model`) | Feature Space page and model-status API |
+| `analysis/outputs/{league_id}/learnable_draft_choice_model.json` | `train_learnable_draft_choice_model.py` (`learnable_draft_model`) | Legacy fallback scoring in Draft Simulator; explicit legacy training only |
+| `analysis/outputs/{league_id}/learned_hero_feature_space.json` | `export_production_hero_feature_space.py` after `sequence_draft_model` (explicit legacy training can still export legacy maps) | Feature Space, favorite-based recommendations, and management readiness; production fingerprint, bag branch, and vector dimension recorded |
 | `analysis/outputs/{league_id}/personalized_draft_choice_model.json` | `train_production_draft_policy.py` (`sequence_draft_model`) | Self-contained chronological bag + GRU policy with the selected 20-parameter familiarity residual |
 | `analysis/outputs/{league_id}/personalized_draft_probability_calibration.json` | `train_production_draft_policy.py` (`sequence_draft_model`) | Calibration temperature bound to the exact composite model and candidate policy |
 | `analysis/outputs/{league_id}/player_draft_context.json` | `train_production_draft_policy.py` (`sequence_draft_model`) | Point-in-time roster, role, and player–hero familiarity context used by the production policy |
@@ -70,6 +70,7 @@ The frontend requests them under `/assets/data/...`.
 
 | Published artifact | Frontend consumer | Derived from |
 | --- | --- | --- |
+| `analysis/published/data/factual-seasons.json` | Rankings, BP Data, Teams and their route-aware selector; includes empty seasons, actual fixture teams and published availability | All locally synced League records and current SQLite observation counts; rebuilt after catalog sync or publication |
 | `analysis/published/data/seasons.json` | Season selectors and page availability; includes league start time for newest-published default selection | League records with an existing published `overview.json` |
 | `analysis/published/data/meta-history.json` | Cross-season meta history | Every published `overview.json` |
 | `analysis/published/data/{league_id}/overview.json` | Main visualization overview and meta heroes | Relationship statistics, meta heroes, and league metadata |
@@ -137,3 +138,13 @@ not build or publish them, and the simulator intent widget computes directly
 from the exported BP corpus.
 The schema and interpretation limits are defined in
 `analysis/DRAFT_EVIDENCE_SPEC.md`.
+
+Production feature maps derive vectors from the active artifact’s self-contained hero feature matrix and frozen bag projection/residual parameters. Their PCA coordinates and full-vector nearest neighbors require no legacy learned-choice artifact. `counts_scope=target_season_observed_decisions` and `count_weighting=equal_weight_per_observed_action` identify actual selected-season pick/ban counts; the compatibility `weighted_bp_action_count` equals the unweighted action count. Existing legacy maps remain readable, but do not satisfy full-update production readiness.
+
+## Shared immutable model registry
+
+`analysis/outputs/models/versions/{version}/` contains a complete copied bundle and `manifest.json` with component SHA-256 fingerprints, actual source seasons, training/reference cutoffs, exact all-data or evaluation split lineage, metrics, calibration status and promotion status. `current.json` is the sole active pointer; `activations/` retains verified activation history for rollback. Keep old versions for pinned sessions. Candidates and their `latest_status.json` live under `analysis/outputs/models/candidates/`; historical backtest roots are explicitly chosen and never promote.
+
+`analysis/published/data/models/versions/{version}/` contains immutable `feature-space.json`, `draft-model.json` and `metadata.json`, verified and readable by the web server before activation. These registry, candidate, report and browser artifacts remain generated and ignored, like season model outputs. Back up the complete server registry together with its published versions; restoring a pointer alone is insufficient. Existing season artifacts are preserved for explicitly requested legacy calls.
+
+All-data production records `production_all_data`, a canonical retrain identity, fixed recipe, pinned maintained-input hashes and an explicit uncalibrated temperature1 sidecar. `analysis/outputs/models/inputs/herolist.json` is a generated, validated Tencent catalog cache used when a new legal hero lacks a lane in maintained data. It is copied into each new bundle. Automatic vocabulary expansion changes only missing rows in maintained `analysis/hero_draft_feature_vectors.json`; such rows mark unknown traits explicitly and preserve existing vectors. Historical seed bundles retain copied old inputs.

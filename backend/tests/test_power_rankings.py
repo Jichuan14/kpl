@@ -126,7 +126,7 @@ class PowerRankingsTest(unittest.TestCase):
             hero_catalog={101: "Hero 101", 999: "Unused Hero"},
         )
 
-        self.assertEqual(artifact["schema_version"], 2)
+        self.assertEqual(artifact["schema_version"], 3)
         self.assertEqual(artifact["team_rankings"][0]["team_id"], "a")
         hero = next(row for row in artifact["hero_rankings"] if row["hero_id"] == 101)
         self.assertEqual(hero["hero_id"], 101)
@@ -143,6 +143,48 @@ class PowerRankingsTest(unittest.TestCase):
         self.assertEqual(position["position"], 1)
         self.assertEqual(position["players"][0]["player_name"], "Strong")
         self.assertEqual(artifact["summary"]["player_position_rows"], 2)
+
+    def test_prior_season_cannot_change_any_board_and_first_elo_starts_at_1500(self):
+        date = datetime(2026, 9, 29)
+        players = [player("A", "a", "A", 101, kda=8, mvp=9, participation=80, damage_rate=.3, gold=10000)]
+        current = match("now", "20260004", date, "a", players)
+        old = [match(str(index), "20260003", date - timedelta(days=index + 1), "b", players) for index in range(100)]
+        baseline = build_rankings([current], [current], date, ["20260004"])
+        changed = build_rankings([current], old + [current], date, ["20260003", "20260004"])
+        self.assertEqual(baseline, changed)
+        self.assertEqual(baseline["history_league_ids"], ["20260004"])
+        self.assertEqual(baseline["team_rankings"][0]["elo"], 1512)
+        self.assertEqual(baseline["team_rankings"][1]["elo"], 1488)
+        self.assertEqual(baseline["hero_rankings"][0]["players"][0]["games"], 1)
+
+    def test_fixture_teams_are_neutral_and_unranked_without_player_priors(self):
+        date = datetime(2026, 9, 29)
+        fixture = match("fixture", "20260004", date, "", [])
+        artifact = build_rankings([fixture], [], date, ["20260003"])
+        self.assertEqual(len(artifact["team_rankings"]), 2)
+        for team in artifact["team_rankings"]:
+            self.assertEqual(team["elo"], 1500)
+            for key in ("rank", "hybrid_score", "decayed_win_rate", "recent_10_wins"):
+                self.assertIsNone(team[key])
+        self.assertEqual(artifact["position_rankings"], [])
+        self.assertEqual(artifact["hero_rankings"], [])
+
+    def test_empty_export_has_explicit_identity_and_missing_export_fails(self):
+        import tempfile
+        from compute_power_rankings import load_history
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with self.assertRaisesRegex(ValueError, "Missing selected-season"):
+                load_history(root, "20260004")
+            (root / "20260004").mkdir()
+            (root / "20260004" / "matches.jsonl").write_text("")
+            target, history, as_of, included = load_history(root, "20260004")
+        with self.assertRaisesRegex(ValueError, "explicit league identity"):
+            build_rankings(target, history, as_of, included)
+        artifact = build_rankings(target, history, as_of, included, league_id="20260004")
+        self.assertEqual(artifact["league"]["league_id"], "20260004")
+        self.assertIsNone(artifact["as_of"])
+        self.assertEqual(artifact["team_rankings"], [])
 
     def test_position_ranking_aggregates_heroes_without_mixing_roles(self) -> None:
         played_at = datetime(2026, 7, 1)

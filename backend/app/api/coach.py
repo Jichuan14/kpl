@@ -50,6 +50,7 @@ from app.schemas import ApiResponse, CoachLimitsUpdate
 from app.services.coach_rate_limit import CoachRateLimiter
 from app.services.request_identity import client_key
 from app.services.season_teams import validate_season_team_pair
+from app.services.model_tool_scope import pinned_model_operation
 
 logger = logging.getLogger(__name__)
 
@@ -176,6 +177,10 @@ def _finish_conversation_turn(
     if conversation_record is None:
         return
     payload["conversation_id"] = conversation_record.conversation_id
+    from app.services.model_registry import current_bundle
+    handle = current_bundle()
+    if handle:
+        payload.update(handle.metadata())
     coverage = result.get("coverage") or {}
     requested = list(coverage.get("requested") or []) if isinstance(coverage, dict) else []
     service.conversation_store.finish_turn(
@@ -191,6 +196,7 @@ def _finish_conversation_turn(
                 body.draft_state.model_dump(mode="json") if body.draft_state else None,
             ),
             "league_id": body.league_id,
+            "model_version": handle.version if handle else None,
             "board_fingerprint": board_fingerprint(
                 body.league_id,
                 body.draft_state.model_dump(mode="json") if body.draft_state else None,
@@ -254,6 +260,7 @@ def _http_error(
 
 
 @router.post("")
+@pinned_model_operation
 def ask_coach(
     body: CoachInput,
     request: Request,
@@ -320,6 +327,7 @@ def ask_coach(
                 conversation_record,
                 client_request_id=body.client_request_id,
                 request_id=request_id,
+                current_board=board_fingerprint(body.league_id, body.draft_state.model_dump(mode="json") if body.draft_state else None),
             )
             if cached is not None:
                 completed = True
@@ -475,6 +483,7 @@ def ask_coach(
 
 
 @router.post("/stream")
+@pinned_model_operation
 def stream_coach(
     body: CoachInput,
     request: Request,
@@ -541,6 +550,7 @@ def stream_coach(
                 conversation_record,
                 client_request_id=body.client_request_id,
                 request_id=request_id,
+                current_board=board_fingerprint(body.league_id, body.draft_state.model_dump(mode="json") if body.draft_state else None),
             )
             conversation_ref = scoped_gate_reference(
                 conversation_record.to_public_ref(),
@@ -752,6 +762,7 @@ def clear_coach_conversation(request: Request, response: Response) -> ApiRespons
 
 
 @router.post("/scout-report")
+@pinned_model_operation
 def prepare_scout_report(
     body: ScoutReportInput,
     request: Request,

@@ -29,7 +29,7 @@ services:
     build:
       context: .
       dockerfile: backend/Dockerfile
-    command: ["celery", "-A", "app.services.pipeline_jobs:celery_app", "worker", "--beat", "--loglevel=INFO", "--concurrency=1", "--pool=solo"]
+    command: ["celery", "-A", "app.services.pipeline_jobs:celery_app", "worker", "--beat", "--loglevel=INFO", "--concurrency=1", "--pool=solo", "--without-mingle", "--without-gossip"]
     env_file:
       - .env.production
     depends_on:

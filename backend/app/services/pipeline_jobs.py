@@ -37,6 +37,9 @@ celery_app.conf.update(
     task_acks_late=True,
     task_reject_on_worker_lost=True,
     worker_prefetch_multiplier=1,
+    # Job status comes from SQLite. Celery's optional remote-control queues
+    # are transient/non-exclusive, which RabbitMQ 4.3 rejects by default.
+    worker_enable_remote_control=False,
     broker_connection_retry_on_startup=True,
     broker_connection_timeout=3,
     broker_transport_options={"confirm_publish": True, "max_retries": 1},
@@ -215,14 +218,26 @@ def _perform(job: PipelineJob) -> dict:
                                downloaded["data_changed"] or not status["analysis_ready"])
                 if do_analysis:
                     _update_stage(job.id, "analysis")
-                    result["analysis"] = AnalysisPipeline(league_id).run("all")
+                    result["analysis"] = AnalysisPipeline(league_id).run("display")
                 status = data_status(league_id, db).data
                 if do_analysis or any(not asset["ready"] for asset in status["frontend_assets"]):
                     _update_stage(job.id, "publish")
                     result["published"] = publish_league(db, league_id)
+                if do_analysis:
+                    # Factual season publication is committed before global model
+                    # training. A deferred/failed candidate keeps the incumbent.
+                    _update_stage(job.id, "rolling_model")
+                    result["model_update"] = AnalysisPipeline(league_id).run("rolling_model")
             return result
         if kind == "analysis":
             _update_stage(job.id, "analysis")
+            if payload["step"] == "all":
+                result = {"analysis": AnalysisPipeline(league_id).run("display")}
+                _update_stage(job.id,"publish")
+                result["published"] = publish_league(db,league_id)
+                _update_stage(job.id,"rolling_model")
+                result["model_update"] = AnalysisPipeline(league_id).run("rolling_model")
+                return result
             return AnalysisPipeline(league_id).run(payload["step"])
         if kind == "publish":
             _update_stage(job.id, "publish")

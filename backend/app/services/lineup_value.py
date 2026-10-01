@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from itertools import combinations
 from pathlib import Path
 from typing import Any, Iterable, Sequence
+from app.services.model_registry import component_path, current_bundle
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -134,7 +135,7 @@ def _rule_density(
             opportunities += len(rules)
             source_values = mechanics.get(source)
             target_values = mechanics.get(target)
-            if source_values is None or target_values is None:
+            if source_values is None or target_values is None or not source_values.get("__mechanics_known",1.) or not target_values.get("__mechanics_known",1.):
                 continue
             known_pairs += 1
             for source_features, target_features in rules:
@@ -453,6 +454,8 @@ _MODEL_CACHE: tuple[Path, int, LineupValueModel] | None = None
 
 def lineup_value_model_path(league_id: str | None = None) -> Path:
     """Prefer a management-built season model, retaining the bundled fallback."""
+    if current_bundle():
+        return current_bundle().path("lineup_value_model.json")
     if league_id:
         if not all(
             character.isalnum() or character in "-_"
@@ -475,6 +478,6 @@ def load_lineup_value_model(
     modified = path.stat().st_mtime_ns
     if _MODEL_CACHE and _MODEL_CACHE[:2] == (path, modified):
         return _MODEL_CACHE[2]
-    model = LineupValueModel.from_path(path)
+    model = LineupValueModel.from_path(path, component_path("hero_tactical_roles.json", TACTICAL_ROLES_PATH))
     _MODEL_CACHE = (path, modified, model)
     return model

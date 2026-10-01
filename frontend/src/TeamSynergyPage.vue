@@ -1,22 +1,22 @@
 <script setup>
-import { computed, onMounted, ref, shallowRef, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import {
   fetchTeamSynergies,
 } from "./api";
-import { useLatestRequest } from "./composables/useLatestRequest";
-import { useSeasonCatalog } from "./composables/useSeasonCatalog";
-import { selectAvailableLeague, selectedLeagueId } from "./selectedLeague";
+import { createFactualLoader, hasSeasonObservations } from "./factualResource.js";
+import { useFactualSeasonCatalog } from "./composables/useFactualSeasonCatalog";
+import { selectedFactualLeagueId } from "./selectedFactualLeague";
 import { heroAsset } from "./heroAssets";
 import { language } from "./i18n";
 import { finishStartupLoading } from "./startupLoader";
 
-const { seasons, loadSeasons } = useSeasonCatalog((season) => season.team_synergy_ready);
-const latestRequest = useLatestRequest();
-const leagueId = selectedLeagueId;
+const { seasons, loadSeasons } = useFactualSeasonCatalog();
+const leagueId = selectedFactualLeagueId;
 const teamId = ref("");
 const payload = shallowRef(null);
 const loading = ref(false);
 const error = ref("");
+const noInformation = ref(false);
 
 const metric = ref("selection_count");
 const support = ref(3);
@@ -113,29 +113,30 @@ function selectTeam(nextTeamId) {
   teamDirectoryOpen.value = false;
 }
 
-async function loadTeamSynergies() {
-  if (!leagueId.value) return;
-  loading.value = true;
-  error.value = "";
-  try {
-    const next = await latestRequest((signal, current) => fetchTeamSynergies({
-      leagueId: leagueId.value,
-      minSelections: 2,
-      signal,
-    }).then((value) => current() ? value : null));
-    if (!next) return;
-    payload.value = next;
-    if (!teams.value.some((team) => team.team_id === teamId.value)) {
-      teamId.value = teams.value[0]?.team_id || "";
-    }
-  } catch (err) {
+const loadTeamSynergies = createFactualLoader({
+  start() {
     payload.value = null;
-    teamId.value = "";
-    error.value = err.message || "Could not load team synergies.";
-  } finally {
-    loading.value = false;
-  }
-}
+    noInformation.value = false;
+    loading.value = true;
+    error.value = "";
+  },
+  async load(signal) {
+    const id = leagueId.value;
+    const season = seasons.value.find((item) => item.league_id === id);
+    if (!id || !season) return null;
+    if (!hasSeasonObservations(season) || !season.team_synergy_ready) return null;
+    return fetchTeamSynergies({ leagueId: id, minSelections: 2, signal });
+  },
+  value(next) {
+    payload.value = next;
+    noInformation.value = !(next.teams || []).length;
+    if (!teams.value.some((team) => team.team_id === teamId.value)) teamId.value = teams.value[0]?.team_id || "";
+  },
+  missing() { noInformation.value = true; },
+  error(err) { error.value = err.message || "Could not load season data."; },
+  finish() { loading.value = false; },
+});
+onBeforeUnmount(() => loadTeamSynergies.cancel());
 
 onMounted(async () => {
   try {
@@ -148,7 +149,7 @@ onMounted(async () => {
   }
 });
 
-watch(leagueId, loadTeamSynergies);
+watch(leagueId, loadTeamSynergies, { flush: "sync" });
 </script>
 
 <template>
@@ -159,24 +160,12 @@ watch(leagueId, loadTeamSynergies);
         <h1>{{ $t("Team Synergy Lab") }}</h1>
         <p>{{ $t("Browse each team’s preferred hero pairs—ranked by how often they complete a combination when the second hero is still legal.") }}</p>
       </div>
-      <label class="season-control">
-        <span>{{ $t("Competition") }}</span>
-        <select v-model="leagueId">
-          <option v-if="!seasons.length" value="">{{ $t("No team data yet") }}</option>
-          <option
-            v-for="season in seasons"
-            :key="season.league_id"
-            :value="season.league_id"
-          >
-            {{ season.year }} · {{ season.league_name }}{{ $t("· S") }}{{ season.season }}
-          </option>
-        </select>
-      </label>
     </header>
 
     <p v-if="error" class="teams-message error">{{ error }}</p>
     <p v-else-if="loading" class="teams-message">{{ $t("Loading team combinations…") }}</p>
 
+    <p v-if="noInformation && !loading && !error" class="teams-message">{{ $t("No current information") }}</p>
     <template v-if="payload && selectedTeam && !loading">
       <section class="teams-workspace">
         <aside class="team-directory">

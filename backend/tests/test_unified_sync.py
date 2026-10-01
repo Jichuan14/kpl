@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 from sqlalchemy import create_engine, func, inspect, select
 from sqlalchemy.orm import Session
@@ -10,6 +11,10 @@ from app.services.sync import SyncService
 
 class UnifiedBattleSyncTest(unittest.TestCase):
     def setUp(self) -> None:
+        # Synthetic season rows must never overwrite the real public catalog.
+        publisher = patch("app.services.static_publisher.publish_factual_catalog")
+        publisher.start()
+        self.addCleanup(publisher.stop)
         self.engine = create_engine("sqlite:///:memory:")
         Base.metadata.create_all(self.engine)
         self.db = Session(self.engine)
@@ -106,6 +111,20 @@ class UnifiedBattleSyncTest(unittest.TestCase):
                 },
             ],
         }
+
+    def test_future_hero_first_league_storage_and_updated_resync(self):
+        detail=self.detail();new_id=909090
+        detail['bp_list'][1].update(hero_id=new_id,hero_name='Future hero',hero_icon='future.png')
+        detail['battle_player_list'][0].update(hero_id=new_id,hero_name='Future hero')
+        self.service._persist_battle_detail(battle=self.battle,match=self.match,data=detail);self.db.commit()
+        self.assertEqual(self.db.get(Hero,new_id).hero_name,'Future hero')
+        detail['bp_list'][1].update(hero_name='Corrected future hero',hero_icon='corrected.png')
+        detail['battle_player_list'][0].update(hero_name='Corrected future hero')
+        self.service._persist_battle_detail(battle=self.battle,match=self.match,data=detail);self.db.commit()
+        hero=self.db.get(Hero,new_id)
+        self.assertEqual(hero.hero_name,'Corrected future hero');self.assertEqual(hero.hero_icon,'corrected.png')
+        self.assertEqual(self.db.scalar(select(func.count()).select_from(Hero).where(Hero.hero_id==new_id)),1)
+        self.assertEqual(self.db.scalar(select(func.count()).select_from(BattleBp)),2)
 
     def test_one_detail_populates_all_tables_idempotently(self) -> None:
         result = self.service._persist_battle_detail(

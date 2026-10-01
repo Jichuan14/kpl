@@ -28,6 +28,8 @@ from app.services.draft_simulator import (
     simulate,
 )
 from app.services.season_teams import validate_season_team_pair
+from app.services.model_tool_scope import pinned_model_operation
+from app.services.model_registry import resolve_bundle, current_bundle
 from app.services.coach_rate_limit import CoachRateLimiter
 from app.services.request_identity import client_key
 from app.services.hero_matchup import recommend_heroes
@@ -60,13 +62,24 @@ def _simulation_client_key(request: Request) -> str:
     )
 
 
+@router.get("/active-model")
+def active_model(model_version: str | None = Query(None, max_length=128)) -> ApiResponse:
+    try:
+        return ApiResponse(data=resolve_bundle(model_version).metadata())
+    except FileNotFoundError as exc:
+        raise HTTPException(404, detail="No active production model is available") from exc
+    except ValueError as exc:
+        raise HTTPException(400, detail=str(exc)) from exc
+
+
 @router.post("/commentary")
+@pinned_model_operation
 def selection_commentary(
     body: DraftSelectionCommentaryRequest,
     db: Session = Depends(get_db),
 ) -> ApiResponse:
     try:
-        state = body.model_dump(exclude={"league_id", "model_type", "seed", "selected_hero_id"})
+        state = body.model_dump(exclude={"league_id", "model_version", "model_type", "seed", "selected_hero_id"})
         teams = validate_season_team_pair(
             db, body.league_id, body.blue_team_id, body.red_team_id
         )
@@ -86,7 +99,7 @@ def move_evidence(body: DraftMoveEvidenceRequest) -> ApiResponse:
     try:
         return ApiResponse(
             data=build_simulator_move_evidence(
-                body.model_dump(exclude={"league_id"})
+                body.model_dump(exclude={"league_id", "model_version"})
             )
         )
     except FileNotFoundError as exc:
@@ -96,7 +109,8 @@ def move_evidence(body: DraftMoveEvidenceRequest) -> ApiResponse:
 
 
 @router.get("/model")
-def draft_model(league_id: str = Query(..., min_length=1, max_length=32)) -> ApiResponse:
+@pinned_model_operation
+def draft_model(league_id: str = Query(..., min_length=1, max_length=32), model_version: str | None = Query(None, max_length=128)) -> ApiResponse:
     try:
         return ApiResponse(data=metadata(league_id))
     except FileNotFoundError as exc:
@@ -106,7 +120,8 @@ def draft_model(league_id: str = Query(..., min_length=1, max_length=32)) -> Api
 
 
 @router.get("/feature-space")
-def feature_space(league_id: str = Query(..., min_length=1, max_length=32)) -> ApiResponse:
+@pinned_model_operation
+def feature_space(league_id: str = Query(..., min_length=1, max_length=32), model_version: str | None = Query(None, max_length=128)) -> ApiResponse:
     try:
         return ApiResponse(data=learned_feature_space(league_id))
     except FileNotFoundError as exc:
@@ -116,9 +131,11 @@ def feature_space(league_id: str = Query(..., min_length=1, max_length=32)) -> A
 
 
 @router.get("/ultimate-lineups")
+@pinned_model_operation
 def ultimate_lineups(
     request: Request,
     league_id: str = Query(..., min_length=1, max_length=32),
+    model_version: str | None = Query(None, max_length=128),
 ) -> ApiResponse:
     """Compute team-neutral peak-duel lineup profiles from existing artifacts."""
     key = _simulation_client_key(request)
@@ -143,6 +160,7 @@ def ultimate_lineups(
 
 
 @router.post("/ultimate-lineups/counter")
+@pinned_model_operation
 def ultimate_counter_lineup(
     body: UltimateCounterLineupRequest,
     request: Request,
@@ -172,6 +190,7 @@ def ultimate_counter_lineup(
 
 
 @router.post("/hero-matchup")
+@pinned_model_operation
 def hero_matchup(body: HeroMatchupRecommendationRequest) -> ApiResponse:
     """Recommend favorite-compatible heroes into one or more enemy picks."""
     try:
@@ -193,6 +212,7 @@ def hero_matchup(body: HeroMatchupRecommendationRequest) -> ApiResponse:
 
 
 @router.post("/draft")
+@pinned_model_operation
 def draft_simulation(
     body: DraftSimulationRequest,
     request: Request,
@@ -209,7 +229,7 @@ def draft_simulation(
             },
             headers={"Retry-After": str(decision.retry_after_seconds)},
         )
-    state = body.model_dump(exclude={"league_id", "model_type", "seed"})
+    state = body.model_dump(exclude={"league_id", "model_version", "model_type", "seed"})
     try:
         teams = validate_season_team_pair(
             db,
@@ -239,6 +259,7 @@ def draft_simulation(
 
 
 @router.post("/draft-scenario")
+@pinned_model_operation
 def draft_scenario(
     body: DraftScenarioRequest,
     request: Request,
@@ -253,7 +274,7 @@ def draft_scenario(
             detail={"code": "simulation_rate_limited", "message": "The simulator is busy. Try again shortly."},
             headers={"Retry-After": str(decision.retry_after_seconds)},
         )
-    state = body.model_dump(exclude={"league_id", "model_type", "seed", "forced_hero_id"})
+    state = body.model_dump(exclude={"league_id", "model_version", "model_type", "seed", "forced_hero_id"})
     try:
         teams = validate_season_team_pair(db, body.league_id, body.blue_team_id, body.red_team_id)
         state.update(blue_team_name=str(teams["blue"]["team_name"]), red_team_name=str(teams["red"]["team_name"]))
@@ -306,6 +327,7 @@ def draft_scenario(
 
 
 @router.post("/recommend-lineup")
+@pinned_model_operation
 def lineup_recommendation(
     body: LineupRecommendationRequest,
     request: Request,
@@ -324,7 +346,7 @@ def lineup_recommendation(
             headers={"Retry-After": str(decision.retry_after_seconds)},
         )
     state = body.model_dump(
-        exclude={"league_id", "model_type", "seed", "top_k", "risk_mode"}
+        exclude={"league_id", "model_version", "model_type", "seed", "top_k", "risk_mode"}
     )
     try:
         teams = validate_season_team_pair(
@@ -356,6 +378,7 @@ def lineup_recommendation(
 
 
 @router.post("/score-lineup")
+@pinned_model_operation
 def lineup_score(
     body: LineupScoreRequest,
     request: Request,
@@ -418,6 +441,7 @@ def lineup_score(
 
 
 @router.post("/score-neutral-lineup")
+@pinned_model_operation
 def neutral_lineup_score(
     body: NeutralLineupScoreRequest,
     request: Request,

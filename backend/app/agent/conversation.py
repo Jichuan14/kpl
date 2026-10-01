@@ -48,7 +48,9 @@ def looks_like_id(value: str | None) -> bool:
 
 
 def board_fingerprint(league_id: str, draft_state: dict[str, Any] | None) -> str:
-    payload = {"league_id": league_id, "draft_state": draft_state or None}
+    from app.services.model_registry import current_bundle
+    handle = current_bundle()
+    payload = {"league_id": league_id, "draft_state": draft_state or None, "model_version": handle.version if handle else None}
     encoded = json.dumps(payload, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()[:16]
 
@@ -206,6 +208,7 @@ class ConversationStore:
         *,
         client_request_id: str | None,
         request_id: str,
+        current_board: str | None = None,
     ) -> dict[str, Any] | None:
         lock = self._lock_for(record.conversation_id)
         if not lock.acquire(blocking=False):
@@ -219,6 +222,8 @@ class ConversationStore:
                 and client_request_id == record.last_client_request_id
                 and record.last_result is not None
             ):
+                if current_board is not None and (not record.turns or record.turns[-1].get("board_fingerprint") != current_board):
+                    raise CoachConversationError("conversation_request_mismatch", "This request ID belongs to another draft or model version. Use a new request ID.")
                 return record.last_result
             if record.in_flight_request_id:
                 raise CoachConversationError(

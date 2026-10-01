@@ -98,6 +98,9 @@ class SyncService:
                 inserted += 1
 
         self.db.commit()
+        # Catalog publication is independent of analysis and model training.
+        from app.services.static_publisher import publish_factual_catalog
+        publish_factual_catalog(self.db)
         return {"inserted": inserted, "updated": updated}
 
     def resolve_league_id(self, league_id: str | None) -> str:
@@ -210,6 +213,11 @@ class SyncService:
         if recompute_stats and finished_to_sync:
             stats = recompute_hero_bp_stats(self.db, lid)
 
+        # Keep factual observation counts current even if later analysis/training
+        # fails. This runs once per league sync, never once per battle.
+        from app.services.static_publisher import publish_factual_catalog
+        publish_factual_catalog(self.db)
+
         return {
             "league_id": lid,
             "incremental": incremental,
@@ -293,6 +301,10 @@ class SyncService:
         for team_id, (team_name, team_icon) in teams.items():
             self._upsert_team(team_id, team_name, team_icon)
         self.db.commit()
+        # Fixtures and finished-series status are facts even when battle-detail
+        # fetching subsequently fails or is interrupted.
+        from app.services.static_publisher import publish_factual_catalog
+        publish_factual_catalog(self.db)
         return count
 
     def _sync_match_battles_and_bp(self, match: Match) -> dict[str, Any]:

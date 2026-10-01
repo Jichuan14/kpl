@@ -1,11 +1,13 @@
 <script setup>
+import ModelCoverageNote from "./ModelCoverageNote.vue";
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import {
-  fetchBattleLineups,
+  fetchActiveModel,  fetchBattleLineups,
   fetchHeroMatchupRecommendations,
   fetchHeroResponses,
   fetchLearnedFeatureSpace,
 } from "./api";
+import { createModelSession } from "./modelSession";
 import { selectedLeagueId } from "./selectedLeague";
 import { useLatestRequest } from "./composables/useLatestRequest";
 import { useSeasonCatalog } from "./composables/useSeasonCatalog";
@@ -37,6 +39,8 @@ const playableLanes = ["clash", "mid", "jungle", "farm", "roam"];
 const { seasons, loadSeasons } = useSeasonCatalog();
 const latestFeatureSpace = useLatestRequest();
 const leagueId = selectedLeagueId;
+const modelSession = createModelSession(fetchActiveModel);
+const modelVersion = ref("");
 const payload = shallowRef(null);
 const responses = shallowRef(null);
 const historicalLineups = shallowRef([]);
@@ -349,6 +353,7 @@ async function recommendForMatchup(limit = INITIAL_MATCHUP_RECOMMENDATION_LIMIT)
     const opponentIds = new Set(supportedOpponents.map(Number));
     const request = {
       league_id: leagueId.value,
+      model_version: modelVersion.value,
       favorite_hero_ids: supportedFavorites.map(Number).filter((heroId) => !opponentIds.has(heroId)),
       opponent_hero_ids: supportedOpponents.map(Number),
       preferred_lane: preferredLane.value || null,
@@ -492,7 +497,9 @@ async function loadFeatureSpace() {
   historicalState.value = "loading";
   try {
     const result = await latestFeatureSpace(async (signal, current) => {
-      const featureSpace = await fetchLearnedFeatureSpace(leagueId.value);
+      modelVersion.value = await modelSession.version();
+      if (!current()) return null;
+      const featureSpace = await fetchLearnedFeatureSpace(leagueId.value, modelVersion.value);
       if (!current()) return null;
       return featureSpace;
     });
@@ -558,7 +565,7 @@ async function loadFeatureSpace() {
       });
   } catch (err) {
     if (err.name === "AbortError") return;
-    error.value = t("No learned feature space is available for this season. Train the learnable model first.");
+    error.value = t("No hero feature space is available for this season. Run production model training first.");
   } finally {
     if (loadVersion === featureLoadVersion) loading.value = false;
   }
@@ -576,7 +583,7 @@ onMounted(async () => {
 watch(leagueId, () => {
   matchupRequestNumber += 1;
   loadFeatureSpace();
-});
+}, { flush: "sync" });
 </script>
 
 <template>
@@ -585,8 +592,10 @@ watch(leagueId, () => {
     <p v-else-if="loading" class="message">{{ t("Loading learned feature space…") }}</p>
 
     <template v-else-if="payload">
+      <ModelCoverageNote :metadata="payload" />
       <LineupAnalyzerWidget
         :league-id="leagueId"
+        :model-version="modelVersion"
         :heroes="pickerHeroes"
         :response-rows="responses?.rows || []"
         :historical-lineups="historicalLineups"
@@ -602,6 +611,7 @@ watch(leagueId, () => {
           <b aria-hidden="true">+</b>
         </summary>
         <div class="deep-dive-content">
+      <p v-if="payload.source_space === 'production_frozen_bag_representation'" class="map-reading">{{ t("Production policy · frozen bag hero vectors") }} · {{ payload.source_dimension }} {{ t("dimensions") }}</p>
       <section class="legend" :aria-label="t('Lane legend')">
         <span class="map-reading"><strong>{{ t("How to read the map") }}</strong>{{ t("Nearby icons mean the model treats those heroes as more similar. The layout directions have no fixed gameplay meaning.") }}</span>
         <span v-for="lane in Object.keys(laneLabels)" :key="lane" :class="['legend-item', lane]">
@@ -685,7 +695,7 @@ watch(leagueId, () => {
           <dl>
             <div><dt>{{ t("Damage") }}</dt><dd>{{ selectedHero.damage_types?.join(" · ") || t("Unknown") }}</dd></div>
             <div v-if="selectedMechanics.length"><dt>{{ t("Gameplay mechanics") }}</dt><dd class="mechanic-list"><span v-for="mechanic in selectedMechanics" :key="mechanic.key">{{ mechanic.label }}</span></dd></div>
-            <div><dt>{{ t("Nearest learned heroes") }}</dt><dd>{{ t("Five closest points in the 16-D learned candidate space.") }}</dd></div>
+            <div><dt>{{ t("Nearest learned heroes") }}</dt><dd>{{ t("Five closest heroes in the full learned representation.") }}</dd></div>
           </dl>
           <div class="neighbor-list">
             <button v-for="hero in selectedNeighbors" :key="hero.hero_id" type="button" @click="selectHero(hero.hero_id)">
@@ -746,15 +756,6 @@ watch(leagueId, () => {
             <h1 id="matchup-lab-heading">{{ t("What should I play into their heroes?") }}</h1>
             <p>{{ t("Build a saved pool of heroes you enjoy, add the opponent picks you can see, and get a ranked shortlist for the positions you actually play.") }}</p>
           </div>
-          <label class="season-picker">
-            <span>{{ t("Competition") }}</span>
-            <select v-model="leagueId" :disabled="loading">
-              <option v-for="season in seasons" :key="season.league_id" :value="season.league_id">
-                {{ season.year }} · {{ season.league_name }}{{ $t("· S") }}{{ season.season }}
-              </option>
-            </select>
-            <small>{{ t("Historical draft evidence · Favorite-style similarity") }}</small>
-          </label>
         </header>
 
         <aside class="bp-reference-note">

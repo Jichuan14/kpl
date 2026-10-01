@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Any
@@ -55,6 +55,13 @@ def _series(path: Path, eligible_match_ids: set[str] | None = None) -> list[dict
     return sorted(rows, key=lambda row: (row["start_time"], row["match_id"]))
 
 
+def normalized_time(value: str) -> datetime:
+    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone(timedelta(hours=8)))
+    return parsed.astimezone(timezone.utc)
+
+
 def _take_date_grouped_tail(
     rows: list[dict[str, str]], count: int
 ) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
@@ -62,8 +69,8 @@ def _take_date_grouped_tail(
     if count < 1 or len(rows) < count:
         raise ValueError("Insufficient series for a requested chronological window")
     boundary = len(rows) - count
-    boundary_time = rows[boundary]["start_time"]
-    while boundary > 0 and rows[boundary - 1]["start_time"] == boundary_time:
+    boundary_time = normalized_time(rows[boundary]["start_time"])
+    while boundary > 0 and normalized_time(rows[boundary - 1]["start_time"]) == boundary_time:
         boundary -= 1
     return rows[:boundary], rows[boundary:]
 
@@ -155,9 +162,17 @@ def validate_split_manifest(manifest: dict[str, Any]) -> None:
     if set(splits) != set(SPLIT_NAMES):
         raise ValueError("Manifest must contain train/validation/calibration/holdout")
     seen: dict[str, str] = {}
+    previous_max = None
     for split in SPLIT_NAMES:
+        if not splits[split] and manifest.get("mode") == "production_all_data" and split != "train":
+            continue
         if not splits[split]:
             raise ValueError(f"Split {split} is empty")
+        times = [normalized_time(row["start_time"]) for row in splits[split] if row.get("start_time")]
+        if times and previous_max is not None and min(times) <= previous_max:
+            raise ValueError("Split chronology overlaps or splits an equal-time group")
+        if times:
+            previous_max = max(times)
         for row in splits[split]:
             key = f"{row.get('season')}:{row.get('match_id')}"
             if key in seen:

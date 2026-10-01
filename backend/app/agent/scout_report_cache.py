@@ -11,6 +11,7 @@ from typing import Any, Callable
 from app.agent.artifact_cache import ArtifactVersion
 from app.config import get_settings
 from app.services.analysis_pipeline import OUTPUT_ROOT
+from app.services.model_registry import component_path, current_bundle
 
 
 SCOUT_ARTIFACTS = (
@@ -58,7 +59,7 @@ def scout_report_cache_key(
             for filename in SCOUT_ARTIFACTS
         ),
     ]
-    return (league_id, blue_team_id, red_team_id, language, *versions)
+    return (league_id, current_bundle().version if current_bundle() else "legacy", blue_team_id, red_team_id, language, *versions)
 
 
 class ScoutReportCache:

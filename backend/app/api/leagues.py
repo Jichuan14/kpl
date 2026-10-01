@@ -3,6 +3,7 @@ from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -61,11 +62,29 @@ def daily_matches(
 
 
 @router.get("")
-def list_leagues(db: Session = Depends(get_db)) -> ApiResponse:
+def list_leagues(db: Session = Depends(get_db), factual: bool = Query(default=False)) -> ApiResponse:
+    if factual is True:
+        from app.services.factual_seasons import factual_seasons
+        from app.services.static_publisher import DATA_ROOT
+        return ApiResponse(data=factual_seasons(db, DATA_ROOT))
     rows = db.scalars(
         select(League).order_by(League.year.desc(), League.season.desc(), League.id.desc())
     ).all()
     return ApiResponse(data=[LeagueOut.model_validate(r).model_dump() for r in rows])
+
+
+class SiteDefaultRequest(BaseModel):
+    league_id: str = Field(min_length=1, max_length=32, pattern=r"^[A-Za-z0-9_-]+$")
+
+
+@router.put("/site-default")
+def update_site_default(body: SiteDefaultRequest, db: Session = Depends(get_db)) -> ApiResponse:
+    """Management write; production's private league catch-all requires auth."""
+    from app.services.site_settings import save_default_league
+    try:
+        return ApiResponse(data=save_default_league(db, body.league_id))
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.get("/latest")

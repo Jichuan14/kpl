@@ -1,19 +1,19 @@
 <script setup>
-import { computed, onMounted, ref, shallowRef, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import { fetchPowerRankings } from "./api";
-import { useLatestRequest } from "./composables/useLatestRequest";
-import { useSeasonCatalog } from "./composables/useSeasonCatalog";
+import { createFactualLoader, hasSeasonObservations, neutralSeasonRankings, isSeasonOnlyRanking } from "./factualResource.js";
+import { useFactualSeasonCatalog } from "./composables/useFactualSeasonCatalog";
 import { heroAsset } from "./heroAssets";
-import { language } from "./i18n";
-import { selectAvailableLeague, selectedLeagueId } from "./selectedLeague";
+import { language, t } from "./i18n";
+import { selectedFactualLeagueId } from "./selectedFactualLeague";
 import { finishStartupLoading } from "./startupLoader";
 
-const { seasons, loadSeasons } = useSeasonCatalog((season) => season.rankings_ready);
-const latestRequest = useLatestRequest();
-const leagueId = selectedLeagueId;
+const { seasons, loadSeasons } = useFactualSeasonCatalog();
+const leagueId = selectedFactualLeagueId;
 const payload = shallowRef(null);
 const loading = ref(false);
 const error = ref("");
+const noInformation = ref(false);
 const board = ref("teams");
 const selectedHeroId = ref(0);
 const selectedPositionId = ref(0);
@@ -70,7 +70,7 @@ const shownPositionPlayers = computed(() => {
         player.current_team_name.toLocaleLowerCase().includes(needle))
   );
 });
-const topTeams = computed(() => teams.value.slice(0, 3));
+const topTeams = computed(() => teams.value.filter((team) => team.rank != null).slice(0, 3));
 const maxTeamScore = computed(() => Math.max(...teams.value.map((row) => row.hybrid_score), 1));
 const maxHeroPlayerScore = computed(() =>
   Math.max(...shownPlayers.value.map((row) => row.hybrid_score), 1)
@@ -92,14 +92,15 @@ function positionLabel(position) {
 }
 
 function number(value, digits = 0) {
-  return Number(value || 0).toLocaleString(language.value, {
+  if (value == null) return t("No current information");
+  return Number(value).toLocaleString(language.value, {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   });
 }
 
 function percent(value) {
-  return `${(Number(value || 0) * 100).toFixed(1)}%`;
+  return value == null ? t("No current information") : `${(Number(value) * 100).toFixed(1)}%`;
 }
 
 function scoreWidth(score, maximum) {
@@ -112,27 +113,34 @@ function selectHero(heroId) {
   playerSearch.value = "";
 }
 
-async function loadRankings() {
-  if (!leagueId.value) return;
-  loading.value = true;
-  error.value = "";
-  try {
-    const next = await latestRequest((signal, current) => fetchPowerRankings(leagueId.value, { cache: false, signal }).then((value) => current() ? value : null));
-    if (!next) return;
-    payload.value = next;
-    if (!heroes.value.some((hero) => hero.hero_id === selectedHeroId.value)) {
-      selectedHeroId.value = filteredHeroes.value[0]?.hero_id || 0;
-    }
-    if (!positions.value.some((position) => position.position === selectedPositionId.value)) {
-      selectedPositionId.value = positions.value[0]?.position || 0;
-    }
-  } catch (err) {
+const loadRankings = createFactualLoader({
+  start() {
     payload.value = null;
-    error.value = err.message || "Could not load power rankings.";
-  } finally {
-    loading.value = false;
-  }
-}
+    noInformation.value = false;
+    loading.value = true;
+    error.value = "";
+  },
+  async load(signal) {
+    const id = leagueId.value;
+    const season = seasons.value.find((item) => item.league_id === id);
+    if (!id || !season) return null;
+    if (!hasSeasonObservations(season)) return neutralSeasonRankings(season);
+    if (!season.rankings_ready) return null;
+    const result = await fetchPowerRankings(id, { cache: false, signal });
+    return isSeasonOnlyRanking(result, id) ? result : null;
+  },
+  value(next) {
+    payload.value = next;
+    noInformation.value = !next.team_rankings?.some((team) => team.games > 0) &&
+      !(next.hero_rankings || []).some((hero) => hero.players?.length);
+    if (!heroes.value.some((hero) => hero.hero_id === selectedHeroId.value)) selectedHeroId.value = filteredHeroes.value[0]?.hero_id || 0;
+    if (!positions.value.some((position) => position.position === selectedPositionId.value)) selectedPositionId.value = positions.value[0]?.position || 0;
+  },
+  missing() { noInformation.value = true; },
+  error(err) { error.value = err.message || "Could not load season data."; },
+  finish() { loading.value = false; },
+});
+onBeforeUnmount(() => loadRankings.cancel());
 
 onMounted(async () => {
   try {
@@ -145,31 +153,24 @@ onMounted(async () => {
   }
 });
 
-watch(leagueId, loadRankings);
+watch(leagueId, loadRankings, { flush: "sync" });
 </script>
 
 <template>
   <main class="rankings-page">
     <header class="rankings-hero">
       <div>
-        <p class="rankings-eyebrow">{{ $t("Cross-season form · Decayed evidence") }}</p>
+        <p class="rankings-eyebrow">{{ $t("Selected-season form · Season-only evidence") }}</p>
         <h1>{{ $t("Power Rankings") }}</h1>
-        <p>{{ $t("Current strength without pretending old results last forever. Compare team Elo, compare players within each position, or open any hero to see which active player performs best.") }}</p>
+        <p>{{ $t("Every season starts at 1500 Elo. Compare teams and players using only results from the selected season.") }}</p>
       </div>
-      <label class="season-control">
-        <span>{{ $t("Competition") }}</span>
-        <select v-model="leagueId">
-          <option v-if="!seasons.length" value="">{{ $t("No ranking data yet") }}</option>
-          <option v-for="season in seasons" :key="season.league_id" :value="season.league_id">
-            {{ season.year }} · {{ season.league_name }}{{ $t("· S") }}{{ season.season }}
-          </option>
-        </select>
-      </label>
     </header>
 
     <p v-if="error" class="rankings-message error">{{ error }}</p>
     <p v-else-if="loading" class="rankings-message">{{ $t("Calculating the form table…") }}</p>
 
+    <p v-if="noInformation && !loading && !error" class="rankings-message">{{ $t("No current information") }}</p>
+    <p v-if="!loading && !error" class="rankings-message">{{ $t("Each season starts at 1500 Elo; teams without results are unranked.") }}</p>
     <template v-if="payload && !loading">
       <div class="board-switch" role="tablist" :aria-label="$t('Ranking board')">
         <button
@@ -207,7 +208,8 @@ watch(leagueId, loadRankings);
         </button>
       </div>
 
-      <section v-if="board === 'teams'" class="team-board">
+      <p v-if="board === 'teams' && !teams.length && !noInformation" class="empty-board">{{ $t("No current information") }}</p>
+      <section v-if="board === 'teams' && teams.length" class="team-board">
         <div class="section-heading">
           <div>
             <p class="rankings-eyebrow">{{ $t("Selected-season field") }}</p>
@@ -220,7 +222,7 @@ watch(leagueId, loadRankings);
           </p>
         </div>
 
-        <div class="podium">
+        <div v-if="topTeams.length" class="podium">
           <article v-for="team in topTeams" :key="team.team_id" :class="`place-${team.rank}`">
             <span class="podium-rank">#{{ team.rank }}</span>
             <div class="team-monogram">{{ team.team_name.slice(0, 2) }}</div>
@@ -248,16 +250,16 @@ watch(leagueId, loadRankings);
               </thead>
               <tbody>
                 <tr v-for="team in teams" :key="team.team_id">
-                  <td class="rank-cell">{{ String(team.rank).padStart(2, "0") }}</td>
+                  <td class="rank-cell">{{ team.rank == null ? $t("Unranked") : String(team.rank).padStart(2, "0") }}</td>
                   <td><strong>{{ team.team_name }}</strong></td>
                   <td class="score-cell">
                     <strong>{{ number(team.hybrid_score, 1) }}</strong>
-                    <span><i :style="{ width: scoreWidth(team.hybrid_score, maxTeamScore) }"></i></span>
+                    <span v-if="team.hybrid_score != null"><i :style="{ width: scoreWidth(team.hybrid_score, maxTeamScore) }"></i></span>
                   </td>
                   <td>{{ number(team.elo) }}</td>
                   <td>{{ percent(team.decayed_win_rate) }}</td>
                   <td>{{ number(team.effective_games, 1) }}</td>
-                  <td>{{ team.recent_10_wins }}–{{ team.recent_10_games - team.recent_10_wins }}</td>
+                  <td>{{ team.recent_10_games ? `${team.recent_10_wins}–${team.recent_10_games - team.recent_10_wins}` : $t("No current information") }}</td>
                 </tr>
               </tbody>
             </table>
@@ -376,14 +378,14 @@ watch(leagueId, loadRankings);
               </div>
               <div class="player-stat">
                 <strong>{{ player.games }}</strong>
-                <span>{{ $t("career games") }}</span>
+                <span>{{ $t("season games") }}</span>
               </div>
               <div class="player-stat confidence">
                 <strong>{{ percent(player.confidence) }}</strong>
                 <span>{{ $t("confidence") }}</span>
               </div>
             </article>
-            <p v-if="!shownPlayers.length" class="empty-board">{{ $t("No players match these filters.") }}</p>
+            <p v-if="!shownPlayers.length" class="empty-board">{{ $t(selectedHero?.players?.length ? "No players match these filters." : "No current information") }}</p>
           </div>
 
           <aside class="formula-note">
@@ -397,7 +399,7 @@ watch(leagueId, loadRankings);
         </div>
       </section>
 
-      <section v-else class="position-board">
+      <section v-else-if="board === 'positions'" class="position-board">
         <div class="section-heading position-heading">
           <div>
             <p class="rankings-eyebrow">{{ $t("Active players · All heroes") }}</p>
@@ -423,6 +425,7 @@ watch(leagueId, loadRankings);
           </button>
         </div>
 
+        <p v-if="!selectedPosition && !noInformation" class="empty-board">{{ $t("No current information") }}</p>
         <template v-if="selectedPosition">
           <section class="hero-filters position-filters">
             <label>
@@ -480,14 +483,14 @@ watch(leagueId, loadRankings);
               </div>
               <div class="player-stat">
                 <strong>{{ player.games }}</strong>
-                <span>{{ $t("career games") }}</span>
+                <span>{{ $t("season games") }}</span>
               </div>
               <div class="player-stat confidence">
                 <strong>{{ percent(player.confidence) }}</strong>
                 <span>{{ $t("confidence") }}</span>
               </div>
             </article>
-            <p v-if="!shownPositionPlayers.length" class="empty-board">{{ $t("No players match these filters.") }}</p>
+            <p v-if="!shownPositionPlayers.length" class="empty-board">{{ $t(selectedPosition?.players?.length ? "No players match these filters." : "No current information") }}</p>
           </div>
 
           <aside class="formula-note">

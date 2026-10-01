@@ -237,9 +237,37 @@ class PipelineJobTests(unittest.TestCase):
         ):
             sync_class.return_value.sync_league_bp.return_value = {"league_id": "20260003", "data_changed": False}
             result = pipeline_jobs._perform(record)
-        analysis.return_value.run.assert_called_once_with("all")
+        self.assertEqual([call.args[0] for call in analysis.return_value.run.call_args_list], ["display", "rolling_model"])
         publish.assert_called_once()
         self.assertIn("analysis", result)
+
+    def test_candidate_failure_occurs_after_factual_publication_and_fails_job(self):
+        job = self.make_job("full_update")
+        events=[];active=Path(self.directory.name)/"current.json";active.write_text('{"version":"incumbent"}')
+        facts=Path(self.directory.name)/"overview.json"
+        def run(step):
+            events.append(step)
+            if step=="rolling_model":raise ValueError("candidate gate failed")
+            return {"ok":True}
+        def publish(db,league):
+            events.append("publish");facts.write_text('{"season":"20260003"}')
+            return {"files":["overview.json"]}
+        with (
+            patch("app.services.sync.SyncService") as sync,
+            patch("app.api.data.data_status",return_value=ApiResponse(data={"analysis_ready":True,"frontend_assets":[]})),
+            patch("app.services.analysis_pipeline.AnalysisPipeline") as analysis,
+            patch("app.services.static_publisher.publish_league",side_effect=publish),
+        ):
+            sync.return_value.sync_league_bp.return_value={"league_id":"20260003","data_changed":True}
+            analysis.return_value.run.side_effect=run
+            pipeline_jobs.run_job(job["id"])
+        self.assertEqual(events,["display","publish","rolling_model"])
+        self.assertEqual(json.loads(facts.read_text())["season"],"20260003")
+        self.assertEqual(json.loads(active.read_text())["version"],"incumbent")
+        with self.sessions() as db:
+            record=db.get(PipelineJob,job["id"])
+            self.assertEqual(record.status,"failed")
+            self.assertIn("candidate gate failed",record.error)
 
     def test_scheduled_auto_resolution_is_persisted_before_sync(self):
         with self.sessions() as db, patch.object(pipeline_jobs, "dispatch_job", return_value=True):
@@ -315,7 +343,7 @@ class PipelineJobTests(unittest.TestCase):
         ):
             sync_class.return_value.sync_league_bp.return_value = {"league_id": "20260003", "data_changed": False}
             pipeline_jobs._perform(record)
-        analysis.return_value.run.assert_called_once_with("all")
+        self.assertEqual([call.args[0] for call in analysis.return_value.run.call_args_list], ["display", "rolling_model"])
         publish.assert_called_once()
 
     def test_retry_after_post_sync_crash_rebuilds_even_if_sync_now_reports_no_change(self):
@@ -335,7 +363,7 @@ class PipelineJobTests(unittest.TestCase):
         ):
             sync_class.return_value.sync_league_bp.return_value = {"league_id": "20260003", "data_changed": False}
             pipeline_jobs._perform(record)
-        analysis.return_value.run.assert_called_once_with("all")
+        self.assertEqual([call.args[0] for call in analysis.return_value.run.call_args_list], ["display", "rolling_model"])
         publish.assert_called_once()
 
 

@@ -7,6 +7,7 @@ import { language, t } from "./i18n";
 
 const props = defineProps({
   leagueId: { type: String, required: true },
+  modelVersion: { type: String, default: "" },
   heroes: { type: Array, default: () => [] },
   responseRows: { type: Array, default: () => [] },
   historicalLineups: { type: Array, default: () => [] },
@@ -305,6 +306,7 @@ async function loadHistoricalScore(battle) {
   try {
     const result = await scoreLineup({
       league_id: props.leagueId,
+      model_version: props.modelVersion || undefined,
       blue_team_id: battle.blue_team_id,
       red_team_id: battle.red_team_id,
       blue_hero_ids: battle.blue.map((hero) => Number(hero.hero_id)),
@@ -354,6 +356,7 @@ async function loadNeutralScore(blueHeroIdsSnapshot, redHeroIdsSnapshot) {
   try {
     const result = await scoreNeutralLineup({
       league_id: props.leagueId,
+      model_version: props.modelVersion || undefined,
       blue_hero_ids: blueHeroIdsSnapshot,
       red_hero_ids: redHeroIdsSnapshot,
     });
@@ -391,7 +394,7 @@ async function loadUltimateLineups() {
   ultimateLoading.value = true;
   ultimateError.value = "";
   try {
-    ultimateResult.value = await fetchUltimateLineups(props.leagueId);
+    ultimateResult.value = await fetchUltimateLineups(props.leagueId, props.modelVersion);
   } catch (error) {
     ultimateResult.value = null;
     ultimateError.value = error.message || t("Could not calculate ultimate lineups.");
@@ -412,6 +415,7 @@ async function generateCounterLineup() {
   try {
     const result = await fetchUltimateCounterLineup({
       leagueId: props.leagueId,
+      modelVersion: props.modelVersion,
       targetHeroIds,
     });
     if (

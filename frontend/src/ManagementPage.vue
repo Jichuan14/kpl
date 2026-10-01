@@ -3,7 +3,7 @@ import { onBeforeUnmount, onMounted } from "vue";
 import { useManagement } from "./composables/useManagement";
 import { language } from "./i18n";
 const management = useManagement();
-const { leagueId, selectedYear, dataStatus, coachUsage, visitorAnalytics, coachLimits, loading, syncing, syncingCatalog, savingCoachLimits, processingStep, processingElapsed, syncMode, syncElapsed, error, notice, apiConnected, recentJobs, activeJob, years, seasonLeagues, selectedLeague, analysisPipeline, readyStages, totalStages, frontendAssets, frontendAssetsReady, artifacts, loadStatus, loadCoachUsage, loadVisitorAnalytics, refreshLeagueCatalog, runDownload, runPipeline, runFullUpdate, publishAssets, saveCoachLimits, pipelineReady, number, bytes, dateTime, initialize, startMonitoring, stopMonitoring } = management;
+const { savingSiteDefault, chooseManagementLeague, chooseManagementYear, leagueId, selectedYear, dataStatus, coachUsage, visitorAnalytics, coachLimits, loading, syncing, syncingCatalog, savingCoachLimits, processingStep, processingElapsed, syncMode, syncElapsed, error, notice, apiConnected, recentJobs, activeJob, years, seasonLeagues, selectedLeague, analysisPipeline, readyStages, totalStages, frontendAssets, frontendAssetsReady, artifacts, loadStatus, loadCoachUsage, loadVisitorAnalytics, refreshLeagueCatalog, runDownload, runPipeline, runFullUpdate, publishAssets, saveCoachLimits, pipelineReady, number, bytes, dateTime, initialize, startMonitoring, stopMonitoring } = management;
 onMounted(async () => { await initialize(); startMonitoring(); });
 onBeforeUnmount(stopMonitoring);
 </script>
@@ -25,7 +25,7 @@ onBeforeUnmount(stopMonitoring);
       <div class="selectors">
         <label class="year-picker">
           <span>{{ $t("Year") }}</span>
-          <select v-model="selectedYear" :disabled="syncing">
+          <select :value="selectedYear" :disabled="syncing || savingSiteDefault" @change="chooseManagementYear($event.target.value)">
             <option v-if="!years.length" value="">{{ $t("No years available") }}</option>
             <option v-for="year in years" :key="year" :value="String(year)">
               {{ year }}
@@ -34,7 +34,7 @@ onBeforeUnmount(stopMonitoring);
         </label>
         <label class="league-picker">
           <span>{{ $t("Season / tournament") }}</span>
-          <select v-model="leagueId" :disabled="syncing">
+          <select :value="leagueId" :disabled="syncing || savingSiteDefault" @change="chooseManagementLeague($event.target.value)">
             <option v-if="!seasonLeagues.length" value="">{{ $t("No seasons available") }}</option>
             <option
               v-for="league in seasonLeagues"
@@ -51,7 +51,7 @@ onBeforeUnmount(stopMonitoring);
         <button
           class="button ghost"
           type="button"
-          :disabled="syncingCatalog || syncing"
+          :disabled="savingSiteDefault || syncingCatalog || syncing"
           @click="refreshLeagueCatalog"
         >
           {{ syncingCatalog ? "Refreshing…" : "Refresh league catalog" }}
@@ -59,7 +59,7 @@ onBeforeUnmount(stopMonitoring);
         <button
           class="button ghost"
           type="button"
-          :disabled="loading || syncing || !leagueId"
+          :disabled="savingSiteDefault || loading || syncing || !leagueId"
           @click="loadStatus"
         >
           {{ loading ? "Checking…" : "Refresh status" }}
@@ -67,7 +67,7 @@ onBeforeUnmount(stopMonitoring);
         <button
           class="button sample"
           type="button"
-          :disabled="syncing || !leagueId"
+          :disabled="savingSiteDefault || syncing || !leagueId"
           @click="runDownload({ matchLimit: 5, mode: 'sample' })"
         >
           {{
@@ -79,7 +79,7 @@ onBeforeUnmount(stopMonitoring);
         <button
           class="button primary"
           type="button"
-          :disabled="syncing || !leagueId"
+          :disabled="savingSiteDefault || syncing || !leagueId"
           @click="runDownload({ matchLimit: null, mode: 'all' })"
         >
           {{
@@ -91,7 +91,7 @@ onBeforeUnmount(stopMonitoring);
         <button
           class="button primary"
           type="button"
-          :disabled="syncing || Boolean(processingStep) || !leagueId"
+          :disabled="savingSiteDefault || syncing || Boolean(processingStep) || !leagueId"
           @click="runFullUpdate"
         >
           {{
@@ -146,7 +146,7 @@ onBeforeUnmount(stopMonitoring);
           <label><span>{{ $t("Server requests / 24 hours") }}</span><input v-model.number="coachLimits.server_requests_per_day" type="number" min="1" required></label>
           <label><span>{{ $t("Per-IP active requests") }}</span><input v-model.number="coachLimits.ip_max_active_requests" type="number" min="1" required></label>
           <label><span>{{ $t("Server active requests") }}</span><input v-model.number="coachLimits.server_max_active_requests" type="number" min="1" required></label>
-          <div class="coach-limit-submit"><small>{{ $t("Changes apply immediately and reset after a server restart.") }}</small><button class="button primary" type="submit" :disabled="savingCoachLimits">{{ savingCoachLimits ? "Saving…" : "Save AI Coach limits" }}</button></div>
+          <div class="coach-limit-submit"><small>{{ $t("Changes apply immediately and reset after a server restart.") }}</small><button class="button primary" type="submit" :disabled="savingSiteDefault || savingCoachLimits">{{ savingCoachLimits ? "Saving…" : "Save AI Coach limits" }}</button></div>
         </form>
     </section>
 
@@ -234,7 +234,7 @@ onBeforeUnmount(stopMonitoring);
             <button
               class="button"
               type="button"
-              :disabled="Boolean(processingStep) || syncing || !pipelineReady('download')"
+              :disabled="savingSiteDefault || Boolean(processingStep) || syncing || !pipelineReady('download')"
               @click="runPipeline('display')"
             >
               {{
@@ -246,7 +246,7 @@ onBeforeUnmount(stopMonitoring);
             <button
               class="button primary"
               type="button"
-              :disabled="Boolean(processingStep) || syncing || !pipelineReady('download')"
+              :disabled="savingSiteDefault || Boolean(processingStep) || syncing || !pipelineReady('download')"
               @click="runPipeline('all')"
             >
               {{
@@ -292,7 +292,7 @@ onBeforeUnmount(stopMonitoring);
             <button
               class="button primary"
               type="button"
-              :disabled="Boolean(processingStep) || syncing || !dataStatus.display_ready"
+              :disabled="savingSiteDefault || Boolean(processingStep) || syncing || !dataStatus.display_ready"
               @click="publishAssets"
             >
               {{ processingStep === "publish" ? `Publishing… ${processingElapsed}s` : "Populate frontend assets" }}

@@ -700,8 +700,11 @@ def prepare_data(
     winning_pick_weight: float,
     second_ban_weight: float = 1.0,
     include_all_target_matches: bool = False,
+    split_manifest: dict[str, Any] | None = None,
 ) -> PreparedData:
     """Reconstruct chronological prefixes, optionally retaining every target match."""
+    if split_manifest is not None and split_manifest.get("mode") == "production_all_data":
+        include_all_target_matches = True
     analysis_dir = repo_root / "analysis"
     exports_dir = analysis_dir / "exports"
     available = {
@@ -715,7 +718,15 @@ def prepare_data(
     training_seasons = seasons[
         max(0, target_index - previous_seasons) : target_index + 1
     ]
-    if len(training_seasons) != previous_seasons + 1:
+    if split_manifest is not None:
+        import sys
+        if str(analysis_dir) not in sys.path:
+            sys.path.insert(0, str(analysis_dir))
+        from rolling_corpus import validate_sources, standard_battle_keys
+        validate_sources(split_manifest)
+        training_seasons = list(split_manifest["source_seasons"])
+        pinned_battles = standard_battle_keys(split_manifest)
+    if split_manifest is None and len(training_seasons) != previous_seasons + 1:
         raise ValueError("Not enough previous seasons for the requested window")
     if second_ban_weight <= 0:
         raise ValueError("Second-ban weight must be positive")
@@ -746,6 +757,8 @@ def prepare_data(
         for hero_id in hero_ids
     }
 
+    split_by_series = { (str(r["season"]), str(r["match_id"])): name
+        for name, rows in (split_manifest or {}).get("splits", {}).items() for r in rows }
     rows_by_battle: dict[tuple[str, str], list[dict[str, Any]]] = {}
     all_rows: list[dict[str, Any]] = []
     for season in training_seasons:
@@ -755,6 +768,10 @@ def prepare_data(
                     continue
                 row = json.loads(line)
                 row["_season"] = season
+                if split_manifest is not None and (season,str(row["match_id"]),str(row["battle_id"])) not in pinned_battles:
+                    continue
+                if split_manifest is not None and (season, str(row["match_id"])) not in split_by_series:
+                    continue
                 all_rows.append(row)
                 rows_by_battle.setdefault(
                     (season, str(row["battle_id"])), []
@@ -768,7 +785,7 @@ def prepare_data(
             if row["_season"] == target_season
         },
     )
-    if include_all_target_matches:
+    if include_all_target_matches or split_manifest is not None:
         validation_match_ids: list[str] = []
         holdout_match_ids: list[str] = []
         excluded_future_match_ids: list[str] = []
@@ -783,6 +800,10 @@ def prepare_data(
             holdout_matches=holdout_matches,
             holdout_offset_matches=holdout_offset_matches,
         )
+    if split_manifest is not None:
+        validation_match_ids = [str(r["match_id"]) for r in split_manifest["splits"]["validation"]]
+        holdout_match_ids = [str(r["match_id"]) for name in ("calibration", "holdout") for r in split_manifest["splits"][name]]
+        excluded_future_match_ids = []
     validation_set = set(validation_match_ids)
     holdout_set = set(holdout_match_ids)
     excluded_future_set = set(excluded_future_match_ids)
@@ -791,9 +812,9 @@ def prepare_data(
             str(row[field])
             for row in all_rows
             if not (
-                row["_season"] == target_season
-                and str(row["match_id"])
-                in validation_set | holdout_set | excluded_future_set
+                (split_manifest is not None and split_by_series[(row["_season"], str(row["match_id"]))] != "train")
+                or (split_manifest is None and row["_season"] == target_season
+                and str(row["match_id"]) in validation_set | holdout_set | excluded_future_set)
             )
             for field in ("acting_team_id", "opponent_team_id")
             if row.get(field)
@@ -819,11 +840,13 @@ def prepare_data(
                 if not 1 <= position <= MAX_ACTIONS:
                     continue
                 is_holdout = bool(
-                    row["_season"] == target_season
+                    split_by_series.get((row["_season"],str(row["match_id"]))) in {"calibration", "holdout"}
+                    if split_manifest is not None else row["_season"] == target_season
                     and str(row["match_id"]) in holdout_set
                 )
                 is_validation = bool(
-                    row["_season"] == target_season
+                    split_by_series.get((row["_season"],str(row["match_id"]))) == "validation"
+                    if split_manifest is not None else row["_season"] == target_season
                     and str(row["match_id"]) in validation_set
                 )
                 values = (
@@ -903,7 +926,7 @@ def prepare_data(
                 values["sample_weights"].append(
                     1.0
                     if is_holdout or is_validation
-                    else season_weights[row["_season"]]
+                    else (split_manifest["series_weights"][f'{row["_season"]}:{row["match_id"]}'] if split_manifest is not None else season_weights[row["_season"]])
                     * outcome_weight
                     * phase_weight
                 )

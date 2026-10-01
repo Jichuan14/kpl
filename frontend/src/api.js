@@ -77,7 +77,9 @@ async function staticData(path, { signal, cache = true } = {}) {
     throw new Error(`Cannot load published analysis (${err.message}).`);
   }
   if (!res.ok) {
-    throw new Error("Published analysis is not available yet. Run the analysis pipeline.");
+    const error = new Error("Published analysis is not available yet. Run the analysis pipeline.");
+    error.status = res.status;
+    throw error;
   }
   return res.json();
   })();
@@ -95,6 +97,14 @@ export function invalidatePublishedData(leagueId) {
 
 // Kept intentionally small and explicit for deterministic browser-client tests.
 export function resetPublishedDataCacheForTests() { staticCache.clear(); }
+
+export function fetchSiteDefault() {
+  return request("/api/site-default", { cache: "no-store" });
+}
+
+export function saveSiteDefault(leagueId) {
+  return request("/api/leagues/site-default", { method: "PUT", body: JSON.stringify({ league_id: leagueId }) });
+}
 
 export function fetchLeagues() {
   return request("/api/leagues");
@@ -159,6 +169,12 @@ export function saveLiveWinnerPrediction({
   });
 }
 
+export function fetchFactualSeasons() {
+  // Visit defaults and options must reflect the live catalog, including newly
+  // synced seasons that have never had artifacts published.
+  return request("/api/leagues?factual=true", { cache: "no-store" });
+}
+
 export function fetchVisualizationSeasons() {
   return staticData("/assets/data/seasons.json");
 }
@@ -205,12 +221,21 @@ export function fetchPowerRankings(leagueId, options) {
   return staticData(`/assets/data/${encodeURIComponent(leagueId)}/rankings.json`, options);
 }
 
-export function fetchDraftModel(leagueId) {
+export function fetchActiveModel() {
+  return request("/api/simulations/active-model");
+}
+
+export function fetchDraftModel(leagueId, modelVersion) {
   const params = new URLSearchParams({ league_id: leagueId });
+  if (modelVersion) params.set("model_version", modelVersion);
   return request(`/api/simulations/model?${params}`);
 }
 
-export function fetchLearnedFeatureSpace(leagueId) {
+export function fetchLearnedFeatureSpace(leagueId, modelVersion) {
+  if (modelVersion) {
+    const params = new URLSearchParams({ league_id: leagueId, model_version: modelVersion });
+    return request(`/api/simulations/feature-space?${params}`);
+  }
   const encodedLeagueId = encodeURIComponent(leagueId);
   // Published feature space is validated during publishing. Keep the API fallback
   // for seasons published by an older server that do not have this compact asset.
@@ -227,17 +252,19 @@ export function fetchHeroMatchupRecommendations(payload) {
   });
 }
 
-export function fetchUltimateLineups(leagueId) {
+export function fetchUltimateLineups(leagueId, modelVersion) {
   const params = new URLSearchParams({ league_id: leagueId });
+  if (modelVersion) params.set("model_version", modelVersion);
   return request(`/api/simulations/ultimate-lineups?${params}`);
 }
 
-export function fetchUltimateCounterLineup({ leagueId, targetHeroIds }) {
+export function fetchUltimateCounterLineup({ leagueId, modelVersion, targetHeroIds }) {
   return request("/api/simulations/ultimate-lineups/counter", {
     method: "POST",
     body: JSON.stringify({
       league_id: leagueId,
       target_hero_ids: targetHeroIds,
+      ...(modelVersion ? { model_version: modelVersion } : {}),
     }),
   });
 }

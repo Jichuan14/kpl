@@ -11,6 +11,7 @@ from time import perf_counter
 from typing import Any, Callable, TypeVar
 
 from app.services.analysis_pipeline import OUTPUT_ROOT
+from app.services.model_registry import component_path
 
 logger = logging.getLogger(__name__)
 
@@ -148,7 +149,7 @@ class JsonlArtifactCache:
             or candidate.suffix != ".jsonl"
         ):
             raise ValueError("Invalid JSONL artifact filename")
-        return self.root / league_id / filename
+        return component_path(filename, self.root / league_id / filename)
 
     @staticmethod
     def _version(path: Path) -> ArtifactVersion:

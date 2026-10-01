@@ -32,6 +32,7 @@ TRAINING_DIR = Path(__file__).resolve().parent
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--split-manifest", type=Path)
     parser.add_argument("--target-season", default="20260003")
     parser.add_argument("--previous-seasons", type=int, default=4)
     parser.add_argument("--validation-matches", type=int, default=10)
@@ -118,6 +119,7 @@ def main() -> None:
         recency_decay=args.recency_decay,
         winning_pick_weight=args.winning_pick_weight,
         second_ban_weight=args.second_ban_weight,
+        split_manifest=json.loads(args.split_manifest.read_text()) if args.split_manifest else None,
     )
     print(
         f"Train decisions: {len(data.train):,}; "
@@ -149,6 +151,7 @@ def main() -> None:
         "config": {
             **vars(args),
             "output_dir": str(output_dir),
+            "split_manifest": str(args.split_manifest) if args.split_manifest else None,
         },
         "models": {},
     }

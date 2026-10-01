@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterable
 
 from app.services.analysis_pipeline import OUTPUT_ROOT
+from app.services.model_registry import model_output_root, current_bundle
 from app.services.draft_simulator import load_model
 from app.services.lineup_value import (
     ALLY_RULES,
@@ -50,7 +51,7 @@ def _jsonl(path: Path) -> list[dict[str, Any]]:
 
 
 def _artifact_signature(league_id: str) -> tuple[int, ...]:
-    root = OUTPUT_ROOT / league_id
+    root = model_output_root(league_id, OUTPUT_ROOT)
     paths = (
         root / "draft_model.json",
         root / "lineup_value_model.json",
@@ -119,7 +120,7 @@ def _rule_density(
 class UltimateLineupOptimizer:
     def __init__(self, league_id: str):
         self.league_id = league_id
-        self.root = OUTPUT_ROOT / league_id
+        self.root = model_output_root(league_id, OUTPUT_ROOT)
         self.draft_model = load_model(league_id)
         self.value_model: LineupValueModel = load_lineup_value_model(league_id)
         self.hero_names = {
@@ -507,12 +508,13 @@ class UltimateLineupOptimizer:
 def optimize_ultimate_lineups(league_id: str) -> dict[str, Any]:
     """Return cached team-neutral peak-duel profiles without writing files."""
     signature = _artifact_signature(league_id)
-    cached = _CACHE.get(league_id)
+    cache_key = current_bundle().version if current_bundle() else league_id
+    cached = _CACHE.get(cache_key)
     if cached and cached[0] == signature:
         return cached[1]
     optimizer = _optimizer_for(league_id, signature)
     result = optimizer.optimize()
-    _CACHE[league_id] = (signature, result)
+    _CACHE[cache_key] = (signature, result)
     return result
 
 
@@ -520,7 +522,7 @@ def optimize_counter_lineup(league_id: str, target_hero_ids: Iterable[int]) -> d
     """Return a cached counter to a user-supplied lineup without writing files."""
     signature = _artifact_signature(league_id)
     target = tuple(int(hero_id) for hero_id in target_hero_ids)
-    cache_key = (league_id, target)
+    cache_key = (current_bundle().version if current_bundle() else league_id, target)
     cached = _COUNTER_CACHE.get(cache_key)
     if cached and cached[0] == signature:
         return cached[1]
@@ -532,9 +534,10 @@ def optimize_counter_lineup(league_id: str, target_hero_ids: Iterable[int]) -> d
 def _optimizer_for(
     league_id: str, signature: tuple[int, ...]
 ) -> UltimateLineupOptimizer:
-    cached = _OPTIMIZER_CACHE.get(league_id)
+    cache_key = current_bundle().version if current_bundle() else league_id
+    cached = _OPTIMIZER_CACHE.get(cache_key)
     if cached and cached[0] == signature:
         return cached[1]
     optimizer = UltimateLineupOptimizer(league_id)
-    _OPTIMIZER_CACHE[league_id] = (signature, optimizer)
+    _OPTIMIZER_CACHE[cache_key] = (signature, optimizer)
     return optimizer
