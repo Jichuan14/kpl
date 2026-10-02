@@ -12,6 +12,22 @@ from app.services import analysis_pipeline
 
 
 class AnalysisPipelineTests(unittest.TestCase):
+    def test_failure_reports_signal_and_both_output_streams(self) -> None:
+        with tempfile.TemporaryDirectory() as directory, patch.object(
+            analysis_pipeline, "_run_command",
+            return_value=subprocess.CompletedProcess([], -9, "last training progress", "relation rows written"),
+        ):
+            pipeline=analysis_pipeline.AnalysisPipeline("20260004")
+            pipeline.export_dir=Path(directory)/"exports"
+            pipeline.output_dir=Path(directory)/"outputs"
+            with self.assertRaisesRegex(RuntimeError, "SIGKILL") as raised:
+                pipeline._run_step("rolling_model")
+            message=str(raised.exception)
+            self.assertIn("train_rolling_bundle.py",message)
+            self.assertIn("last training progress",message)
+            self.assertIn("relation rows written",message)
+            self.assertNotIn("out of memory",message)
+
     def test_full_pipeline_trains_lineup_value_after_draft_models(self) -> None:
         pipeline = analysis_pipeline.AnalysisPipeline("20260003")
         completed: list[str] = []

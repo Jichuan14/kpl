@@ -67,11 +67,20 @@ def build_rolling_manifest(exports: Path, *, cutoff: str | None = None,
         if not matches.is_file():
             continue
         games = {}
-        for line in decisions.read_text().splitlines():
-            if line.strip():
+        # Eligibility needs counts, order coverage and validity, not the full
+        # legal pools and draft contexts for every decision in this season.
+        with decisions.open(encoding='utf-8') as stream:
+            for line in stream:
+                if not line.strip():continue
                 row = json.loads(line)
                 if not row.get('is_peak_battle'):
-                    games.setdefault((str(row['match_id']), str(row['battle_id'])), []).append(row)
+                    game=games.setdefault((str(row['match_id']),str(row['battle_id'])),
+                                          {'count':0,'orders':set(),'valid':True})
+                    game['count'] += 1
+                    game['orders'].add(int(row.get('bp_order') or 0))
+                    game['valid'] = game['valid'] and bool(
+                        not row.get('quality_flags') and row.get('selected_hero_id')
+                        and int(row['selected_hero_id']) in row.get('legal_hero_ids',[]))
         eligible = set()
         for line in matches.read_text().splitlines():
             if not line.strip(): continue
@@ -87,9 +96,9 @@ def build_rolling_manifest(exports: Path, *, cutoff: str | None = None,
             actual_ids={str(b["battle_id"]) for b in match.get("battles",[])}
             no_orphans=all(battle_id in actual_ids for (series_id,battle_id) in games if series_id==match_id)
             complete = resolved and no_orphans and bool(expected) and all(
-                len(games.get((match_id,str(b["battle_id"])), [])) == 20 and
-                {int(r.get('bp_order') or 0) for r in games.get((match_id,str(b['battle_id'])), [])} == set(range(1,21))
-                and all(not r.get('quality_flags') and r.get('selected_hero_id') and int(r['selected_hero_id']) in r.get('legal_hero_ids', []) for r in games.get((match_id,str(b['battle_id'])), []))
+                games.get((match_id,str(b['battle_id'])),{}).get('count') == 20 and
+                games[(match_id,str(b['battle_id']))]['orders'] == set(range(1,21))
+                and games[(match_id,str(b['battle_id']))]['valid']
                 for b in expected)
             if complete:
                 eligible.add(match_id); rows.append({'season':season,'match_id':match_id,'start_time':event_time(time).isoformat()})
@@ -161,11 +170,12 @@ def standard_battle_keys(manifest: dict) -> set[tuple[str,str,str]]:
     series=set().union(*(split_keys(manifest,name) for name in manifest['splits']))
     keys=set()
     for season,source in manifest['source_files'].items():
-        for line in Path(source['matches']).read_text().splitlines():
-            if not line.strip():continue
-            match=json.loads(line)
-            if (season,str(match['match_id'])) not in series:continue
-            keys.update((season,str(match['match_id']),str(b['battle_id'])) for b in match['battles'] if not b.get('is_peak_battle') and int(b.get('battle_seq') or 0)!=7)
+        with Path(source['matches']).open(encoding='utf-8') as stream:
+            for line in stream:
+                if not line.strip():continue
+                match=json.loads(line)
+                if (season,str(match['match_id'])) not in series:continue
+                keys.update((season,str(match['match_id']),str(b['battle_id'])) for b in match['battles'] if not b.get('is_peak_battle') and int(b.get('battle_seq') or 0)!=7)
     return keys
 
 

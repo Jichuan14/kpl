@@ -6,6 +6,7 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
+from types import SimpleNamespace
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -25,6 +26,39 @@ from app.services import static_publisher
 
 
 class PipelineJobTests(unittest.TestCase):
+    def test_small_host_publishes_facts_and_records_deferred_model(self):
+        for kind, payload in (("scheduled", {}), ("full_update", {}), ("analysis", {"step":"all"})):
+            with self.subTest(kind=kind):
+                job=self.make_job(kind,payload)
+                with (
+                    patch.object(pipeline_jobs,"get_settings",return_value=SimpleNamespace(auto_model_training_enabled=False)),
+                    patch("app.services.sync.SyncService") as sync,
+                    patch("app.api.data.data_status",return_value=ApiResponse(data={"analysis_ready":False,"frontend_assets":[]})),
+                    patch("app.services.analysis_pipeline.AnalysisPipeline") as analysis,
+                    patch("app.services.static_publisher.publish_league",return_value={"files":["rankings.json"]}) as publish,
+                ):
+                    sync.return_value.sync_league_bp.return_value={"league_id":"20260003","data_changed":True}
+                    analysis.return_value.run.return_value={"steps":[{"step":"statistics"}]}
+                    pipeline_jobs.run_job(job["id"])
+                self.assertEqual([call.args[0] for call in analysis.return_value.run.call_args_list],["display"])
+                publish.assert_called_once()
+                with self.sessions() as db:
+                    record=db.get(PipelineJob,job["id"])
+                    self.assertEqual(record.status,"completed")
+                    self.assertEqual(record.stage,"Data updated; model training deferred")
+                    self.assertIsNone(record.error)
+                    self.assertEqual(json.loads(record.result)["model_update"]["status"],"DEFERRED")
+
+    def test_small_host_still_allows_explicit_model_training(self):
+        job=self.make_job("analysis",{"step":"rolling_model"})
+        with (
+            patch.object(pipeline_jobs,"get_settings",return_value=SimpleNamespace(auto_model_training_enabled=False)),
+            patch("app.services.analysis_pipeline.AnalysisPipeline") as analysis,
+        ):
+            analysis.return_value.run.return_value={"steps":[]}
+            pipeline_jobs.run_job(job["id"])
+        analysis.return_value.run.assert_called_once_with("rolling_model")
+
     def setUp(self) -> None:
         self.directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)

@@ -51,8 +51,36 @@ def test_reference_match_stream_decodes_once_and_keeps_season_selection_order(tm
              'source_seasons': ['S3','S4'], 'splits': {'train': []}, 'weighting': {}}
     output = tmp_path / 'output'; output.mkdir()
     original_loads = json.loads
-    with patch.object(rolling, 'corpus_rows', return_value=[]), patch.object(rolling, 'split_keys', return_value={('S4','same')}), patch.object(rolling, 'command'), patch.object(json, 'loads', wraps=original_loads) as decode:
+    with patch.object(rolling, 'iter_corpus_rows', return_value=iter([])), patch.object(rolling, 'split_keys', return_value={('S4','same')}), patch.object(rolling, 'command'), patch.object(json, 'loads', wraps=original_loads) as decode:
         rolling.build_references(value, output)
         assert decode.call_count == 3
     rows = [original_loads(line) for line in (output / 'references/matches.jsonl').read_text().splitlines()]
     assert rows == [{'match_id':'same', 'teams':[]}]
+
+
+def test_streamed_references_preserve_rows_weights_and_historical_scope(tmp_path):
+    from test_rolling_corpus import exports
+    from rolling_corpus import build_rolling_manifest
+    manifest=build_rolling_manifest(exports(tmp_path/'exports',30),production_all_data=True)
+    expected=rolling.corpus_rows(manifest,('train',))
+    output=tmp_path/'output';output.mkdir()
+    calls=[]
+    def analyzer(script,*args):
+        calls.append(script)
+        # Every child can see complete, closed reference files.
+        merged=output/'references/bp_decisions.jsonl'
+        assert [json.loads(line) for line in merged.read_text().splitlines()]==expected
+        if script=='compute_bp_statistics.py':
+            (output/'pick_synergy_stats.jsonl').write_text(
+                '\n'+json.dumps({'league_id':'A','support':7,'confidence_interval':[.1,.9]})+'\n')
+    with patch.object(rolling,'command',side_effect=analyzer):
+        rolling.build_references(manifest,output)
+    for season in manifest['source_seasons']:
+        path=output/'references'/season/'bp_decisions.jsonl'
+        assert [json.loads(line) for line in path.read_text().splitlines()]==[
+            row for row in expected if str(row['league_id'])==season]
+    assert len(calls)==5
+    result=json.loads((output/'pick_synergy_stats.jsonl').read_text())
+    assert result=={'support':7,'confidence_interval':[.1,.9],
+                    'evidence_scope':'rolling_model_reference','source_seasons':['A','B']}
+    assert not list(output.glob('*.tmp'))

@@ -7,6 +7,7 @@ are rebuilt from scratch. Smoke runs always produce experimental bundles.
 from __future__ import annotations
 import argparse
 import copy
+from contextlib import ExitStack
 from datetime import datetime, timezone, timedelta
 import importlib.util
 import json
@@ -39,17 +40,22 @@ def command(script: str, *args: str) -> None:
     subprocess.run([sys.executable,str(ANALYSIS/script),*map(str,args)],cwd=ROOT,check=True)
 
 
-def corpus_rows(manifest: dict, names: tuple[str,...]) -> list[dict]:
-    keys=set().union(*(split_keys(manifest,name) for name in names)); rows=[]
+def iter_corpus_rows(manifest: dict, names: tuple[str,...]):
+    """Read one decision at a time, preserving split, battle and weight rules."""
+    keys=set().union(*(split_keys(manifest,name) for name in names))
     battles=standard_battle_keys(manifest)
     for season,source in manifest['source_files'].items():
-        for line in Path(source['decisions']).read_text().splitlines():
-            if not line.strip(): continue
-            row=json.loads(line); key=(season,str(row['match_id']))
-            if key in keys and (season,str(row['match_id']),str(row['battle_id'])) in battles:
-                row['_rolling_weight']=manifest['series_weights'][f'{season}:{row["match_id"]}']
-                rows.append(row)
-    return rows
+        with Path(source['decisions']).open(encoding='utf-8') as stream:
+            for line in stream:
+                if not line.strip(): continue
+                row=json.loads(line); key=(season,str(row['match_id']))
+                if key in keys and (season,str(row['match_id']),str(row['battle_id'])) in battles:
+                    row['_rolling_weight']=manifest['series_weights'][f'{season}:{row["match_id"]}']
+                    yield row
+
+
+def corpus_rows(manifest: dict, names: tuple[str,...]) -> list[dict]:
+    return list(iter_corpus_rows(manifest, names))
 
 
 def train_lineup(manifest: dict, output: Path, trials: int, seed: int) -> dict:
@@ -96,8 +102,23 @@ def train_lineup(manifest: dict, output: Path, trials: int, seed: int) -> dict:
 
 def build_references(manifest: dict, output: Path) -> None:
     work=output/'references'; work.mkdir()
-    train=corpus_rows(manifest,('train',))
-    merged=work/'bp_decisions.jsonl'; merged.write_text(''.join(json.dumps(r,ensure_ascii=False)+'\n' for r in train))
+    # Finish and release the corpus stream before starting any child analyzer.
+    # Previously the parent retained every parsed decision while each child
+    # loaded the same corpus again, exceeding the shared worker memory limit.
+    merged=work/'bp_decisions.jsonl'
+    inputs=[]
+    with ExitStack() as stack:
+        destination=stack.enter_context(merged.open('w',encoding='utf-8'))
+        season_files={}
+        for season in manifest['source_seasons']:
+            path=work/season/'bp_decisions.jsonl';path.parent.mkdir()
+            season_files[season]=stack.enter_context(path.open('w',encoding='utf-8'))
+            inputs += ['--input',str(path)]
+        for row in iter_corpus_rows(manifest,('train',)):
+            line=json.dumps(row,ensure_ascii=False)+'\n'
+            destination.write(line)
+            if str(row['league_id']) in season_files:
+                season_files[str(row['league_id'])].write(line)
     merged_matches=work/'matches.jsonl'; keys=split_keys(manifest,'train')
     with merged_matches.open('w', encoding='utf-8') as destination:
         for season, source in manifest['source_files'].items():
@@ -112,22 +133,24 @@ def build_references(manifest: dict, output: Path) -> None:
     command('compute_meta_heroes.py','--input',merged,'--output',output/'meta_hero_stats.jsonl')
     command('compute_team_synergies.py','--input',merged,'--output',output/'team_synergy_stats.jsonl')
     command('compute_team_draft_profiles.py','--decisions',merged,'--matches',merged_matches,'--output-dir',output)
-    inputs=[]
-    for season in manifest['source_seasons']:
-        path=work/season/'bp_decisions.jsonl';path.parent.mkdir()
-        path.write_text(''.join(json.dumps(r,ensure_ascii=False)+'\n' for r in train if str(r['league_id'])==season))
-        inputs += ['--input',str(path)]
     command('build_draft_model.py',*inputs,'--use-rolling-weights','--recency-decay',.65,'--output',output/'draft_model.json')
     # Reference counts retain existing statistical definitions. Record actual
     # corpus coverage explicitly instead of relabeling mixed rows as target facts.
     atomic_json(output/'reference_coverage.json',{'scope':'rolling_model_reference','series':manifest['splits']['train'],
         'source_seasons':manifest['source_seasons'],'statistical_weighting':'existing unweighted relation definitions','catalog_weighting':manifest['weighting']})
     for path in output.glob('*.jsonl'):
-        rows=[json.loads(line) for line in path.read_text().splitlines() if line.strip()]
-        for row in rows:
-            row.pop('league_id',None)
-            row.update(evidence_scope='rolling_model_reference',source_seasons=manifest['source_seasons'])
-        path.write_text(''.join(json.dumps(row,ensure_ascii=False)+'\n' for row in rows))
+        temporary=path.with_suffix('.jsonl.tmp')
+        try:
+            with path.open(encoding='utf-8') as source, temporary.open('w',encoding='utf-8') as destination:
+                for line in source:
+                    if not line.strip():continue
+                    row=json.loads(line)
+                    row.pop('league_id',None)
+                    row.update(evidence_scope='rolling_model_reference',source_seasons=manifest['source_seasons'])
+                    destination.write(json.dumps(row,ensure_ascii=False)+'\n')
+            temporary.replace(path)
+        finally:
+            temporary.unlink(missing_ok=True)
 
 
 def finalize_catalog(output: Path, *, manifest: dict | None = None) -> None:

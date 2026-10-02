@@ -167,10 +167,16 @@ class AnalysisPipeline:
                     f"{step} timed out after {timeout_seconds} seconds"
                 ) from exc
             if process.returncode != 0:
-                detail = (
-                    process.stderr or process.stdout or "unknown error"
-                ).strip()
-                raise RuntimeError(f"{step} failed: {detail}")
+                # Retain the exit reason even when stderr only contains ordinary
+                # progress output. SIGKILL is not sufficient to diagnose OOM.
+                exit_reason = f"exit code {process.returncode}"
+                if process.returncode < 0:
+                    try:
+                        exit_reason = f"signal {signal.Signals(-process.returncode).name} ({process.returncode})"
+                    except ValueError:
+                        exit_reason = f"signal {-process.returncode}"
+                detail = "\n".join(part.strip()[-2500:] for part in (process.stderr, process.stdout) if part and part.strip())
+                raise RuntimeError(f"{step} failed ({exit_reason}; {Path(command[1]).name}): {detail or 'no output'}")
             if process.stdout.strip():
                 outputs.append(process.stdout.strip())
         duration = round(time.monotonic() - started, 3)

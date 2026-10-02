@@ -159,6 +159,16 @@ def _current_stage(job_id: str) -> str:
         return job.stage if job else "running"
 
 
+def _automatic_model_update(job: PipelineJob, league_id: str) -> dict:
+    if not get_settings().auto_model_training_enabled:
+        logger.info("Job %s published season data; automatic model training is disabled", job.id)
+        return {"status": "DEFERRED", "active_preserved": True,
+                "reason": "AUTO_MODEL_TRAINING_ENABLED=false; existing model retained, no new model trained."}
+    from app.services.analysis_pipeline import AnalysisPipeline
+    _update_stage(job.id, "rolling_model")
+    return AnalysisPipeline(league_id).run("rolling_model")
+
+
 def _perform(job: PipelineJob) -> dict:
     from app.api.data import data_status
     from app.services.analysis_pipeline import AnalysisPipeline
@@ -226,8 +236,7 @@ def _perform(job: PipelineJob) -> dict:
                 if do_analysis:
                     # Factual season publication is committed before global model
                     # training. A deferred/failed candidate keeps the incumbent.
-                    _update_stage(job.id, "rolling_model")
-                    result["model_update"] = AnalysisPipeline(league_id).run("rolling_model")
+                    result["model_update"] = _automatic_model_update(job, league_id)
             return result
         if kind == "analysis":
             _update_stage(job.id, "analysis")
@@ -235,8 +244,7 @@ def _perform(job: PipelineJob) -> dict:
                 result = {"analysis": AnalysisPipeline(league_id).run("display")}
                 _update_stage(job.id,"publish")
                 result["published"] = publish_league(db,league_id)
-                _update_stage(job.id,"rolling_model")
-                result["model_update"] = AnalysisPipeline(league_id).run("rolling_model")
+                result["model_update"] = _automatic_model_update(job, league_id)
                 return result
             return AnalysisPipeline(league_id).run(payload["step"])
         if kind == "publish":
@@ -297,7 +305,9 @@ def run_job(job_id: str) -> None:
             with SessionLocal() as db:
                 record = db.get(PipelineJob, job_id)
                 record.status = "completed"
-                record.stage = "completed"
+                record.stage = ("Data updated; model training deferred"
+                                if result.get("model_update", {}).get("status") == "DEFERRED"
+                                else "completed")
                 record.result = json.dumps(result, default=str)
                 record.error = None
                 record.finished_at = now()

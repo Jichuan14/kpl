@@ -120,6 +120,11 @@ the chosen season. The local backend now needs RabbitMQ and a Celery worker;
 the production Compose file runs both. Maintenance mutation calls return HTTP
 202 with a job ID and `status_url` to poll.
 
+Automatic model training is enabled by default (`AUTO_MODEL_TRAINING_ENABLED=true`).
+Set it to false only to temporarily keep factual analysis and publication running
+while retaining the existing model. Jobs explicitly report deferred model training.
+See `deploy/README.md` for small-host monitoring and deployment instructions.
+
 The daily 03:00 China-time job refreshes the official league catalog and picks
 the newest started competition with a completed match. This job policy is
 independent of the website default. New visits open the season saved by

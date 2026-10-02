@@ -55,6 +55,7 @@ export const messages = {
     "pending": "排队中",
     "running": "运行中",
     "completed": "已完成",
+    "Data updated; model training deferred": "数据已更新；模型训练已暂缓",
     "failed": "失败",
     "queued": "已排队",
     "starting": "启动中",

@@ -45,7 +45,7 @@ def test_equivalent_offset_times_stay_together():
     assert event_time('2025-01-01 10:00:00')==event_time('2025-01-01T02:00:00Z')
 
 
-@pytest.mark.parametrize('kind',['unfinished','partial','duplicate','quality','winner','score','team','battle_id','orphan'])
+@pytest.mark.parametrize('kind',['unfinished','partial','duplicate','quality','winner','score','team','battle_id','orphan','illegal_hero','duplicate_order'])
 def test_invalid_series_excluded(tmp_path,kind):
     root=exports(tmp_path/'exports');path=root/'B';matches=[json.loads(x) for x in (path/'matches.jsonl').read_text().splitlines()]
     rows=[json.loads(x) for x in (path/'bp_decisions.jsonl').read_text().splitlines()]
@@ -53,6 +53,8 @@ def test_invalid_series_excluded(tmp_path,kind):
     elif kind=='partial':matches[-1]['score']['camp1']=3;matches[-1]['bo']=5
     elif kind=='duplicate':rows.append(copy.deepcopy(rows[-1]))
     elif kind=='quality':rows[-1]['quality_flags']=['bp_player_pick_mismatch']
+    elif kind=='illegal_hero':rows[-1]['selected_hero_id']=9999
+    elif kind=='duplicate_order':rows[-1]['bp_order']=19
     elif kind=='winner':matches[-1]['battles'][0]['winner_team_id']='2'
     elif kind=='score':matches[-1]['score']={'camp1':0,'camp2':1};matches[-1]['match_winner_team_id']='2'
     elif kind=='team':matches[-1]['battles'][0]['players'][0]['team_id']='3'

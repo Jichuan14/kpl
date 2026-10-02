@@ -91,6 +91,44 @@ docker image prune -f
 
 ## Scheduled refresh
 
+### Small-host operation and model training
+
+Automatic model training is enabled by default in both the application and
+`.env.production.example`. On an existing server, set
+`AUTO_MODEL_TRAINING_ENABLED=true` in `.env.production` (or remove an old false
+override) to enable it. Recreate the API and worker after deploying this setting:
+
+```bash
+docker compose -f docker-compose.production.yml up -d --build api worker
+```
+
+For temporary deferral, set `AUTO_MODEL_TRAINING_ENABLED=false`.
+Scheduled refresh, Full update, and the queued `analysis/all` action still sync
+where applicable, rebuild factual season statistics, and publish them. They
+defer the automatic global model refit and retain the existing active model
+with its original version and training coverage. Completed jobs explicitly show
+“Data updated; model training deferred” and record the reason in `result.model_update`.
+Missing models remain unavailable. Explicit individual training actions still
+run training; do not use those on this host until their peak usage is measured.
+Explicit false overrides remain effective until removed or changed; uploading
+new code does not replace the server's existing `.env.production`.
+
+The RabbitMQ rollout also introduced a new global training path: the old cron
+was pinned to Season 3, while current jobs discover started seasons and may
+train on all eligible historical series. Compare actual work, not just broker
+overhead. The API and worker each have a 1 GiB ceiling; these are not reserved
+RAM and their combined peaks plus RabbitMQ can exceed host capacity. A worker
+child can be OOM-killed while Celery remains running. Inspect kernel/cgroup
+events even if Docker does not show a terminated container.
+
+Reference preparation now streams decisions and output relabeling instead of
+retaining the complete corpus alongside child analyzers. This reduces a known
+overlap but is not proof that the complete neural refit fits 1 GiB. Monitor
+the first full training run on the small host to verify adequate headroom.
+More swap or a higher worker RAM limit alone does not protect website latency.
+
+### Install the daily trigger
+
 Install the repository-managed refresh script. It submits one idempotent job
 per China calendar day. The worker refreshes the official league catalog and
 selects the newest league that has started and has a completed match. A future

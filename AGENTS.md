@@ -37,6 +37,7 @@ Generated artifact locations and Git policy: `ARTIFACTS.md`
 | League, match, hero, team, and player endpoints | `backend/app/api/leagues.py`, `backend/app/api/bp.py`, `backend/app/api/data.py` | `backend/app/models.py`, `backend/app/schemas.py` |
 | Syncing official KPL data | `backend/app/api/sync.py` | `backend/app/services/sync.py`, `backend/app/clients/kpl_api.py` |
 | Queue-backed update jobs and 03:00 China-time refresh | `backend/app/services/pipeline_jobs.py` | `backend/app/api/jobs.py`, `deploy/kpl-refresh`, `docker-compose.production.yml` |
+| Small-host training deferral and worker memory failures | `deploy/README.md` | `backend/app/config.py` (`AUTO_MODEL_TRAINING_ENABLED`), `analysis/train_rolling_bundle.py`, `backend/app/services/analysis_pipeline.py` |
 | Analysis and publishing pipeline | `backend/app/services/analysis_pipeline.py` | `backend/app/api/pipeline.py`, `backend/app/services/static_publisher.py` |
 | Hero relationship statistics | `analysis/compute_bp_statistics.py` | `analysis/build_bp_decisions.py`, `analysis/common.py`, `analysis/statistical_helpers.py` |
 | Researching ban/pick intentions | `analysis/DRAFT_INTENTION_RESEARCH.md` | `analysis/explore_draft_intentions.py`, `analysis/run_intention_case_study.py` (offline; no model changes) |
