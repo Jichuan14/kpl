@@ -60,3 +60,32 @@ test("published cache remains bounded across season-specific artifacts", async (
     assert.equal(calls, 50);
   } finally { globalThis.fetch = previous; }
 });
+
+test("public catalog uses uncached live league query without changing artifact requests", async () => {
+  const { fetchFactualSeasons, fetchVisualizationSeasons, fetchLeagues } = await import("./api.js");
+  resetPublishedDataCacheForTests();
+  const previous = globalThis.fetch;
+  const paths = [];
+  globalThis.fetch = async (path) => {
+    paths.push(path);
+    if (path === "/assets/data/factual-seasons.json") return { ok: false, status: 404 };
+    return { ok: true, json: async () => path.startsWith("/api/") ? { data: [] } : [] };
+  };
+  try {
+    await fetchFactualSeasons();
+    await fetchVisualizationSeasons();
+    await fetchLeagues();
+    assert.deepEqual(paths, ["/api/leagues?factual=true", "/assets/data/seasons.json", "/api/leagues"]);
+  } finally { globalThis.fetch = previous; }
+});
+
+test("public catalog does not hide API failures", async () => {
+  const { fetchFactualSeasons } = await import("./api.js");
+  const previous = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => { calls++; return { ok: false, status: 500, text: async () => "server failed", headers: { get: () => null } }; };
+  try {
+    await assert.rejects(fetchFactualSeasons(), { status: 500 });
+    assert.equal(calls, 1);
+  } finally { globalThis.fetch = previous; }
+});

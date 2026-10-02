@@ -1,6 +1,7 @@
 import unittest
+from unittest.mock import patch
 
-from sqlalchemy import create_engine, func, inspect, select
+from sqlalchemy import create_engine, event, func, inspect, select
 from sqlalchemy.orm import Session
 
 from app.database import Base, ensure_schema_compatibility
@@ -10,6 +11,10 @@ from app.services.sync import SyncService
 
 class UnifiedBattleSyncTest(unittest.TestCase):
     def setUp(self) -> None:
+        # Synthetic season rows must never overwrite the real public catalog.
+        publisher = patch("app.services.static_publisher.publish_factual_catalog")
+        publisher.start()
+        self.addCleanup(publisher.stop)
         self.engine = create_engine("sqlite:///:memory:")
         Base.metadata.create_all(self.engine)
         self.db = Session(self.engine)
@@ -36,6 +41,36 @@ class UnifiedBattleSyncTest(unittest.TestCase):
         self.service.close()
         self.db.close()
         self.engine.dispose()
+
+    def complete_game(self, battle):
+        battle.win_camp = 1
+        for camp in (1, 2):
+            for slot in range(5):
+                hero_id = camp * 100 + slot
+                self.db.add(BattleBp(battle_id=battle.battle_id, league_id=battle.league_id,
+                                    action_type=1, camp=camp, hero_id=hero_id, bp_order=slot + 1))
+                self.db.add(BattlePlayer(battle_id=battle.battle_id, match_id=battle.match_id, league_id=battle.league_id,
+                                        camp=camp, hero_id=hero_id, player_name=f"{camp}-{slot}"))
+        self.db.commit()
+
+    def test_batch_completeness_requires_expected_games_and_full_detail(self):
+        self.match.camp1_score = 1
+        self.complete_game(self.battle)
+        statements = []
+        def record(conn, cursor, statement, parameters, context, executemany):
+            statements.append(statement)
+        event.listen(self.engine, "before_cursor_execute", record)
+        try:
+            result = self.service._complete_match_ids(["match-1", "no-battles"])
+        finally:
+            event.remove(self.engine, "before_cursor_execute", record)
+        self.assertEqual(result, {"match-1"})
+        self.assertEqual(len(statements), 1)
+        self.assertEqual(self.service._complete_match_ids([]), set())
+        self.match.camp1_score = 3
+        self.match.camp2_score = 1
+        self.db.commit()
+        self.assertFalse(self.service._match_has_complete_battle_data("match-1"))
 
     def detail(self) -> dict:
         return {
@@ -106,6 +141,20 @@ class UnifiedBattleSyncTest(unittest.TestCase):
                 },
             ],
         }
+
+    def test_future_hero_first_league_storage_and_updated_resync(self):
+        detail=self.detail();new_id=909090
+        detail['bp_list'][1].update(hero_id=new_id,hero_name='Future hero',hero_icon='future.png')
+        detail['battle_player_list'][0].update(hero_id=new_id,hero_name='Future hero')
+        self.service._persist_battle_detail(battle=self.battle,match=self.match,data=detail);self.db.commit()
+        self.assertEqual(self.db.get(Hero,new_id).hero_name,'Future hero')
+        detail['bp_list'][1].update(hero_name='Corrected future hero',hero_icon='corrected.png')
+        detail['battle_player_list'][0].update(hero_name='Corrected future hero')
+        self.service._persist_battle_detail(battle=self.battle,match=self.match,data=detail);self.db.commit()
+        hero=self.db.get(Hero,new_id)
+        self.assertEqual(hero.hero_name,'Corrected future hero');self.assertEqual(hero.hero_icon,'corrected.png')
+        self.assertEqual(self.db.scalar(select(func.count()).select_from(Hero).where(Hero.hero_id==new_id)),1)
+        self.assertEqual(self.db.scalar(select(func.count()).select_from(BattleBp)),2)
 
     def test_one_detail_populates_all_tables_idempotently(self) -> None:
         result = self.service._persist_battle_detail(
@@ -197,16 +246,9 @@ class UnifiedBattleSyncTest(unittest.TestCase):
 
     def test_incremental_sync_downloads_only_finished_matches_without_battles(self) -> None:
         calls: list[str] = []
-        # This existing match is fully stored, so it must not be downloaded.
-        self.db.add(
-            BattleBp(
-                battle_id="battle-1",
-                league_id="league-1",
-                action_type=0,
-                hero_id=1,
-            )
-        )
-        self.db.commit()
+        # This existing match has one complete peak-duel game.
+        self.match.camp1_score = 1
+        self.complete_game(self.battle)
         self.service._sleep = lambda: None
         self.service.api.get_matches = lambda league_id: {
             "code": 200,
@@ -214,13 +256,13 @@ class UnifiedBattleSyncTest(unittest.TestCase):
                 {
                     "match_id": "match-1",
                     "status": 2,
-                    "camp1": {"team_id": "team-a", "team_name": "Team A"},
+                    "camp1": {"team_id": "team-a", "team_name": "Team A", "score": 1},
                     "camp2": {"team_id": "team-b", "team_name": "Team B"},
                 },
                 {
                     "match_id": "match-new",
                     "status": 2,
-                    "camp1": {"team_id": "team-a", "team_name": "Team A"},
+                    "camp1": {"team_id": "team-a", "team_name": "Team A", "score": 1},
                     "camp2": {"team_id": "team-b", "team_name": "Team B"},
                 },
             ],
@@ -228,12 +270,17 @@ class UnifiedBattleSyncTest(unittest.TestCase):
 
         def battles(match_id: str) -> dict:
             calls.append(f"battles:{match_id}")
-            return {"code": 200, "results": [{"battle_id": "battle-new"}]}
+            return {"code": 200, "results": [{"battle_id": "battle-new", "battle_seq": 1, "win_camp": 1}]}
 
         def detail(battle_id: str) -> dict:
             calls.append(f"detail:{battle_id}")
             data = self.detail()
             data["battle_id"] = battle_id
+            data["bp_list"] = [{"is_ban_or_pick": 1, "camp": camp, "hero_id": camp * 100 + slot,
+                                "hero_name": f"Hero {camp}-{slot}"} for camp in (1, 2) for slot in range(5)]
+            data["battle_player_list"] = [{"camp": camp, "hero_id": camp * 100 + slot,
+                "actual_player_name": f"Player {camp}-{slot}", "team_id": "team-a" if camp == 1 else "team-b"}
+                for camp in (1, 2) for slot in range(5)]
             return {"code": 200, "data": data}
 
         self.service.api.get_match_battles = battles
@@ -246,7 +293,7 @@ class UnifiedBattleSyncTest(unittest.TestCase):
         self.assertEqual(first["finished_matches_found"], 2)
         self.assertEqual(first["finished_matches_processed"], 1)
         self.assertEqual(first["finished_matches_skipped"], 1)
-        self.assertEqual(first["performance_rows_written"], 1)
+        self.assertEqual(first["performance_rows_written"], 0)
         self.assertEqual(calls, ["battles:match-new", "detail:battle-new"])
 
         calls.clear()

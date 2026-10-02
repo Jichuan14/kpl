@@ -1,9 +1,7 @@
-"""Build cross-season team Elo, player-on-hero, and player-by-position rankings.
+"""Build season-only team Elo, player-on-hero, and player-by-position rankings.
 
-The selected season defines who is eligible for the boards and the ranking
-cutoff. Earlier exported seasons contribute evidence with exponential time
-decay. Existing match artifacts are read without modification; this script
-writes one new, versioned JSON artifact.
+Every competition starts at 1500 Elo. Earlier seasons never contribute to the
+selected-season boards. Empty exports are valid; missing exports are not.
 """
 
 from __future__ import annotations
@@ -16,6 +14,8 @@ from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterable
+
+from statistical_helpers import read_jsonl
 
 from common import CURRENT_LEAGUE_ID, REPO_ROOT
 
@@ -31,22 +31,6 @@ PLAYER_METRIC_NAMES = (
     "gold_per_minute",
 )
 POSITION_ORDER = {6: 0, 5: 1, 2: 2, 7: 3, 4: 4}
-
-
-def read_jsonl(path: Path) -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = []
-    with path.open(encoding="utf-8") as source:
-        for line_number, line in enumerate(source, 1):
-            if not line.strip():
-                continue
-            try:
-                row = json.loads(line)
-            except json.JSONDecodeError as exc:
-                raise ValueError(f"Invalid JSON in {path}:{line_number}") from exc
-            if not isinstance(row, dict):
-                raise ValueError(f"Expected an object in {path}:{line_number}")
-            rows.append(row)
-    return rows
 
 
 def parse_time(value: Any) -> datetime | None:
@@ -100,27 +84,18 @@ def load_history(
     target_times = [
         parsed
         for row in target_matches
-        if (parsed := parse_time(row.get("start_time"))) is not None
+        if any(battle.get("winner_team_id") for battle in row.get("battles") or [])
+        and (parsed := parse_time(row.get("start_time"))) is not None
     ]
-    if not target_times:
-        raise ValueError("Selected season has no dated matches")
-    as_of = max(target_times)
-
-    by_match_id: dict[str, dict[str, Any]] = {}
-    included_leagues: set[str] = set()
-    for path in sorted(exports_root.glob("*/matches.jsonl")):
-        for match in read_jsonl(path):
-            played_at = parse_time(match.get("start_time"))
-            match_id = str(match.get("match_id") or "")
-            if not match_id or played_at is None or played_at > as_of:
-                continue
-            by_match_id[match_id] = match
-            included_leagues.add(str(match.get("league_id") or path.parent.name))
-    history = sorted(
-        by_match_id.values(),
-        key=lambda row: (str(row.get("start_time") or ""), str(row.get("match_id") or "")),
-    )
-    return target_matches, history, as_of, sorted(included_leagues)
+    as_of = max(target_times) if target_times else datetime.min
+    for match in target_matches:
+        recorded_id = str(match.get("league_id") or target_league_id)
+        if recorded_id != target_league_id:
+            raise ValueError("Selected-season export contains another league")
+        match["league_id"] = target_league_id
+    history = sorted(target_matches, key=lambda row: (
+        str(row.get("start_time") or ""), str(row.get("match_id") or "")))
+    return target_matches, history, as_of, [target_league_id]
 
 
 def _battle_teams(battle: dict[str, Any]) -> list[dict[str, Any]]:
@@ -152,7 +127,11 @@ def compute_team_rankings(
     }
     ratings: defaultdict[str, float] = defaultdict(lambda: 1500.0)
     last_played: dict[str, datetime] = {}
-    names: dict[str, str] = {}
+    names: dict[str, str] = {
+        str(team["team_id"]): str(team.get("team_name") or team["team_id"])
+        for match in target_matches for team in match.get("teams") or []
+        if team.get("team_id")
+    }
     events: defaultdict[str, list[tuple[datetime, bool]]] = defaultdict(list)
     target_games: defaultdict[str, int] = defaultdict(int)
     target_league_id = str(target_matches[0].get("league_id") or "") if target_matches else ""
@@ -164,7 +143,7 @@ def compute_team_rankings(
         factor = decay_weight(previous, played_at, regression_half_life_days)
         ratings[team_id] = 1500.0 + (ratings[team_id] - 1500.0) * factor
 
-    for match in history:
+    for match in sorted(target_matches, key=lambda row: (str(row.get("start_time") or ""), str(row.get("match_id") or ""))):
         played_at = parse_time(match.get("start_time"))
         if played_at is None:
             continue
@@ -196,6 +175,13 @@ def compute_team_rankings(
     rows: list[dict[str, Any]] = []
     for team_id in active_team_ids:
         if team_id not in last_played:
+            rows.append({
+                "team_id": team_id, "team_name": names.get(team_id, team_id),
+                "rank": None, "elo": 1500.0, "hybrid_score": None,
+                "elo_component": None, "decayed_win_rate": None,
+                "games": 0, "effective_games": 0.0, "target_season_games": 0,
+                "recent_10_wins": None, "recent_10_games": 0, "last_played": None,
+            })
             continue
         factor = decay_weight(last_played[team_id], as_of, regression_half_life_days)
         final_elo = 1500.0 + (ratings[team_id] - 1500.0) * factor
@@ -228,9 +214,9 @@ def compute_team_rankings(
                 "last_played": last_played[team_id].isoformat(sep=" "),
             }
         )
-    rows.sort(key=lambda row: (-row["hybrid_score"], -row["elo"], row["team_name"]))
+    rows.sort(key=lambda row: (row["hybrid_score"] is None, -(row["hybrid_score"] or 0), -row["elo"], row["team_name"]))
     for rank, row in enumerate(rows, 1):
-        row["rank"] = rank
+        row["rank"] = rank if row["games"] else None
     return rows
 
 
@@ -245,6 +231,9 @@ def _player_events(
         league_id = str(match.get("league_id") or "")
         for battle in match.get("battles") or []:
             winner_id = str(battle.get("winner_team_id") or "")
+            teams = _battle_teams(battle)
+            if len(teams) != 2 or winner_id not in {str(team["team_id"]) for team in teams}:
+                continue
             duration_minutes = max(float(battle.get("game_duration_ms") or 0) / 60_000.0, 1.0)
             for player in battle.get("players") or []:
                 if not player.get("performance_data_available"):
@@ -321,7 +310,7 @@ def compute_hero_rankings(
     for event in target_events:
         target_pair_games[(event["player_id"], event["hero_id"])] += 1
 
-    events = _player_events(history)
+    events = _player_events(target_matches)
     _score_player_events(events)
 
     aggregates: defaultdict[tuple[str, int], dict[str, Any]] = defaultdict(
@@ -430,7 +419,7 @@ def compute_position_rankings(
         if key in eligible_pairs:
             target_pair_games[key] += 1
 
-    events = _player_events(history)
+    events = _player_events(target_matches)
     _score_player_events(events)
     aggregates: defaultdict[tuple[str, int], dict[str, Any]] = defaultdict(
         lambda: {
@@ -529,8 +518,17 @@ def build_rankings(
     *,
     half_life_days: float = DEFAULT_HALF_LIFE_DAYS,
     hero_catalog: dict[int, str] | None = None,
+    league_id: str | None = None,
 ) -> dict[str, Any]:
-    league_id = str(target_matches[0].get("league_id") or "") if target_matches else ""
+    league_id = league_id or (str(target_matches[0].get("league_id") or "") if target_matches else "")
+    if not league_id:
+        raise ValueError("An explicit league identity is required for an empty season")
+    if any(str(row.get("league_id") or league_id) != league_id for row in target_matches):
+        raise ValueError("Selected-season export contains another league")
+    # Enforce season isolation even when callers still pass historical evidence.
+    target_matches = [{**row, "league_id": league_id} for row in target_matches]
+    history = target_matches
+    included_leagues = [league_id]
     team_rankings = compute_team_rankings(
         target_matches,
         history,
@@ -551,14 +549,16 @@ def build_rankings(
         half_life_days=half_life_days,
     )
     return {
-        "schema_version": 2,
+        "schema_version": 3,
+        "evidence_scope": "season_only",
+        "initial_elo": 1500,
         "league": {
             "league_id": league_id,
             "league_name": str(target_matches[0].get("league_name") or league_id)
             if target_matches
             else league_id,
         },
-        "as_of": as_of.isoformat(sep=" "),
+        "as_of": as_of.isoformat(sep=" ") if as_of != datetime.min else None,
         "history_league_ids": included_leagues,
         "methodology": {
             "decay_half_life_days": half_life_days,
@@ -637,6 +637,7 @@ def main(argv: list[str] | None = None) -> int:
         included_leagues,
         half_life_days=args.half_life_days,
         hero_catalog=hero_catalog,
+        league_id=args.league_id,
     )
     output = args.output or (
         REPO_ROOT / "analysis" / "outputs" / args.league_id / DEFAULT_OUTPUT_NAME

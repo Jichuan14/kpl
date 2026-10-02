@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from ipaddress import ip_address
 from typing import NoReturn
+from threading import Lock
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
@@ -48,8 +49,10 @@ from app.database import get_db
 from app.config import get_settings
 from app.schemas import ApiResponse, CoachLimitsUpdate
 from app.services.coach_rate_limit import CoachRateLimiter
+from app.services import provider_budget
 from app.services.request_identity import client_key
 from app.services.season_teams import validate_season_team_pair
+from app.services.model_tool_scope import pinned_model_operation
 
 logger = logging.getLogger(__name__)
 
@@ -77,32 +80,34 @@ def _new_rate_limiter() -> CoachRateLimiter:
     )
 
 
-rate_limiter = _new_rate_limiter()
+rate_limiter = provider_budget.rate_limiter
 _coach_service: KimiCoachService | None = None
+_service_lock = Lock()
 
 
 def get_coach_service() -> KimiCoachService:
     """Reuse one service so the compiled graph is not rebuilt per request."""
     global _coach_service
-    if _coach_service is None:
-        settings = get_settings()
-        persistent = (
-            settings.coach_enable_conversations
-            and settings.coach_orchestration == "langgraph"
-        )
-        _coach_service = KimiCoachService(
-            settings=settings,
-            conversation_store=(
-                SqliteConversationStore(settings.coach_conversation_path)
-                if persistent
-                else None
-            ),
-            checkpointer=(
-                build_checkpointer(True, settings.coach_checkpoint_path)
-                if persistent
-                else None
-            ),
-        )
+    with _service_lock:
+        if _coach_service is None:
+            settings = get_settings()
+            persistent = (
+                settings.coach_enable_conversations
+                and settings.coach_orchestration == "langgraph"
+            )
+            _coach_service = KimiCoachService(
+                settings=settings,
+                conversation_store=(
+                    SqliteConversationStore(settings.coach_conversation_path)
+                    if persistent
+                    else None
+                ),
+                checkpointer=(
+                    build_checkpointer(True, settings.coach_checkpoint_path)
+                    if persistent
+                    else None
+                ),
+            )
     return _coach_service
 
 
@@ -117,6 +122,7 @@ def reset_coach_rate_limiter() -> None:
     """Reset process-local counters for isolated application tests."""
     global rate_limiter
     rate_limiter = _new_rate_limiter()
+    provider_budget.rate_limiter = rate_limiter
 
 
 def _public_coach_data(result: dict) -> dict:
@@ -176,6 +182,10 @@ def _finish_conversation_turn(
     if conversation_record is None:
         return
     payload["conversation_id"] = conversation_record.conversation_id
+    from app.services.model_registry import current_bundle
+    handle = current_bundle()
+    if handle:
+        payload.update(handle.metadata())
     coverage = result.get("coverage") or {}
     requested = list(coverage.get("requested") or []) if isinstance(coverage, dict) else []
     service.conversation_store.finish_turn(
@@ -191,6 +201,7 @@ def _finish_conversation_turn(
                 body.draft_state.model_dump(mode="json") if body.draft_state else None,
             ),
             "league_id": body.league_id,
+            "model_version": handle.version if handle else None,
             "board_fingerprint": board_fingerprint(
                 body.league_id,
                 body.draft_state.model_dump(mode="json") if body.draft_state else None,
@@ -254,6 +265,7 @@ def _http_error(
 
 
 @router.post("")
+@pinned_model_operation
 def ask_coach(
     body: CoachInput,
     request: Request,
@@ -320,6 +332,7 @@ def ask_coach(
                 conversation_record,
                 client_request_id=body.client_request_id,
                 request_id=request_id,
+                current_board=board_fingerprint(body.league_id, body.draft_state.model_dump(mode="json") if body.draft_state else None),
             )
             if cached is not None:
                 completed = True
@@ -475,6 +488,7 @@ def ask_coach(
 
 
 @router.post("/stream")
+@pinned_model_operation
 def stream_coach(
     body: CoachInput,
     request: Request,
@@ -541,6 +555,7 @@ def stream_coach(
                 conversation_record,
                 client_request_id=body.client_request_id,
                 request_id=request_id,
+                current_board=board_fingerprint(body.league_id, body.draft_state.model_dump(mode="json") if body.draft_state else None),
             )
             conversation_ref = scoped_gate_reference(
                 conversation_record.to_public_ref(),
@@ -752,6 +767,7 @@ def clear_coach_conversation(request: Request, response: Response) -> ApiRespons
 
 
 @router.post("/scout-report")
+@pinned_model_operation
 def prepare_scout_report(
     body: ScoutReportInput,
     request: Request,

@@ -1,4 +1,5 @@
 import json
+import math
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -70,8 +71,11 @@ def artifact(path: Path, key: str, label: str) -> dict[str, Any]:
     exists = path.is_file()
     records = 0
     if exists and path.suffix == ".jsonl":
-        with path.open("rb") as source:
-            records = sum(1 for line in source if line.strip())
+        from app.services.file_summary_cache import file_summary
+        def count_records(source_path):
+            with source_path.open("rb") as source:
+                return sum(1 for line in source if line.strip())
+        records = file_summary(path, count_records, variant="jsonl_count")
     stat = path.stat() if exists else None
     return {
         "key": key,
@@ -337,16 +341,48 @@ def data_status(
         and sequence_draft_model_path.stat().st_mtime >= decision_mtime
         and all(path.is_file() and path.stat().st_mtime >= decision_mtime for path in sequence_support_paths)
     )
+    sequence_model_source = None
     if sequence_draft_model["exists"]:
         try:
             with sequence_draft_model_path.open(encoding="utf-8") as source:
+                sequence_model_source = json.load(source)
                 sequence_draft_model["records"] = int(
-                    json.load(source).get("base_artifact", {}).get("training", {}).get(
+                    sequence_model_source.get("base_artifact", {}).get("training", {}).get(
                         "training_decisions", 0
                     )
                 )
         except (OSError, ValueError, json.JSONDecodeError):
             sequence_draft_model["records"] = 0
+
+    feature_space_path = league_output_dir / "learned_hero_feature_space.json"
+    feature_space = artifact(feature_space_path, "feature_space", "Production hero feature space")
+    feature_space["ready"] = False
+    if sequence_draft_model["ready"] and feature_space_path.is_file():
+        try:
+            model_source = sequence_model_source
+            space_source = json.loads(feature_space_path.read_text(encoding="utf-8"))
+            if not isinstance(model_source, dict) or not isinstance(space_source, dict):
+                raise ValueError("Invalid model/map root")
+            rows = space_source.get("rows")
+            if not isinstance(rows, list) or not rows or not all(
+                isinstance(row, dict) and isinstance(row.get("hero_id"), int)
+                and all(isinstance(row.get(axis), (int, float)) and math.isfinite(row[axis]) for axis in ("x", "y"))
+                for row in rows
+            ):
+                raise ValueError("Invalid hero map rows")
+            feature_space["records"] = len(rows)
+            feature_space["ready"] = bool(
+                space_source.get("schema_version") == 1
+                and space_source.get("projection") == "pca"
+                and model_source.get("model_fingerprint")
+                and space_source.get("source_model_fingerprint") == model_source["model_fingerprint"]
+                and space_source.get("target_season") == league_id
+                and space_source.get("source_space") == "production_frozen_bag_representation"
+                and feature_space_path.stat().st_mtime >= sequence_draft_model_path.stat().st_mtime
+                and feature_space["records"] > 0
+            )
+        except (OSError, ValueError, TypeError):
+            pass
 
     lineup_value_model = artifact(
         league_output_dir / "lineup_value_model.json",
@@ -497,11 +533,24 @@ def data_status(
     analysis_ready = bool(
         display_ready
         and draft_model["ready"]
-        and learnable_draft_model["ready"]
+        and feature_space["ready"]
         and sequence_draft_model["ready"]
         and ban_value_model["ready"]
         and lineup_value_model["ready"]
     )
+    from app.services.model_registry import REGISTRY_ROOT, resolve_bundle
+    try:
+        active_model = {"ready": True, **resolve_bundle().metadata()}
+    except (FileNotFoundError, ValueError, KeyError) as exc:
+        active_model = {"ready": False, "reason": str(exc)}
+    candidate_path = REGISTRY_ROOT / "candidates" / "latest_status.json"
+    try:
+        candidate = json.loads(candidate_path.read_text()) if candidate_path.is_file() else {"status": "NOT_RUN"}
+    except (OSError, ValueError):
+        candidate = {"status": "UNKNOWN", "reason": "Candidate status report is unavailable"}
+    # Factual readiness and global model readiness are independent. Legacy
+    # season artifacts stay inspectable but do not retarget the active bundle.
+    analysis_ready = bool(display_ready and active_model["ready"])
     pipeline = [
         {
             "key": "download",
@@ -572,16 +621,16 @@ def data_status(
             "detail": f'{draft_model["records"]:,} training decisions',
         },
         {
-            "key": "learnable_draft_model",
-            "label": "Team-aware learnable draft model",
-            "ready": learnable_draft_model["ready"],
-            "detail": f'{learnable_draft_model["records"]:,} training decisions',
-        },
-        {
             "key": "sequence_draft_model",
             "label": "Sequence + player familiarity draft model",
             "ready": sequence_draft_model["ready"],
             "detail": f'{sequence_draft_model["records"]:,} training decisions',
+        },
+        {
+            "key": "feature_space",
+            "label": "Production hero feature space",
+            "ready": feature_space["ready"],
+            "detail": f'{feature_space["records"]:,} heroes',
         },
         {
             "key": "ban_value_model",
@@ -597,8 +646,11 @@ def data_status(
         },
     ]
 
+    pipeline = [row for row in pipeline if row["key"] not in {"draft_model", "sequence_draft_model", "feature_space", "ban_value_model", "lineup_value_model"}] + [{"key": "rolling_model", "label": "Active rolling model bundle", "ready": active_model["ready"], "detail": f'{active_model.get("model_version", "unavailable")} · {active_model.get("context_reference_cutoff", "")} · {candidate.get("status", "UNKNOWN")} · {candidate.get("reason", "")}'}]
     return ApiResponse(
         data={
+            "active_model": active_model,
+            "model_candidate": candidate,
             "league": {
                 "league_id": league_id,
                 "league_name": league["league_name"],
@@ -626,6 +678,7 @@ def data_status(
                 "draft_model": draft_model,
                 "learnable_draft_model": learnable_draft_model,
                 "sequence_draft_model": sequence_draft_model,
+                "feature_space": feature_space,
                 "lineup_value_model": lineup_value_model,
                 "ban_value_model": ban_value_model,
             },

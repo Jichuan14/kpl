@@ -28,7 +28,7 @@ hero may have several rows when it has been played in multiple positions.
 | `compute_meta_heroes.py` | Rank opening-priority heroes from first-phase bans and Blue first picks |
 | `compute_team_synergies.py` | Rank availability-adjusted hero pairs preferred by each team |
 | `compute_team_draft_profiles.py` | Build season rosters, team tendencies/openings/combos, player pools, and recent trends |
-| `compute_power_rankings.py` | Build decayed team Elo plus player-position and player-hero performance boards across available seasons |
+| `compute_power_rankings.py` | Build decayed team Elo plus player-position and player-hero performance boards using only the selected season |
 | `build_hero_tactical_roles.py` | Build the commentary-only hero class and tactical-role artifact from Tencent sources |
 | `build_draft_model.py` | Train an interpretable next-action probability model and run BP rollouts |
 | `train_learnable_draft_choice_model.ipynb` | Train the team-aware learnable choice model with acting-team and opponent-team embeddings |
@@ -164,8 +164,9 @@ analysis/outputs/{league_id}/meta_hero_stats.jsonl
 ### Build team, player-position, and player-hero power rankings
 
 The selected season determines eligible teams, player-position pairs, and
-player-hero pairs. All available match exports up to that season contribute
-with a 180-day half-life. Team strength blends opponent-adjusted Elo with a
+player-hero pairs and provides all evidence. Each season starts at 1500 Elo;
+earlier exports never contribute. Results within the season decay with a
+180-day half-life. Team strength blends opponent-adjusted Elo with a
 decayed Bayesian win rate.
 Player-hero strength blends role-and-season-normalized KDA, MVP score,
 participation, hero damage share, gold pace, and battle results, with a neutral
@@ -396,3 +397,9 @@ does not use or update any BP model. It is an optional research command rather
 than part of the management display/full pipeline; the simulator intent widget
 computes from the exported BP corpus at request time. See
 `DRAFT_EVIDENCE_SPEC.md`.
+
+## Rolling model training and backtests
+
+`rolling_corpus.py` owns complete-series eligibility, UTC chronology, shared standard-battle identities and weights. `production_all_data.py` owns fixed-recipe production refits, canonical retrain identity, new-hero unknown-trait encoding and explicit uncalibrated probability lineage. `train_rolling_bundle.py` defaults to this all-data path: 30 epochs per neural stage, fixed lineup configuration and no evaluation reservation/search. `NO_CHANGE` skips an identical eligible corpus/input/recipe. Low budgets are isolated experimental smoke runs, even without an explicit smoke flag.
+
+`backtest_rolling_bundle.py` retrains baseline and alternative for each repeated `--cutoff`, writes research reports only and never reuses the active checkpoint. `train_rolling_bundle.py --evaluation-mode` retains evaluated candidates and their historical gates. `seed_model_bundle.py` validates and copies an existing historical collection without rewriting its source coverage. Root README documents runnable commands and interpretation limits.

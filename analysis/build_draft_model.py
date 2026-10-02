@@ -239,6 +239,7 @@ def build_model(
     meta_weight: float,
     max_meta_lift: float,
     input_paths: list[Path],
+    use_rolling_weights: bool = False,
 ) -> dict[str, Any]:
     usable = [
         row
@@ -264,7 +265,7 @@ def build_model(
     }
 
     for row in usable:
-        sample_weight = season_weights.get(str(row.get("league_id") or ""), 1.0)
+        sample_weight = float(row["_rolling_weight"]) if use_rolling_weights else season_weights.get(str(row.get("league_id") or ""), 1.0)
         context = context_key(row)
         action = str(row["action"])
         selected = int(row["selected_hero_id"])
@@ -295,7 +296,7 @@ def build_model(
     }
     relation_opportunities: Counter[str] = Counter()
     for row in usable:
-        sample_weight = season_weights.get(str(row.get("league_id") or ""), 1.0)
+        sample_weight = float(row["_rolling_weight"]) if use_rolling_weights else season_weights.get(str(row.get("league_id") or ""), 1.0)
         context = context_key(row)
         legal = legal_heroes(row)
         for role, source in visible_sources(row):
@@ -340,7 +341,7 @@ def build_model(
         "training_inputs": [path_label(path) for path in input_paths],
         "training_decisions": len(usable),
         "effective_training_decisions": sum(
-            season_weights.get(str(row.get("league_id") or ""), 1.0) for row in usable
+            (float(row["_rolling_weight"]) if use_rolling_weights else season_weights.get(str(row.get("league_id") or ""), 1.0)) for row in usable
         ),
         "hero_ids": all_hero_ids,
         "hero_names": {
@@ -641,6 +642,7 @@ def main() -> None:
     parser.add_argument("--min-relation-selections", type=int, default=2)
     parser.add_argument("--shrinkage", type=float, default=20.0)
     parser.add_argument("--max-lift", type=float, default=3.0)
+    parser.add_argument("--use-rolling-weights", action="store_true")
     parser.add_argument("--recency-decay", type=float, default=DEFAULT_RECENCY_DECAY)
     parser.add_argument(
         "--own-pick-relation-weight", type=float, default=DEFAULT_OWN_PICK_RELATION_WEIGHT
@@ -683,6 +685,7 @@ def main() -> None:
                 meta_weight=args.meta_weight,
                 max_meta_lift=args.max_meta_lift,
                 input_paths=training_inputs,
+                use_rolling_weights=args.use_rolling_weights,
             )
             write_model(model, args.output_root / target_input.parent.name / "draft_model.json")
         return
@@ -698,6 +701,7 @@ def main() -> None:
         meta_weight=args.meta_weight,
         max_meta_lift=args.max_meta_lift,
         input_paths=inputs,
+        use_rolling_weights=args.use_rolling_weights,
     )
     write_model(model, args.output)
     if args.state:

@@ -105,6 +105,10 @@ def resolve_calibration(
         raw = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return CalibrationResolution(diagnostic="sidecar_corrupt")
+    if raw.get('status')=='uncalibrated' and raw.get('method')=='none' and raw.get('temperature')==1.0:
+        if raw.get('model_fingerprint')==model_fingerprint and raw.get('candidate_policy_fingerprint')==candidate_policy_fingerprint_value and raw.get('candidate_policy_id')==candidate_policy_id and raw.get('policy_model_type')==policy_model_type:
+            return CalibrationResolution(1.,'uncalibrated',str(raw.get('reason') or 'all_data_refit'), 'none',model_fingerprint)
+        return CalibrationResolution(diagnostic='uncalibrated_contract_mismatch',model_fingerprint=model_fingerprint)
     checks = (
         (raw.get("schema_version") == 1, "unsupported_schema"),
         (raw.get("method") == "global_temperature", "unsupported_method"),

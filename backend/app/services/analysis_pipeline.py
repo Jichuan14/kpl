@@ -20,6 +20,7 @@ PipelineStep = Literal[
     "draft_evidence",
     "draft_model",
     "learnable_draft_model",
+    "rolling_model",
     "sequence_draft_model",
     "ban_value_model",
     "lineup_value_model",
@@ -121,10 +122,7 @@ class AnalysisPipeline:
             display_steps
             + [
                 "draft_model",
-                "learnable_draft_model",
-                "sequence_draft_model",
-                "ban_value_model",
-                "lineup_value_model",
+                "rolling_model",
             ]
             if step == "all"
             else display_steps
@@ -152,10 +150,12 @@ class AnalysisPipeline:
                     str(ANALYSIS_DIR / "build_hero_draft_feature_vectors.py"),
                 ],
             )
+        if step == "sequence_draft_model":
+            commands.append([sys.executable, str(ANALYSIS_DIR / "export_production_hero_feature_space.py"), "--league-id", self.league_id])
         started = time.monotonic()
         outputs: list[str] = []
         for command in commands:
-            timeout_seconds = 1800 if step == "sequence_draft_model" else 900 if step == "lineup_value_model" else 300
+            timeout_seconds = 7200 if step == "rolling_model" else 1800 if step == "sequence_draft_model" else 900 if step == "lineup_value_model" else 300
             try:
                 process = _run_command(
                     command,
@@ -284,6 +284,8 @@ class AnalysisPipeline:
                 "--league-id",
                 self.league_id,
             ]
+        if step == "rolling_model":
+            return [python,str(ANALYSIS_DIR / "train_rolling_bundle.py"),"--activate"]
         if step == "sequence_draft_model":
             return [
                 python,

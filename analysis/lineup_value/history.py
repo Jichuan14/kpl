@@ -444,11 +444,15 @@ def fit_logistic(
     *,
     l2: float = 2.0,
     max_iterations: int = 100,
+    sample_weights: np.ndarray | None = None,
 ) -> dict[str, Any]:
     if len(features) != len(outcomes) or len(outcomes) == 0:
         raise ValueError("Training data must be nonempty and aligned")
-    means = features.mean(axis=0)
-    scales = features.std(axis=0)
+    sample_weights = np.ones(len(outcomes)) if sample_weights is None else np.asarray(sample_weights, dtype=float)
+    if sample_weights.shape != outcomes.shape or not np.isfinite(sample_weights).all() or (sample_weights <= 0).any():
+        raise ValueError("Sample weights must be finite, positive and aligned")
+    means = np.average(features, axis=0, weights=sample_weights)
+    scales = np.sqrt(np.average((features - means) ** 2, axis=0, weights=sample_weights))
     scales = np.where(scales < 1e-9, 1.0, scales)
     normalized = (features - means) / scales
     design = np.column_stack([np.ones(len(normalized)), normalized])
@@ -459,8 +463,8 @@ def fit_logistic(
     for _iteration in range(max_iterations):
         logits = np.clip(design @ coefficients, -30.0, 30.0)
         probabilities = 1.0 / (1.0 + np.exp(-logits))
-        weights = np.maximum(probabilities * (1.0 - probabilities), 1e-8)
-        gradient = design.T @ (probabilities - outcomes) + regularizer @ coefficients
+        weights = sample_weights * np.maximum(probabilities * (1.0 - probabilities), 1e-8)
+        gradient = design.T @ (sample_weights * (probabilities - outcomes)) + regularizer @ coefficients
         hessian = design.T @ (design * weights[:, None]) + regularizer
         step = np.linalg.solve(hessian, gradient)
         coefficients -= step

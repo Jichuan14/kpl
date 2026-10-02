@@ -8,7 +8,7 @@ import math
 import unicodedata
 from collections import Counter, defaultdict
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -28,7 +28,9 @@ def player_key(team_id: str, player_name: str) -> str:
 
 
 def parse_date(value: str) -> date:
-    return datetime.fromisoformat(value.replace("Z", "+00:00")).date()
+    parsed=datetime.fromisoformat(value.replace("Z", "+00:00"))
+    china=timezone(timedelta(hours=8))
+    return (parsed.replace(tzinfo=china) if parsed.tzinfo is None else parsed.astimezone(china)).date()
 
 
 @dataclass(frozen=True)

@@ -8,6 +8,7 @@ state lives only in this process's expiring memory cache.
 from __future__ import annotations
 
 from collections.abc import Mapping
+from concurrent.futures import Future
 from datetime import UTC, datetime
 from math import ceil
 from threading import Lock
@@ -44,6 +45,7 @@ class LiveMatchService:
         client: KplApiClient | Any | None = None,
         cache_seconds: int | None = None,
         manual_refresh_seconds: int | None = None,
+        max_cache_entries: int = 256,
     ) -> None:
         settings = settings or get_settings()
         self.client = client or KplApiClient(settings)
@@ -51,53 +53,55 @@ class LiveMatchService:
         self.manual_refresh_seconds = (
             manual_refresh_seconds or settings.live_match_manual_refresh_seconds
         )
-        self._cache: dict[tuple[str, str], tuple[float, dict[str, Any]]] = {}
-        self._fixture_cache: dict[str, tuple[float, dict[str, Any] | None]] = {}
+        self._cache: dict[tuple[str, str, tuple[str, ...]], tuple[float, dict[str, Any]]] = {}
+        self._fixture_cache: dict[str, tuple[float, list[dict[str, Any]]]] = {}
+        self._state_flights: dict[Any, Future] = {}
+        self._fixture_flights: dict[Any, Future] = {}
         self._lock = Lock()
+        self.max_cache_entries = max(1, max_cache_entries)
+
+    def _fixtures(self, league_id: str, ttl: int):
+        return self._cached_fetch(
+            self._fixture_cache, self._fixture_flights, league_id, ttl,
+            lambda: _results(self.client.get_matches(league_id)),
+        )[0]
 
     def get_current_fixture(
         self, league_id: str, *, selectable_team_ids: set[str]
     ) -> dict[str, Any] | None:
         """Return the current official fixture, without touching the database."""
-        now = monotonic()
-        with self._lock:
-            cached = self._fixture_cache.get(str(league_id))
-            if cached and now - cached[0] < self.cache_seconds:
-                return cached[1]
-
-            rows = _results(self.client.get_matches(str(league_id)))
-            live = sorted(
-                (
-                    row
-                    for row in rows
-                    if _as_int(row.get("status")) == 1
-                    and {
-                        str((row.get("camp1") or {}).get("team_id") or ""),
-                        str((row.get("camp2") or {}).get("team_id") or ""),
-                    }.issubset(selectable_team_ids)
-                ),
-                key=lambda row: str(row.get("start_time") or ""),
-            )
-            fixture = None
-            if live:
-                match = live[0]
-                camps = [match.get("camp1") or {}, match.get("camp2") or {}]
-                fixture = {
-                    "match_id": str(match.get("match_id") or ""),
-                    "start_time": match.get("start_time"),
-                    "timezone": "Asia/Shanghai",
-                    "fixture_status": "live",
-                    "is_live": True,
-                    "teams": [
-                        {
-                            "team_id": str(camp.get("team_id") or ""),
-                            "team_name": camp.get("team_name") or "",
-                        }
-                        for camp in camps
-                    ],
-                }
-            self._fixture_cache[str(league_id)] = (now, fixture)
-            return fixture
+        rows = self._fixtures(str(league_id), self.cache_seconds)
+        live = sorted(
+            (
+                row
+                for row in rows
+                if _as_int(row.get("status")) == 1
+                and {
+                    str((row.get("camp1") or {}).get("team_id") or ""),
+                    str((row.get("camp2") or {}).get("team_id") or ""),
+                }.issubset(selectable_team_ids)
+            ),
+            key=lambda row: str(row.get("start_time") or ""),
+        )
+        fixture = None
+        if live:
+            match = live[0]
+            camps = [match.get("camp1") or {}, match.get("camp2") or {}]
+            fixture = {
+                "match_id": str(match.get("match_id") or ""),
+                "start_time": match.get("start_time"),
+                "timezone": "Asia/Shanghai",
+                "fixture_status": "live",
+                "is_live": True,
+                "teams": [
+                    {
+                        "team_id": str(camp.get("team_id") or ""),
+                        "team_name": camp.get("team_name") or "",
+                    }
+                    for camp in camps
+                ],
+            }
+        return fixture
 
     def get_match_state(
         self, league_id: str, team_a_id: str, team_b_id: str, match_id: str
@@ -136,18 +140,49 @@ class LiveMatchService:
             raise ValueError("Choose two different teams to follow a live match")
         if not str(match_id):
             raise ValueError("A scheduled match is required for live follow")
-        key = (str(league_id), str(match_id))
-        now = monotonic()
-        with self._lock:
-            cached = self._cache.get(key)
-            if cached and now - cached[0] < refresh_after_seconds:
-                return self._response(cached[1], cache_age=now - cached[0], refreshed=False)
+        key = (str(league_id), str(match_id), tuple(sorted(team_ids)))
+        state, cache_age, refreshed = self._cached_fetch(
+            self._cache, self._state_flights, key, refresh_after_seconds,
+            lambda: self._fetch_state(str(league_id), team_ids, str(match_id), refresh_after_seconds),
+        )
+        return self._response(state, cache_age=cache_age, refreshed=refreshed)
 
-            # Holding this small lock prevents many browser tabs from making the
-            # same upstream KPL request at once. No data is written to SQLite.
-            state = self._fetch_state(str(league_id), team_ids, str(match_id))
-            self._cache[key] = (now, state)
-            return self._response(state, cache_age=0, refreshed=True)
+    def _cached_fetch(self, cache, flights, key, ttl, fetch):
+        with self._lock:
+            now = monotonic()
+            # TTL determines refresh eligibility; eviction bounds retention
+            # even for keys that will never be requested again.
+            for expired in [k for k, (published, _) in cache.items()
+                            if now - published >= self.cache_seconds]:
+                del cache[expired]
+            cached = cache.get(key)
+            if cached and now - cached[0] < ttl:
+                return cached[1], now - cached[0], False
+            future = flights.get(key)
+            leader = future is None
+            if leader:
+                future = Future()
+                flights[key] = future
+        if not leader:
+            published, value = future.result()
+            return value, max(0, monotonic() - published), False
+        try:
+            value = fetch()
+            with self._lock:
+                published = monotonic()
+                if key not in cache and len(cache) >= self.max_cache_entries:
+                    del cache[min(cache, key=lambda k: cache[k][0])]
+                cache[key] = (published, value)
+            # Future callbacks and waiter wakeups run outside the cache lock.
+            future.set_result((published, value))
+            return value, 0, True
+        except BaseException as error:
+            future.set_exception(error)
+            raise
+        finally:
+            with self._lock:
+                if flights.get(key) is future:
+                    del flights[key]
 
     def _response(
         self, state: dict[str, Any], *, cache_age: float, refreshed: bool
@@ -163,12 +198,12 @@ class LiveMatchService:
         return response
 
     def _fetch_state(
-        self, league_id: str, team_ids: set[str], match_id: str
+        self, league_id: str, team_ids: set[str], match_id: str, fixture_ttl: int | None = None
     ) -> dict[str, Any]:
-        matches_payload = self.client.get_matches(league_id)
+        fixture_rows = self._fixtures(league_id, fixture_ttl or self.cache_seconds)
         candidates = [
             row
-            for row in _results(matches_payload)
+            for row in fixture_rows
             if str(row.get("match_id") or "") == match_id
             and {
                 str((row.get("camp1") or {}).get("team_id") or ""),

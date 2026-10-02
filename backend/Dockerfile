@@ -15,6 +15,7 @@ RUN pip install --no-cache-dir \
 
 COPY backend /app/backend
 COPY analysis /app/analysis
+COPY knowledge/sources/official/herolist.json /app/knowledge/sources/official/herolist.json
 
 WORKDIR /app/backend
 

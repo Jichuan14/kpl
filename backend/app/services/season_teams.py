@@ -147,6 +147,13 @@ def validate_season_team_pair(
     if blue_team_id == red_team_id:
         raise ValueError("Blue and Red must be different teams.")
     teams = {str(row["team_id"]): row for row in list_season_teams(db, league_id)}
+    from app.services.model_registry import current_bundle
+    handle = current_bundle()
+    if handle:
+        import json
+        reference = json.loads(handle.path("lineup_value_model.json").read_text()).get("team_names", {})
+        for team_id, name in reference.items():
+            teams.setdefault(str(team_id), {"team_id": str(team_id), "team_name": name, "evidence_scope": "model_reference_coverage"})
     missing = [team_id for team_id in (blue_team_id, red_team_id) if team_id not in teams]
     if missing:
         raise ValueError(

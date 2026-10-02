@@ -1,11 +1,17 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
-import { fetchDraftModel } from "./api";
+import { createSeasonStartup } from "./seasonStartup.js";
+import ModelCoverageNote from "./ModelCoverageNote.vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { fetchActiveModel, fetchDraftModel } from "./api";
+import { createModelSession } from "./modelSession";
 import { selectedLeagueId } from "./selectedLeague";
+import { useSeasonCatalog } from "./composables/useSeasonCatalog";
+import { createFactualLoader } from "./factualResource.js";
 import { finishStartupLoading } from "./startupLoader";
 
 const activeSection = ref("relations");
 const model = ref(null);
+const modelSession = createModelSession(fetchActiveModel);
 const demoStep = ref(0);
 const demoPlaying = ref(false);
 let demoTimer = null;
@@ -95,18 +101,21 @@ function updateActiveSection() {
   if (current) activeSection.value = current.id;
 }
 
-async function loadModel() {
-  try {
-    model.value = await fetchDraftModel(selectedLeagueId.value);
-  } catch {
-    model.value = null;
-  } finally {
-    finishStartupLoading();
-  }
-}
+const { loadSeasons } = useSeasonCatalog();
+const loadModel = createFactualLoader({
+  start() { model.value = null; },
+  async load() { return selectedLeagueId.value ? fetchDraftModel(selectedLeagueId.value, await modelSession.version()) : null; },
+  value(value) { model.value = value; },
+  missing() { model.value = null; },
+  error() { model.value = null; },
+  finish() { finishStartupLoading(); },
+});
+const seasonStartup = createSeasonStartup(loadSeasons, loadModel);
+watch(selectedLeagueId, seasonStartup.changed, { flush: "sync" });
 
 onMounted(async () => {
-  await loadModel();
+  try { await seasonStartup.initialize(); }
+  catch { finishStartupLoading(); }
   await nextTick();
   const hash = window.location.hash.slice(1);
   if (hash) scrollToSection(hash === "rankings" ? "training" : hash);
@@ -115,6 +124,7 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
+  loadModel.cancel();
   window.removeEventListener("scroll", updateActiveSection);
   stopDemo();
 });
@@ -415,6 +425,7 @@ onBeforeUnmount(() => {
         </section>
 
         <section id="training">
+          <ModelCoverageNote :metadata="model" />
           <h2>6. 训练、评估与线上推理</h2>
           <p>{{ $t("训练数据中的每一个样本都是一个真实的历史 BP 前缀：输入为当时已经发生的动作和下一步上下文，标签为真实发生的下一手英雄。训练时最小化真实英雄的负对数概率：") }}</p>
 

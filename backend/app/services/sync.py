@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import logging
 import time
+from datetime import datetime, timezone
 from typing import Any
+from zoneinfo import ZoneInfo
 
-from sqlalchemy import delete, select
+from sqlalchemy import case, delete, func, select
 from sqlalchemy.orm import Session
 
 from app.clients.kpl_api import KplApiClient
@@ -30,6 +32,17 @@ logger = logging.getLogger(__name__)
 
 # Match status used by official API for finished series (same convention as kpl-agent).
 FINISHED_MATCH_STATUS = 2
+CHINA_TZ = ZoneInfo("Asia/Shanghai")
+
+
+def _china_time(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed.replace(tzinfo=CHINA_TZ) if parsed.tzinfo is None else parsed.astimezone(CHINA_TZ)
 
 
 def _as_int(value: Any) -> int:
@@ -85,6 +98,9 @@ class SyncService:
                 inserted += 1
 
         self.db.commit()
+        # Catalog publication is independent of analysis and model training.
+        from app.services.static_publisher import publish_factual_catalog
+        publish_factual_catalog(self.db)
         return {"inserted": inserted, "updated": updated}
 
     def resolve_league_id(self, league_id: str | None) -> str:
@@ -98,6 +114,42 @@ class SyncService:
         if not latest:
             raise RuntimeError("No leagues available after sync")
         return latest.league_id
+
+    def select_started_league_id(self, at: datetime | None = None) -> str:
+        """Choose the newest officially listed league with a completed match.
+
+        The official catalog can list future competitions before play begins.
+        Require both a started league window and evidence of a finished match.
+        """
+        instant = at or datetime.now(timezone.utc)
+        if instant.tzinfo is None:
+            instant = instant.replace(tzinfo=timezone.utc)
+        current = instant.astimezone(CHINA_TZ)
+        leagues = list(self.db.scalars(select(League)))
+        leagues.sort(
+            key=lambda league: (
+                _china_time(league.start_time) or datetime.min.replace(tzinfo=CHINA_TZ),
+                league.year or 0,
+                league.season or 0,
+                league.league_id,
+            ),
+            reverse=True,
+        )
+        for league in leagues:
+            start = _china_time(league.start_time)
+            if start is None or start > current:
+                continue
+            payload = self.api.get_matches(league.league_id)
+            if not payload or payload.get("code") != 200:
+                raise RuntimeError(f"Failed to fetch matches for league {league.league_id}")
+            if any(
+                _as_int(match.get("status")) == FINISHED_MATCH_STATUS
+                and (match_start is None or match_start <= current)
+                for match in (payload.get("results") or [])
+                for match_start in (_china_time(match.get("start_time")),)
+            ):
+                return league.league_id
+        raise RuntimeError("No officially started league has a completed match yet")
 
     def sync_league_bp(
         self,
@@ -130,11 +182,8 @@ class SyncService:
             finished = finished[: max(0, match_limit)]
 
         if incremental:
-            finished_to_sync = [
-                match
-                for match in finished
-                if not self._match_has_complete_battle_data(match.match_id)
-            ]
+            complete_ids = self._complete_match_ids([match.match_id for match in finished])
+            finished_to_sync = [match for match in finished if match.match_id not in complete_ids]
         else:
             finished_to_sync = finished
 
@@ -160,6 +209,11 @@ class SyncService:
         stats = None
         if recompute_stats and finished_to_sync:
             stats = recompute_hero_bp_stats(self.db, lid)
+
+        # Keep factual observation counts current even if later analysis/training
+        # fails. This runs once per league sync, never once per battle.
+        from app.services.static_publisher import publish_factual_catalog
+        publish_factual_catalog(self.db)
 
         return {
             "league_id": lid,
@@ -187,17 +241,45 @@ class SyncService:
         is available. Treat that as incomplete so the *same new match* is
         retried on the next run instead of silently publishing partial data.
         """
-        battle_ids = list(
-            self.db.scalars(select(Battle.battle_id).where(Battle.match_id == match_id))
-        )
-        if not battle_ids:
-            return False
-        for battle_id in battle_ids:
-            if self.db.scalar(
-                select(BattleBp.id).where(BattleBp.battle_id == battle_id).limit(1)
-            ) is None:
-                return False
-        return True
+        return match_id in self._complete_match_ids([match_id])
+
+    def _complete_match_ids(self, match_ids: list[str]) -> set[str]:
+        """Only skip a final series when every expected game has full detail."""
+        complete = set()
+        for offset in range(0, len(match_ids), 500):
+            ids = match_ids[offset:offset + 500]
+            battle_ids = select(Battle.battle_id).where(Battle.match_id.in_(ids))
+            def bp_count(action, camp):
+                return func.count(func.distinct(case(
+                    ((BattleBp.action_type == action) & (BattleBp.camp == camp) & (BattleBp.hero_id > 0), BattleBp.hero_id))))
+            bp = select(BattleBp.battle_id, bp_count(1, 1).label("blue_picks"),
+                        bp_count(1, 2).label("red_picks"), bp_count(0, 1).label("blue_bans"),
+                        bp_count(0, 2).label("red_bans")).where(
+                            BattleBp.battle_id.in_(battle_ids)).group_by(BattleBp.battle_id).subquery()
+            def player_count(camp):
+                return func.count(func.distinct(case(
+                    ((BattlePlayer.camp == camp) & (BattlePlayer.hero_id > 0) & (BattlePlayer.player_name != ""), BattlePlayer.hero_id))))
+            players = select(BattlePlayer.battle_id, player_count(1).label("blue"),
+                             player_count(2).label("red")).where(
+                                 BattlePlayer.battle_id.in_(battle_ids)).group_by(BattlePlayer.battle_id).subquery()
+            full_game = ((bp.c.blue_picks == 5) & (bp.c.red_picks == 5)
+                         & (((bp.c.blue_bans == 4) & (bp.c.red_bans == 4))
+                            | ((bp.c.blue_bans == 5) & (bp.c.red_bans == 5))
+                            | ((bp.c.blue_bans == 0) & (bp.c.red_bans == 0)))
+                         & (players.c.blue == 5) & (players.c.red == 5)
+                         & Battle.win_camp.in_([1, 2]))
+            expected = Match.camp1_score + Match.camp2_score
+            rows = self.db.scalars(select(Match.match_id).join(Battle, Battle.match_id == Match.match_id)
+                .outerjoin(bp, bp.c.battle_id == Battle.battle_id)
+                .outerjoin(players, players.c.battle_id == Battle.battle_id)
+                .where(Match.match_id.in_(ids), Match.status == FINISHED_MATCH_STATUS, expected > 0)
+                .group_by(Match.match_id, Match.camp1_score, Match.camp2_score)
+                .having(func.count(Battle.id) == expected,
+                        func.count(func.distinct(Battle.battle_seq)) == expected,
+                        func.min(Battle.battle_seq) == 1, func.max(Battle.battle_seq) == expected,
+                        func.sum(case((full_game, 0), else_=1)) == 0))
+            complete.update(rows)
+        return complete
 
     def _sync_matches(self, league_id: str) -> int:
         payload = self.api.get_matches(league_id)
@@ -244,6 +326,10 @@ class SyncService:
         for team_id, (team_name, team_icon) in teams.items():
             self._upsert_team(team_id, team_name, team_icon)
         self.db.commit()
+        # Fixtures and finished-series status are facts even when battle-detail
+        # fetching subsequently fails or is interrupted.
+        from app.services.static_publisher import publish_factual_catalog
+        publish_factual_catalog(self.db)
         return count
 
     def _sync_match_battles_and_bp(self, match: Match) -> dict[str, Any]:
@@ -275,50 +361,55 @@ class SyncService:
             battle_id = str(node.get("battle_id") or "")
             if not battle_id:
                 continue
-            existing = self.db.scalar(select(Battle).where(Battle.battle_id == battle_id))
-            fields = {
-                "match_id": match.match_id,
-                "league_id": match.league_id,
-                "battle_seq": int(node.get("battle_seq") or 0),
-                "win_camp": int(node.get("win_camp") or 0),
-                "game_duration": int(node.get("game_duration") or 0),
-                "status": int(node.get("status") or 0),
-            }
-            if existing:
-                for key, value in fields.items():
-                    setattr(existing, key, value)
-            else:
-                self.db.add(Battle(battle_id=battle_id, **fields))
-            battle_count += 1
-            self.db.flush()
-
             self._sleep()
             payload = self.api.get_battle_detail(battle_id)
-            if not payload or payload.get("code") != 200:
-                logger.warning("Battle detail missing for %s", battle_id)
-                detail_errors += 1
-                continue
-            data = payload.get("data") or {}
-            if not isinstance(data, dict):
-                logger.warning("Unexpected battle detail shape for %s", battle_id)
-                detail_errors += 1
-                continue
+            try:
+                existing = self.db.scalar(select(Battle).where(Battle.battle_id == battle_id))
+                fields = {
+                    "match_id": match.match_id,
+                    "league_id": match.league_id,
+                    "battle_seq": int(node.get("battle_seq") or 0),
+                    "win_camp": int(node.get("win_camp") or 0),
+                    "game_duration": int(node.get("game_duration") or 0),
+                    "status": int(node.get("status") or 0),
+                }
+                if existing:
+                    for key, value in fields.items():
+                        setattr(existing, key, value)
+                else:
+                    self.db.add(Battle(battle_id=battle_id, **fields))
+                battle_count += 1
+                self.db.flush()
 
-            result = self._persist_battle_detail(
-                battle=existing or self.db.scalar(
-                    select(Battle).where(Battle.battle_id == battle_id)
-                ),
-                match=match,
-                data=data,
-            )
-            bp_total += result["bp_rows"]
-            battle_player_total += result["battle_player_rows"]
-            performance_rows += result["performance_rows"]
-            team_ids.update(result["team_ids"])
-            player_keys.update(result["player_keys"])
-            self.db.flush()
+                if not payload or payload.get("code") != 200:
+                    logger.warning("Battle detail missing for %s", battle_id)
+                    detail_errors += 1
+                    self.db.commit()
+                    continue
+                data = payload.get("data") or {}
+                if not isinstance(data, dict):
+                    logger.warning("Unexpected battle detail shape for %s", battle_id)
+                    detail_errors += 1
+                    self.db.commit()
+                    continue
 
-        self.db.commit()
+                result = self._persist_battle_detail(
+                    battle=existing or self.db.scalar(
+                        select(Battle).where(Battle.battle_id == battle_id)
+                    ),
+                    match=match,
+                    data=data,
+                )
+                bp_total += result["bp_rows"]
+                battle_player_total += result["battle_player_rows"]
+                performance_rows += result["performance_rows"]
+                team_ids.update(result["team_ids"])
+                player_keys.update(result["player_keys"])
+                self.db.commit()
+            except BaseException:
+                self.db.rollback()
+                raise
+
         return {
             "battles": battle_count,
             "bp_rows": bp_total,

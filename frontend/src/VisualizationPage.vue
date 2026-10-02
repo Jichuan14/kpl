@@ -1,24 +1,25 @@
 <script setup>
+import { createSeasonStartup } from "./seasonStartup.js";
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import {
   fetchMetaHistory,
   fetchPatternManifest,
   fetchVisualizationPatterns,
 } from "./api";
-import { selectedLeagueId } from "./selectedLeague";
-import { useLatestRequest } from "./composables/useLatestRequest";
-import { useSeasonCatalog } from "./composables/useSeasonCatalog";
+import { selectedFactualLeagueId } from "./selectedFactualLeague";
+import { createFactualLoader, hasSeasonObservations } from "./factualResource.js";
+import { useFactualSeasonCatalog } from "./composables/useFactualSeasonCatalog";
 import { heroAsset } from "./heroAssets";
 import { language, t } from "./i18n";
 import { finishStartupLoading } from "./startupLoader";
 
-const { seasons, loadSeasons } = useSeasonCatalog();
-const latestPatterns = useLatestRequest();
-const leagueId = selectedLeagueId;
+const { seasons, loadSeasons } = useFactualSeasonCatalog();
+const leagueId = selectedFactualLeagueId;
 const payload = shallowRef(null);
 const loading = ref(false);
 const metaLoading = ref(false);
 const error = ref("");
+const noInformation = ref(false);
 const metaHistory = ref([]);
 const selectedMetaHeroId = ref("");
 const hoveredMetaPoint = ref(null);
@@ -35,7 +36,6 @@ const search = ref("");
 const debouncedSearch = ref("");
 let searchTimer = null;
 let relationScrollY = null;
-let patternLoadVersion = 0;
 
 const relationOptions = [
   { value: "counter_pick", label: "Counter picks", short: "Counter picks" },
@@ -246,41 +246,44 @@ function metaPickWidth(hero) {
   )}%`;
 }
 
-async function loadPatterns() {
-  if (!leagueId.value) return;
-  const loadVersion = ++patternLoadVersion;
-  loading.value = true;
-  error.value = "";
-  try {
-    const result = await latestPatterns(async (signal, current) => {
-      const [manifest, patterns] = await Promise.all([
-      fetchPatternManifest(leagueId.value, { signal }),
-      fetchVisualizationPatterns({
-        leagueId: leagueId.value,
-        minSelections: 2,
-        relation: relation.value,
-        context: context.value,
-        signal,
-      }),
-    ]);
-      return current() ? { ...manifest, rows: patterns.rows || [] } : null;
-    });
-    if (!result) return;
-    payload.value = result;
-  } catch (err) {
-    if (err.name === "AbortError") return;
+const loadPatterns = createFactualLoader({
+  start() {
     payload.value = null;
-    error.value = err.message || "Could not load this season's patterns.";
-  } finally {
-      if (loadVersion !== patternLoadVersion) return;
-      loading.value = false;
-      if (relationScrollY != null) {
-        const scrollY = relationScrollY;
-        relationScrollY = null;
-        window.requestAnimationFrame(() => window.scrollTo({ top: scrollY, behavior: "auto" }));
-      }
-  }
-}
+    noInformation.value = false;
+    loading.value = true;
+    error.value = "";
+  },
+  async load(signal) {
+    const id = leagueId.value;
+    const season = seasons.value.find((item) => item.league_id === id);
+    if (!id || !season) return null;
+    if (!hasSeasonObservations(season) || !season.statistics_ready) return null;
+    const selectedRelation = relation.value;
+    const selectedContext = context.value;
+    const manifest = await fetchPatternManifest(id, { cache: false, signal });
+    // No shard is produced for a relation with no qualifying published rows.
+    const patterns = Number(manifest.source_counts?.[selectedRelation] || 0) === 0
+      ? { rows: [] }
+      : await fetchVisualizationPatterns({ leagueId: id, minSelections: 2,
+          relation: selectedRelation, context: selectedContext, signal });
+    return { ...manifest, rows: patterns.rows || [] };
+  },
+  value(next) {
+    payload.value = next;
+    noInformation.value = !Object.values(next.source_counts || {}).some((count) => Number(count) > 0) && !(next.meta_heroes || []).length;
+  },
+  missing() { noInformation.value = true; },
+  error(err) { error.value = err.message || "Could not load season data."; },
+  finish() {
+    loading.value = false;
+    if (relationScrollY != null) {
+      const scrollY = relationScrollY;
+      relationScrollY = null;
+      window.requestAnimationFrame(() => window.scrollTo({ top: scrollY, behavior: "auto" }));
+    }
+  },
+});
+onBeforeUnmount(() => loadPatterns.cancel());
 
 async function loadMetaHistory() {
   metaLoading.value = true;
@@ -301,10 +304,10 @@ async function loadMetaHistory() {
   }
 }
 
+const seasonStartup = createSeasonStartup(loadSeasons, loadPatterns);
 onMounted(async () => {
   try {
-    await loadSeasons();
-    await loadPatterns();
+    await seasonStartup.initialize();
     await loadMetaHistory();
   } catch (err) {
     error.value = err.message || "Could not load visualization data.";
@@ -313,7 +316,7 @@ onMounted(async () => {
   }
 });
 
-watch(leagueId, loadPatterns);
+watch(leagueId, seasonStartup.changed, { flush: "sync" });
 watch([relation, context], loadPatterns);
 watch(search, (value) => {
   if (searchTimer) window.clearTimeout(searchTimer);
@@ -343,6 +346,7 @@ onBeforeUnmount(() => {
     <p v-if="error" class="visual-message error">{{ error }}</p>
     <p v-else-if="loading" class="visual-message">{{ $t("Loading season data…") }}</p>
 
+    <p v-if="noInformation && !loading && !error" class="visual-message">{{ $t("No current information") }}</p>
     <template v-if="payload && !loading">
       <section
         v-if="topMetaHeroes.length"
@@ -425,6 +429,7 @@ onBeforeUnmount(() => {
           <div>
             <p class="visual-eyebrow">{{ $t("Season comparison") }}</p>
             <h2>{{ $t("Meta evolution") }}</h2>
+            <p>{{ $t("Historical season evidence; each point belongs to its labeled season.") }}</p>
             <p>{{ $t("Track how opening-draft priority rises and falls between seasons.") }}</p>
           </div>
           <div class="meta-hero-controls">

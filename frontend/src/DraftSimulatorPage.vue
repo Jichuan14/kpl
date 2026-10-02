@@ -1,7 +1,10 @@
 <script setup>
+import { createRequestScope } from "./requestScope.js";
+import { createSeasonStartup } from "./seasonStartup.js";
+import ModelCoverageNote from "./ModelCoverageNote.vue";
 import { computed, onBeforeUnmount, onMounted, ref, toRaw, watch } from "vue";
 import {
-  fetchDraftModel,
+  fetchActiveModel,  fetchDraftModel,
   fetchDraftMoveEvidence,
   fetchLiveMatch,
   fetchLiveWinnerPredictions,
@@ -10,7 +13,6 @@ import {
   fetchSelectionCommentary,
   fetchSeasonTeams,
   fetchUpcomingMatch,
-  fetchVisualizationSeasons,
   recommendLineup,
   scoreLineup,
   simulateDraft,
@@ -22,7 +24,9 @@ import DraftScenarioPanel from "./DraftScenarioPanel.vue";
 import DraftVersionTree from "./DraftVersionTree.vue";
 import WhatIfWorkspaceModal from "./WhatIfWorkspaceModal.vue";
 import TeamCombobox from "./TeamCombobox.vue";
-import { selectAvailableLeague, selectedLeagueId } from "./selectedLeague";
+import { createModelSession } from "./modelSession";
+import { selectedLeagueId } from "./selectedLeague";
+import { useSeasonCatalog } from "./composables/useSeasonCatalog";
 import { heroAsset } from "./heroAssets";
 import { messages, t as uiT } from "./i18n";
 import { finishStartupLoading } from "./startupLoader";
@@ -30,7 +34,9 @@ import { MAX_SCENARIO_NODES, nextScenarioNode, snapshotDraft } from "./composabl
 import { actionsSinceCheckpoint, appendVersionCheckpoint, createVersionCheckpoint, findDeepestVersionPrefix, findVersionCheckpoint, restoreVersionTree, sameVersionHistory, snapshotVersionState } from "./composables/draftVersionTree";
 
 const leagueId = selectedLeagueId;
-const seasons = ref([]);
+const modelSession = createModelSession(fetchActiveModel);
+const modelVersion = ref("");
+const { seasons, loadSeasons } = useSeasonCatalog();
 const model = ref(null);
 const result = ref(null);
 const recommendationResult = ref(null);
@@ -47,6 +53,7 @@ const moveEvidence = ref(null);
 const moveEvidenceLoading = ref(false);
 const moveEvidenceError = ref("");
 const moveEvidenceHistoryKey = ref("");
+const pendingMoveEvidence = ref(null);
 const settingsOpen = ref(false);
 let commentaryRequestNumber = 0;
 let commentaryAbortController = null;
@@ -83,7 +90,11 @@ const liveScheduleClock = ref(Date.now());
 let liveMatchPollTimer = null;
 let liveMatchCheckTimer = null;
 let liveScheduleTimer = null;
-let liveMatchRequestNumber = 0;
+const liveRequests = createRequestScope();
+function invalidateLiveMatch() {
+  liveRequests.invalidate();
+  liveMatchLoading.value = false;
+}
 const selectedTeamIds = ref({ [TEAM_A]: "", [TEAM_B]: "" });
 
 function clearCommentary() {
@@ -108,6 +119,7 @@ function clearMoveEvidence() {
   moveEvidenceLoading.value = false;
   moveEvidenceError.value = "";
   moveEvidenceHistoryKey.value = "";
+  pendingMoveEvidence.value = null;
 }
 const teamsBySide = ref({ blue: TEAM_A, red: TEAM_B });
 const seriesWins = ref({ [TEAM_A]: 0, [TEAM_B]: 0 });
@@ -282,6 +294,7 @@ const whatIfSimulationContext = computed(() => {
   if (!blueTeam || !redTeam) return null;
   return {
     leagueId: leagueId.value,
+    modelVersion: modelVersion.value,
     modelType,
     blueTeam,
     redTeam,
@@ -780,7 +793,7 @@ function selectedTeamsMatchFixture() {
 
 function scheduleLiveScheduleClock() {
   stopLiveScheduleClock();
-  if (!teamsReady.value || !selectedTeamsMatchFixture()) return;
+  if (liveRequests.disposed || !teamsReady.value || !selectedTeamsMatchFixture()) return;
   const checkDelay = scheduledLiveCheckDelay(upcomingMatch.value);
   if (checkDelay === null) return;
   const waits = [checkDelay - 5 * 60_000, checkDelay].filter((wait) => wait > 0);
@@ -794,7 +807,7 @@ function scheduleLiveScheduleClock() {
 
 function scheduleLiveMatchCheck() {
   stopLiveMatchCheckSchedule();
-  if (!teamsReady.value || !selectedTeamsMatchFixture()) return;
+  if (liveRequests.disposed || !teamsReady.value || !selectedTeamsMatchFixture()) return;
   const delay = scheduledLiveCheckDelay(upcomingMatch.value);
   if (delay === null) return;
   const wait = Math.max(0, delay);
@@ -805,6 +818,7 @@ function scheduleLiveMatchCheck() {
 }
 
 function startLiveMatchPolling() {
+  if (liveRequests.disposed) return;
   stopLiveMatchPolling();
   // The browser checks in frequently enough to react to cache expiry, while
   // the backend itself limits official KPL requests to one per three minutes.
@@ -862,12 +876,14 @@ async function applyLiveMatchState(state) {
 }
 
 async function moveToNextScheduledFixture() {
+  const targetLeague = leagueId.value;
   let fixture;
   try {
-    fixture = await fetchUpcomingMatch(leagueId.value, { nextOnly: true });
+    fixture = await fetchUpcomingMatch(targetLeague, { nextOnly: true });
   } catch {
     return;
   }
+  if (liveRequests.disposed || targetLeague !== leagueId.value) return;
   if (!fixture || String(fixture.match_id || "") === String(liveMatch.value?.match?.match_id || "")) {
     return;
   }
@@ -903,7 +919,8 @@ async function moveToNextScheduledFixture() {
 
 async function refreshLiveMatch(manual = false) {
   if (!leagueId.value || !teamsReady.value || !upcomingMatch.value?.match_id) return;
-  const requestNumber = ++liveMatchRequestNumber;
+  const operation = liveRequests.begin();
+  if (!operation) return;
   liveMatchLoading.value = true;
   try {
     const payload = {
@@ -911,11 +928,12 @@ async function refreshLiveMatch(manual = false) {
       teamAId: String(selectedTeamIds.value[TEAM_A]),
       teamBId: String(selectedTeamIds.value[TEAM_B]),
       matchId: String(upcomingMatch.value.match_id),
+      signal: operation.signal,
     };
     const state = manual
       ? await requestLiveMatchRefresh(payload)
       : await fetchLiveMatch(payload);
-    if (requestNumber !== liveMatchRequestNumber) return;
+    if (!operation.isCurrent()) return;
     liveMatch.value = state;
     if (!liveFollowing.value && shouldRestoreLiveFollow(state)) {
       await followLiveMatch({ persist: false });
@@ -923,6 +941,7 @@ async function refreshLiveMatch(manual = false) {
     }
     if (isOfficialSeriesComplete(state)) {
       if (liveFollowing.value) await applyLiveMatchState(state);
+      if (!operation.isCurrent()) return;
       stopFollowingLiveMatch();
       stopLiveMatchPolling();
       stopLiveMatchCheckSchedule();
@@ -936,12 +955,14 @@ async function refreshLiveMatch(manual = false) {
       return;
     }
     await loadLiveWinnerPredictions();
+    if (!operation.isCurrent()) return;
     const gameSignature = completedGameSignature(state);
     if (gameSignature !== liveAppliedGameSignature.value) {
       // Only a newly completed official battle replaces the temporary local BP
       // board. Late hero-detail updates for that battle keep the same stable
       // battle signature and therefore leave the current game's BP untouched.
       await applyLiveMatchState(state);
+      if (!operation.isCurrent()) return;
       liveAppliedGameSignature.value = gameSignature;
     }
     startLiveMatchPolling();
@@ -949,7 +970,7 @@ async function refreshLiveMatch(manual = false) {
     // A temporary official API failure should not remove the last usable live
     // context from a visitor's simulator.
   } finally {
-    if (requestNumber === liveMatchRequestNumber) liveMatchLoading.value = false;
+    if (operation.isCurrent()) liveMatchLoading.value = false;
   }
 }
 
@@ -975,13 +996,12 @@ function stopFollowingLiveMatch({ forget = true } = {}) {
   if (forget) clearLiveFollowPreference();
 }
 
-async function loadSeasons() {
-  seasons.value = (await fetchVisualizationSeasons()) || [];
-  selectAvailableLeague(seasons.value);
-}
-
+let modelLoadVersion = 0;
 async function loadModel() {
-  if (!leagueId.value) return;
+  const version = ++modelLoadVersion;
+  invalidateLiveMatch();
+  const operationLeagueId = leagueId.value;
+  if (!operationLeagueId) return;
   loading.value = true;
   error.value = "";
   result.value = null;
@@ -1011,11 +1031,14 @@ async function loadModel() {
   resetSeriesTeams();
   pickerTarget.value = "draft";
   try {
-    const [draftModel, teams, fixture] = await Promise.all([
-      fetchDraftModel(leagueId.value),
-      fetchSeasonTeams(leagueId.value),
-      fetchUpcomingMatch(leagueId.value),
+    modelVersion.value = await modelSession.version();
+    const [draftModel, factualTeams, fixture] = await Promise.all([
+      fetchDraftModel(operationLeagueId, modelVersion.value),
+      fetchSeasonTeams(operationLeagueId),
+      fetchUpcomingMatch(operationLeagueId),
     ]);
+    if (version !== modelLoadVersion || operationLeagueId !== leagueId.value) return;
+    const teams = factualTeams.length ? factualTeams : (draftModel.model_reference_teams || []).map((team) => ({ ...team, team_name: `${team.team_name} · ${t("Historical model context")}` }));
     model.value = draftModel;
     upcomingMatch.value = fixture;
     if ([5, 7].includes(Number(fixture?.bo))) bestOf.value = Number(fixture.bo);
@@ -1039,10 +1062,11 @@ async function loadModel() {
       };
     }
   } catch (err) {
+    if (version !== modelLoadVersion || operationLeagueId !== leagueId.value) return;
     model.value = null;
     error.value = err.message || "Could not load this season's draft model.";
   } finally {
-    loading.value = false;
+    if (version === modelLoadVersion) loading.value = false;
   }
 }
 
@@ -1085,6 +1109,7 @@ async function forecast() {
   try {
     result.value = await simulateDraft({
       league_id: leagueId.value,
+      model_version: modelVersion.value,
       model_type: modelType,
       blue_team_id: String(blue.team_id),
       blue_team_name: blue.team_name,
@@ -1115,6 +1140,7 @@ async function scoreCompletedLineup() {
   try {
     const score = await scoreLineup({
       league_id: leagueId.value,
+      model_version: modelVersion.value,
       blue_team_id: String(blue.team_id),
       red_team_id: String(red.team_id),
       blue_hero_ids: [...board.value.blue_picks],
@@ -1142,6 +1168,7 @@ async function recommendCurrentDraft() {
   try {
     const recommendations = await recommendLineup({
       league_id: leagueId.value,
+      model_version: modelVersion.value,
       model_type: modelType,
       blue_team_id: String(blue.team_id),
       blue_team_name: blue.team_name,
@@ -1182,6 +1209,7 @@ async function loadMoveEvidence(preSelectionState, step, heroId, expectedHistory
   try {
     const payload = await fetchDraftMoveEvidence({
       league_id: leagueId.value,
+      model_version: modelVersion.value,
       schedule: model.value?.draft_sequence?.length === 20 ? "standard_20" : "standard_18",
       battle_seq: Number(seriesGame.value),
       bp_order: Number(step.bp_order),
@@ -1214,6 +1242,12 @@ async function loadMoveEvidence(preSelectionState, step, heroId, expectedHistory
   }
 }
 
+function calculateMoveEvidence() {
+  const pending = pendingMoveEvidence.value;
+  if (!pending || moveEvidenceLoading.value || historyEvidenceKey() !== pending.historyKey) return;
+  void loadMoveEvidence(pending.preSelectionState, pending.step, pending.heroId, pending.historyKey);
+}
+
 async function chooseHero(heroId) {
   if (!teamsReady.value || isPeakDuel.value || liveHeroSelectionLocked.value || simulating.value) return;
   if (pickerTarget.value !== "draft") {
@@ -1240,6 +1274,7 @@ async function chooseHero(heroId) {
     commentaryLoading.value = true;
     fetchSelectionCommentary({
       league_id: leagueId.value,
+      model_version: modelVersion.value,
       ...preSelectionState,
       action: currentStep.value.action,
       side: currentStep.value.side,
@@ -1262,8 +1297,15 @@ async function chooseHero(heroId) {
   }`;
   board.value[field].push(Number(heroId));
   history.value.push({ field, heroId: Number(heroId), bpOrder: bpOrder.value });
+  clearMoveEvidence();
   const evidenceKey = historyEvidenceKey();
-  void loadMoveEvidence(preSelectionState, currentStep.value, heroId, evidenceKey);
+  pendingMoveEvidence.value = {
+    preSelectionState,
+    step: { ...currentStep.value },
+    heroId: Number(heroId),
+    historyKey: evidenceKey,
+  };
+  moveEvidenceHistoryKey.value = evidenceKey;
   bpOrder.value += 1;
   search.value = "";
   syncVersionTreeWithBoard();
@@ -1283,7 +1325,8 @@ async function expandScenario(hero, parent = null) {
   scenarioLoadingId.value = node.id;
   scenarioError.value = "";
   try {
-    const result = await simulateDraftScenario({ league_id: leagueId.value, ...node.state, forced_hero_id: Number(hero.hero_id) }, { signal: controller.signal });
+    const result = await simulateDraftScenario({ league_id: leagueId.value,
+      model_version: modelVersion.value, ...node.state, forced_hero_id: Number(hero.hero_id) }, { signal: controller.signal });
     if (requestNumber === scenarioRequestNumber && !scenarioStale.value) {
       scenarioNodes.value = scenarioNodes.value.map((item) => item.id === node.id ? { ...item, result } : item);
     }
@@ -1666,10 +1709,10 @@ function resistMobileBoardWheel(event) {
   window.scrollBy(0, event.deltaY - resistedAmount + resistedAmount * 0.18);
 }
 
+const seasonStartup = createSeasonStartup(loadSeasons, loadModel);
 onMounted(async () => {
   try {
-    await loadSeasons();
-    await loadModel();
+    await seasonStartup.initialize();
   } catch (err) {
     error.value = err.message || "Could not load the draft simulator.";
   } finally {
@@ -1677,11 +1720,16 @@ onMounted(async () => {
   }
 });
 
-watch(leagueId, loadModel);
+watch(leagueId, seasonStartup.changed, { flush: "sync" });
+watch(() => [leagueId.value, selectedTeamIds.value[TEAM_A], selectedTeamIds.value[TEAM_B], upcomingMatch.value?.match_id],
+  invalidateLiveMatch, { flush: "sync" });
 watch(
   selectedTeamIds,
   async () => {
+    invalidateLiveMatch();
+    const target = JSON.stringify([leagueId.value, selectedTeamIds.value]);
     clearCommentary();
+    clearMoveEvidence();
     stopFollowingLiveMatch({ forget: false });
     stopLiveMatchPolling();
     liveMatch.value = null;
@@ -1689,6 +1737,7 @@ watch(
     liveAppliedGameSignature.value = "";
     liveScheduleClock.value = Date.now();
     await forecast();
+    if (liveRequests.disposed || target !== JSON.stringify([leagueId.value, selectedTeamIds.value])) return;
     if (shouldRestoreScheduledFollow()) {
       liveFollowing.value = true;
       liveFollowDismissed.value = true;
@@ -1700,6 +1749,8 @@ watch(
 );
 
 onBeforeUnmount(() => {
+  liveRequests.dispose();
+  modelLoadVersion += 1;
   clearCommentary();
   clearMoveEvidence();
   scenarioAbortController?.abort();
@@ -1725,13 +1776,7 @@ onBeforeUnmount(() => {
       </div>
       <div class="simulator-header-controls">
         <div class="simulator-season">
-          <label for="simulator-season-select">赛事</label>
           <div class="simulator-control-row">
-            <select id="simulator-season-select" v-model="leagueId" :disabled="loading">
-              <option v-for="season in seasons" :key="season.league_id" :value="season.league_id">
-                {{ season.year }} · {{ season.league_name }}{{ $t("· S") }}{{ season.season }}
-              </option>
-            </select>
             <div class="simulator-settings">
               <button
                 type="button"
@@ -1767,6 +1812,7 @@ onBeforeUnmount(() => {
               </div>
             </div>
           </div>
+          <ModelCoverageNote :metadata="model" />
           <small v-if="model">{{ number(model.training_decisions) }}{{ $t("条历史 BP 操作") }}</small>
         </div>
       </div>
@@ -2166,7 +2212,9 @@ onBeforeUnmount(() => {
               :payload="moveEvidence"
               :loading="moveEvidenceLoading"
               :error="moveEvidenceError"
+              :ready="Boolean(pendingMoveEvidence)"
               wide
+              @calculate="calculateMoveEvidence"
             />
           </section>
 
@@ -2275,6 +2323,7 @@ onBeforeUnmount(() => {
             <div v-show="assistantTab === 'coach'" class="assistant-view coach-view" role="tabpanel">
               <DraftCoachPanel
                 :league-id="leagueId"
+                :model-version="modelVersion"
                 :season-name="selectedSeason?.league_name || leagueId"
                 :draft-state="coachDraftState"
                 :force-chinese="true"

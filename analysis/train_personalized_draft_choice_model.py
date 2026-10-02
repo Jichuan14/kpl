@@ -16,12 +16,13 @@ import numpy as np
 
 ANALYSIS = Path(__file__).resolve().parent; ROOT = ANALYSIS.parent
 sys.path.insert(0, str(ANALYSIS / "sequence_training"))
+sys.path.insert(0, str(ROOT / "backend"))
 
 from calibration import PredictionRecords, score_metrics  # noqa: E402
 from models import ACTION_INDEX, load_checkpoint, prepare_data, seed_everything  # noqa: E402
 from personalized_models import FamiliarityResidual  # noqa: E402
 from player_context.dataset import candidate_familiarity_features, compact_familiarity_context  # noqa: E402
-from player_context.history import TemporalContextBuilder, load_historical_games  # noqa: E402
+from player_context.history import TemporalContextBuilder, load_historical_games, parse_date  # noqa: E402
 from sequence_training.splits import validate_split_manifest  # noqa: E402
 
 
@@ -35,7 +36,7 @@ def source_rows(seasons: list[str]) -> dict[tuple[str,str,int],dict[str,Any]]:
         with (ANALYSIS/"exports"/season/"matches.jsonl").open(encoding="utf-8") as source:
             for line in source:
                 if line.strip():
-                    row=json.loads(line); dates[str(row["match_id"])]=date.fromisoformat(str(row["start_time"])[:10])
+                    row=json.loads(line); dates[str(row["match_id"])]=parse_date(str(row["start_time"]))
     rows={}
     for season in seasons:
         with (ANALYSIS/"exports"/season/"bp_decisions.jsonl").open(encoding="utf-8") as source:
@@ -60,16 +61,27 @@ class Extended:
         return result
 
 
-def extend(base: Any, rows: dict[tuple[str,str,int],dict[str,Any]], builder: TemporalContextBuilder) -> Extended:
+def extend(base: Any, rows: dict[tuple[str,str,int],dict[str,Any]], builder: TemporalContextBuilder, *, frozen_cutoff: date | None = None) -> Extended:
     import torch
-    features=np.empty((len(base),len(builder.hero_ids),9),dtype=np.float16)
+    features=np.empty((len(base),len(builder.hero_ids),9),dtype=np.float32)
     cache={}
+    snapshot={"hero_ids":list(builder.hero_ids),"pairs":{}}
+    known_teams = {appearance.team_id for game in builder.games if frozen_cutoff is not None and game.event_date < frozen_cutoff for appearance in game.appearances}
     for index,(match,battle,position) in enumerate(zip(base.match_ids,base.battle_ids,base.next_positions.tolist(),strict=True)):
-        row=rows[(match,battle,int(position))]; cutoff=date.fromisoformat(row["event_date"])
+        row=rows[(match,battle,int(position))]; cutoff=frozen_cutoff or date.fromisoformat(row["event_date"])
         key=(str(row["acting_team_id"]),str(row["opponent_team_id"]),cutoff)
+        if frozen_cutoff is not None and (key[0] not in known_teams or key[1] not in known_teams):
+            features[index] = 0.0
+            continue
         context=cache.get(key)
         if context is None:
             context=compact_familiarity_context(builder.build(key[0],key[1],cutoff));cache[key]=context
+        if frozen_cutoff is not None:
+            from app.services.player_draft_context import candidate_features
+            snapshot["pairs"][f"{key[0]}|{key[1]}"]={"familiarity":context["familiarity"].tolist(),"hero_role_prior":context["hero_role_prior"].tolist(),"coverage":context["coverage"]}
+            state={"blue_picks":row.get("current_team_picks",[]),"red_picks":row.get("current_opponent_picks",[]),"blue_used_previous_battles":row.get("team_used_in_previous_battles",[]),"red_used_previous_battles":row.get("opponent_used_in_previous_battles",[])}
+            features[index],_reason=candidate_features(snapshot,key[0],key[1],state,"blue")
+            continue
         features[index]=candidate_familiarity_features(context,own_picks=[int(v) for v in row.get("current_team_picks",[])],opponent_picks=[int(v) for v in row.get("current_opponent_picks",[])],own_previous=row.get("team_used_in_previous_battles",[]),opponent_previous=row.get("opponent_used_in_previous_battles",[]),hero_ids=list(builder.hero_ids))
     return Extended(base,{"candidate_features":torch.from_numpy(features)})
 
@@ -98,11 +110,15 @@ def main() -> None:
     args=parser.parse_args(); import torch
     torch.set_num_threads(args.threads);seed_everything(args.seed);device=torch.device("cpu")
     manifest=json.loads(args.split_manifest.read_text());validate_split_manifest(manifest);seasons=[str(v) for v in manifest["source_seasons"]]
-    data=prepare_data(ROOT,target_season=str(manifest["target_season"]),previous_seasons=len(seasons)-1,validation_matches=len(manifest["splits"]["validation"]),holdout_matches=len(manifest["splits"]["calibration"])+len(manifest["splits"]["holdout"]),holdout_offset_matches=int(manifest.get("holdout_offset_series",0)),recency_decay=.65,winning_pick_weight=1.5)
+    data=prepare_data(ROOT,target_season=str(manifest["target_season"]),previous_seasons=len(seasons)-1,validation_matches=len(manifest["splits"]["validation"]),holdout_matches=len(manifest["splits"]["calibration"])+len(manifest["splits"]["holdout"]),holdout_offset_matches=int(manifest.get("holdout_offset_series",0)),recency_decay=.65,winning_pick_weight=1.0 if manifest.get("mode")=="rolling" else 1.5, split_manifest=manifest if manifest.get("mode")=="rolling" else None)
     base=load_checkpoint(args.checkpoint,device); payload=torch.load(args.checkpoint,map_location="cpu",weights_only=False)
     if payload["hero_ids"]!=data.hero_ids or payload["team_ids"]!=data.team_ids: raise ValueError("Checkpoint and manifest vocabularies differ")
-    raw=source_rows(seasons);games=load_historical_games([ANALYSIS/"exports"/season/"matches.jsonl" for season in seasons]);builder=TemporalContextBuilder(games,data.hero_ids)
-    train,validation,holdout=extend(data.train,raw,builder),extend(data.validation,raw,builder),extend(data.holdout,raw,builder)
+    from rolling_corpus import training_context_games, frozen_context_date
+    raw=source_rows(seasons)
+    games=training_context_games(manifest) if manifest.get("mode")=="rolling" else load_historical_games([ANALYSIS/"exports"/season/"matches.jsonl" for season in seasons])
+    builder=TemporalContextBuilder(games,data.hero_ids)
+    cutoff=frozen_context_date(manifest) if manifest.get("mode")=="rolling" else None
+    train,validation,holdout=extend(data.train,raw,builder),extend(data.validation,raw,builder,frozen_cutoff=cutoff),extend(data.holdout,raw,builder,frozen_cutoff=cutoff)
     branch=FamiliarityResidual()
     branch.to(device);optimizer=torch.optim.AdamW(branch.parameters(),lr=args.learning_rate,weight_decay=args.weight_decay);generator=torch.Generator().manual_seed(args.seed)
     best=None;best_nll=math.inf;history=[];stale=0

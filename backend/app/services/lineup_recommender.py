@@ -8,6 +8,7 @@ from collections import Counter
 from typing import Any, Iterable
 
 from app.services.draft_simulator import (
+    _prepare_prediction,
     predict_next_action,
     sample_forced_draft_completions,
 )
@@ -159,6 +160,7 @@ def _evaluate_candidate(
     risk_mode: str,
     value_model: LineupValueModel,
     next_step: dict[str, Any],
+    prepared_prediction: tuple,
 ) -> dict[str, Any] | None:
     hero_id = int(policy_row["hero_id"])
     acting_side = str(next_step["side"])
@@ -170,6 +172,7 @@ def _evaluate_candidate(
         rollouts=ROLLOUTS_PER_CANDIDATE,
         seed=None if seed is None else seed + hero_id * 1009,
         model_type=model_type,
+        _prepared_prediction=prepared_prediction,
     )
     completed = [row for row in rollout["completions"] if row.get("completed")]
     scored: list[dict[str, Any]] = []
@@ -275,11 +278,13 @@ def recommend_lineup(
         raise ValueError("top_k must be between 1 and 5")
     if risk_mode not in RISK_PENALTIES:
         raise ValueError(f"Unsupported risk mode: {risk_mode}")
+    prepared_prediction = _prepare_prediction(league_id, state, model_type)
     policy = predict_next_action(
         league_id,
         state,
         model_type=model_type,
         limit=200,
+        _prepared_prediction=prepared_prediction,
     )
     if policy["next_step"]["action"] == "ban":
         return recommend_ban(
@@ -306,6 +311,7 @@ def recommend_lineup(
                 risk_mode=risk_mode,
                 value_model=value_model,
                 next_step=policy["next_step"],
+                prepared_prediction=prepared_prediction,
             )
         )
         is not None

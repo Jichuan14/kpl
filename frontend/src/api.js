@@ -1,3 +1,5 @@
+import { browserDate, shiftDate } from "./matchCalendar.js";
+
 async function request(path, options = {}) {
   let res;
   try {
@@ -77,7 +79,9 @@ async function staticData(path, { signal, cache = true } = {}) {
     throw new Error(`Cannot load published analysis (${err.message}).`);
   }
   if (!res.ok) {
-    throw new Error("Published analysis is not available yet. Run the analysis pipeline.");
+    const error = new Error("Published analysis is not available yet. Run the analysis pipeline.");
+    error.status = res.status;
+    throw error;
   }
   return res.json();
   })();
@@ -95,6 +99,14 @@ export function invalidatePublishedData(leagueId) {
 
 // Kept intentionally small and explicit for deterministic browser-client tests.
 export function resetPublishedDataCacheForTests() { staticCache.clear(); }
+
+export function fetchSiteDefault() {
+  return request("/api/site-default", { cache: "no-store" });
+}
+
+export function saveSiteDefault(leagueId) {
+  return request("/api/leagues/site-default", { method: "PUT", body: JSON.stringify({ league_id: leagueId }) });
+}
 
 export function fetchLeagues() {
   return request("/api/leagues");
@@ -114,15 +126,37 @@ export function fetchDailyMatches({ date } = {}) {
   return request(`/api/leagues/daily-matches${query}`);
 }
 
-export function fetchLiveMatch({ leagueId, teamAId, teamBId, matchId }) {
-  const params = new URLSearchParams({ team_a_id: teamAId, team_b_id: teamBId, match_id: matchId });
-  return request(`/api/leagues/${encodeURIComponent(leagueId)}/live-match?${params}`);
+const calendarCache = new Map();
+export function resetCalendarCacheForTests() { calendarCache.clear(); }
+export function fetchMatchCalendar({ date = browserDate() } = {}) {
+  const now = Date.now();
+  for (const [key, entry] of calendarCache) {
+    if (entry.expiresAt <= now) calendarCache.delete(key);
+  }
+  if (calendarCache.has(date)) return calendarCache.get(date).promise;
+  while (calendarCache.size >= 4) calendarCache.delete(calendarCache.keys().next().value);
+  const params = new URLSearchParams({ start_date: shiftDate(date, -8), end_date: shiftDate(date, 8) });
+  const entry = { expiresAt: Infinity };
+  entry.promise = request(`/api/leagues/daily-matches?${params}`).then((value) => {
+    entry.expiresAt = Date.now() + 60_000;
+    return value;
+  }).catch((error) => {
+    if (calendarCache.get(date) === entry) calendarCache.delete(date);
+    throw error;
+  });
+  calendarCache.set(date, entry);
+  return entry.promise;
 }
 
-export function refreshLiveMatch({ leagueId, teamAId, teamBId, matchId }) {
+export function fetchLiveMatch({ leagueId, teamAId, teamBId, matchId, signal }) {
+  const params = new URLSearchParams({ team_a_id: teamAId, team_b_id: teamBId, match_id: matchId });
+  return request(`/api/leagues/${encodeURIComponent(leagueId)}/live-match?${params}`, { signal });
+}
+
+export function refreshLiveMatch({ leagueId, teamAId, teamBId, matchId, signal }) {
   const params = new URLSearchParams({ team_a_id: teamAId, team_b_id: teamBId, match_id: matchId });
   return request(`/api/leagues/${encodeURIComponent(leagueId)}/live-match/refresh?${params}`, {
-    method: "POST",
+    method: "POST", signal,
   });
 }
 
@@ -157,6 +191,12 @@ export function saveLiveWinnerPrediction({
       team_b_score: teamBScore,
     }),
   });
+}
+
+export function fetchFactualSeasons() {
+  // Visit defaults and options must reflect the live catalog, including newly
+  // synced seasons that have never had artifacts published.
+  return request("/api/leagues?factual=true", { cache: "no-store" });
 }
 
 export function fetchVisualizationSeasons() {
@@ -205,12 +245,21 @@ export function fetchPowerRankings(leagueId, options) {
   return staticData(`/assets/data/${encodeURIComponent(leagueId)}/rankings.json`, options);
 }
 
-export function fetchDraftModel(leagueId) {
+export function fetchActiveModel() {
+  return request("/api/simulations/active-model");
+}
+
+export function fetchDraftModel(leagueId, modelVersion) {
   const params = new URLSearchParams({ league_id: leagueId });
+  if (modelVersion) params.set("model_version", modelVersion);
   return request(`/api/simulations/model?${params}`);
 }
 
-export function fetchLearnedFeatureSpace(leagueId) {
+export function fetchLearnedFeatureSpace(leagueId, modelVersion) {
+  if (modelVersion) {
+    const params = new URLSearchParams({ league_id: leagueId, model_version: modelVersion });
+    return request(`/api/simulations/feature-space?${params}`);
+  }
   const encodedLeagueId = encodeURIComponent(leagueId);
   // Published feature space is validated during publishing. Keep the API fallback
   // for seasons published by an older server that do not have this compact asset.
@@ -220,24 +269,27 @@ export function fetchLearnedFeatureSpace(leagueId) {
   });
 }
 
-export function fetchHeroMatchupRecommendations(payload) {
+export function fetchHeroMatchupRecommendations(payload, { signal } = {}) {
   return request("/api/simulations/hero-matchup", {
     method: "POST",
     body: JSON.stringify(payload),
+    signal,
   });
 }
 
-export function fetchUltimateLineups(leagueId) {
+export function fetchUltimateLineups(leagueId, modelVersion) {
   const params = new URLSearchParams({ league_id: leagueId });
+  if (modelVersion) params.set("model_version", modelVersion);
   return request(`/api/simulations/ultimate-lineups?${params}`);
 }
 
-export function fetchUltimateCounterLineup({ leagueId, targetHeroIds }) {
+export function fetchUltimateCounterLineup({ leagueId, modelVersion, targetHeroIds }) {
   return request("/api/simulations/ultimate-lineups/counter", {
     method: "POST",
     body: JSON.stringify({
       league_id: leagueId,
       target_hero_ids: targetHeroIds,
+      ...(modelVersion ? { model_version: modelVersion } : {}),
     }),
   });
 }
@@ -404,6 +456,21 @@ export function syncLeagues() {
   return request("/api/sync/leagues", { method: "POST" });
 }
 
+export function fetchPipelineJobs() {
+  return request("/api/jobs?limit=30");
+}
+
+export function fetchPipelineJob(jobId) {
+  return request(`/api/jobs/${encodeURIComponent(jobId)}`);
+}
+
+export function queueFullUpdate(leagueId) {
+  return request("/api/jobs/full-update", {
+    method: "POST",
+    body: JSON.stringify({ league_id: leagueId }),
+  });
+}
+
 export function fetchDataStatus(leagueId) {
   const params = new URLSearchParams({ league_id: leagueId });
   return request(`/api/data/status?${params}`);
@@ -420,10 +487,6 @@ export function publishFrontendAssets(leagueId) {
   return request("/api/pipeline/publish", {
     method: "POST",
     body: JSON.stringify({ league_id: leagueId }),
-  }).then((result) => {
-    // Publishing changes the season catalog and cross-season meta history too.
-    invalidatePublishedData();
-    return result;
   });
 }
 

@@ -7,12 +7,15 @@ const props = defineProps({
   payload: { type: Object, default: null },
   loading: { type: Boolean, default: false },
   error: { type: String, default: "" },
+  ready: { type: Boolean, default: false },
   wide: { type: Boolean, default: false },
 });
+const emit = defineEmits(["calculate"]);
 
 const zh = computed(() => language.value === "zh-CN");
 const copy = computed(() => zh.value ? {
-  eyebrow: "历史证据", title: "本步意图", waiting: "完成一步禁用或选择后，这里会显示可能的后续意图。",
+  eyebrow: "历史证据", title: "本步意图", waiting: "完成一步禁用或选择后，即可计算意图。", ready: "点击“计算意图”查看这一步的历史证据。",
+  calculate: "计算意图", recalculate: "重新计算", calculating: "计算中…",
   loading: "正在匹配全部赛季…", unavailable: "证据暂时不可用，请确认后端正在运行。",
   ownCandidates: "本步操作方后续选择", opponentCandidates: "对方后续选择", evidenceRows: "条",
   own: "本步操作方", opponent: "对方", relativeDifference: "相对差值", support: "重合样本", actions: "次操作",
@@ -22,7 +25,8 @@ const copy = computed(() => zh.value ? {
   method: "比较口径", methodBody: "仅比较同赛制、同小局、同 BP 顺位，以及双方已选英雄数量相同的历史操作。各赛季分别计算后再汇总。",
   close: "关闭", noData: "无样本", detailsTitle: "意图证据详情",
 } : {
-  eyebrow: "Historical evidence", title: "Move intents", waiting: "Complete a ban or pick to see plausible follow-up intents here.",
+  eyebrow: "Historical evidence", title: "Move intents", waiting: "Complete a ban or pick to calculate its intent.", ready: "Click Calculate intent to see historical evidence for this move.",
+  calculate: "Calculate intent", recalculate: "Recalculate", calculating: "Calculating…",
   loading: "Matching all available seasons...", unavailable: "Evidence is unavailable. Confirm that the backend is running.",
   ownCandidates: "Team making this move", opponentCandidates: "Opponent follow-ups", evidenceRows: "rows",
   own: "Team making this move", opponent: "Opponent", relativeDifference: "Relative difference", support: "Overlap sample", actions: "actions",
@@ -90,11 +94,14 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
   <section class="intent-widget" :class="{ 'is-wide': wide }" aria-live="polite">
     <header class="intent-header">
       <div><p>{{ copy.eyebrow }}</p><h2>{{ copy.title }}</h2></div>
+      <button type="button" class="intent-calculate" :disabled="!ready || loading" @click="emit('calculate')">
+        {{ loading ? copy.calculating : move ? copy.recalculate : copy.calculate }}
+      </button>
     </header>
 
     <div v-if="loading" class="intent-state loading-state"><i></i><i></i><span>{{ copy.loading }}</span></div>
     <p v-else-if="error" class="intent-state error-state">{{ copy.unavailable }}</p>
-    <p v-else-if="!move" class="intent-state waiting-state">{{ copy.waiting }}</p>
+    <p v-else-if="!move" class="intent-state waiting-state">{{ ready ? copy.ready : copy.waiting }}</p>
 
     <div v-else class="intent-scroll">
       <section v-for="group in signalGroups" :key="group.key" class="intent-group">
@@ -173,6 +180,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
 <style scoped>
 .intent-widget{display:grid;grid-template-rows:auto minmax(0,1fr);height:100%;min-height:0;box-sizing:border-box;border:1px solid var(--line);background:#fff;overflow:hidden}
 .intent-header{display:flex;min-height:62px;box-sizing:border-box;align-items:center;justify-content:space-between;gap:16px;padding:10px 12px;border-bottom:1px solid var(--line);background:rgba(255,255,255,.96)}
+.intent-calculate{flex:none;padding:8px 12px;border:1px solid var(--accent-deep);border-radius:3px;background:var(--accent-deep);color:#fff;font:700 11px var(--display);cursor:pointer}.intent-calculate:hover:not(:disabled),.intent-calculate:focus-visible{filter:brightness(.9)}.intent-calculate:disabled{border-color:var(--line);background:#edf0ee;color:var(--ink-soft);cursor:default}
 .intent-header p,.intent-modal-header p{margin:0 0 2px;color:var(--accent-deep);font:700 9px var(--mono);letter-spacing:.1em;text-transform:uppercase}.intent-header h2,.intent-modal-header h2{margin:0;font:750 17px var(--display);letter-spacing:-.03em}
 .intent-scroll{min-height:0;overflow:auto;overscroll-behavior:contain;scrollbar-gutter:stable}.intent-group>header{position:sticky;z-index:1;top:0;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 11px;border-bottom:1px solid rgba(16,42,46,.08);background:#f4f7f5}.intent-group h3{margin:0;font:700 11px var(--display);letter-spacing:.02em}.intent-group>header span{color:var(--ink-soft);font:600 9px var(--mono)}
 .intent-row{display:grid;width:100%;min-height:49px;box-sizing:border-box;grid-template-columns:34px minmax(0,1fr) 54px 10px;gap:9px;align-items:center;padding:7px 10px;border:0;border-bottom:1px solid rgba(16,42,46,.08);background:#fff;color:var(--ink);text-align:left;cursor:pointer}.intent-row:hover,.intent-row:focus-visible{background:#edf7f2;outline:none;box-shadow:inset 3px 0 var(--accent-deep)}.intent-row img{width:34px;height:34px;border-radius:3px;object-fit:cover}.intent-name{display:grid;min-width:0;gap:2px}.intent-name strong,.intent-name small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.intent-name strong{font:700 12px var(--display)}.intent-name small{color:var(--ink-soft);font:500 9px var(--mono)}.intent-delta{display:grid;justify-items:end;line-height:1;white-space:nowrap}.intent-delta strong{font:750 12px var(--mono)}.intent-delta small{margin-top:3px;color:currentColor;font:600 8px var(--mono);opacity:.75}.intent-open{color:var(--accent-deep);font:500 18px/1 var(--display)}.trend-up{color:#277458!important}.trend-down{color:#9b4d3f!important}.trend-flat{color:var(--ink-soft)!important}

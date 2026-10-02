@@ -6,6 +6,7 @@ import json
 import math
 from dataclasses import dataclass
 from pathlib import Path
+from app.services.model_registry import component_path
 from typing import Any, Sequence
 
 
@@ -275,7 +276,7 @@ def ban_value_model_path(league_id: str) -> Path:
         character.isalnum() or character in "-_" for character in league_id
     ):
         raise ValueError("Invalid league_id")
-    return MODEL_ROOT / league_id / "ban_value_model.json"
+    return component_path("ban_value_model.json", MODEL_ROOT / league_id / "ban_value_model.json")
 
 
 def load_ban_value_model(league_id: str) -> BanValueModel:

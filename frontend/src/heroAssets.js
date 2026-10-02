@@ -1,6 +1,9 @@
 // Late-added files may replace a previously cached 404. Give only those files
 // a revisioned URL so existing hero portraits keep their long-lived cache.
-const HERO_ASSET_REVISIONS = new Map([[547, "72a0a7e"]]);
+const HERO_ASSET_REVISIONS = new Map([
+  [547, "72a0a7e"],
+  [138, "3afb8261"],
+]);
 
 /** Return the bundled hero image path; never make a remote image request. */
 export function heroAsset(heroId) {

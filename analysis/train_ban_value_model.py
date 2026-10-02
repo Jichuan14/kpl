@@ -196,7 +196,7 @@ def build_state(
     for battle_rows in group_battles(rows).values():
         first = battle_rows[0]
         league_id = str(first.get("league_id") or "")
-        weight = float(season_weights.get(league_id, 1.0))
+        weight = float(first.get("_rolling_weight", season_weights.get(league_id, 1.0)))
         winner = str(first.get("battle_winner_team_id") or "")
         if not winner:
             continue

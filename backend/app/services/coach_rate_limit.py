@@ -45,6 +45,7 @@ class CoachRateLimiter:
         self._accepted = 0
         self._blocked = Counter()
         self._lock = Lock()
+        self._last_cleanup = 0.0
 
     @staticmethod
     def _trim(values: deque[float], now: float, window_seconds: int) -> None:
@@ -62,7 +63,13 @@ class CoachRateLimiter:
         now = monotonic()
         with self._lock:
             self._trim(self._server_requests, now, 86_400)
-            ip_requests = self._ip_requests[client_key]
+            if now - self._last_cleanup >= 60:
+                for identity, timestamps in list(self._ip_requests.items()):
+                    self._trim(timestamps, now, 86_400)
+                    if not timestamps and not self._active_by_ip[identity]:
+                        del self._ip_requests[identity]
+                self._last_cleanup = now
+            ip_requests = self._ip_requests.get(client_key, deque())
             self._trim(ip_requests, now, 86_400)
 
             if self._active_server >= self.max_active_server:
@@ -88,6 +95,7 @@ class CoachRateLimiter:
                 )
 
             self._server_requests.append(now)
+            self._ip_requests[client_key] = ip_requests
             ip_requests.append(now)
             self._active_server += 1
             self._active_by_ip[client_key] += 1

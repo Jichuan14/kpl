@@ -4,9 +4,11 @@ import { fetchUltimateCounterLineup, fetchUltimateLineups, scoreLineup, scoreNeu
 import { heroAsset } from "./heroAssets";
 import { heroSearchAliases } from "./heroSearchAliases";
 import { language, t } from "./i18n";
+import { indexRelationships, relationshipWeight } from "./lineupRelationships.js";
 
 const props = defineProps({
   leagueId: { type: String, required: true },
+  modelVersion: { type: String, default: "" },
   heroes: { type: Array, default: () => [] },
   responseRows: { type: Array, default: () => [] },
   historicalLineups: { type: Array, default: () => [] },
@@ -132,21 +134,10 @@ function laneConflict(hero, side = activeSide.value) {
   return !rolesAreFeasible([...teamIds(side), Number(hero?.hero_id)]);
 }
 
-function relationshipWeight(row) {
-  const lift = Math.max(1, Number(row?.smoothed_lift || 1));
-  const support = Math.min(1, Number(row?.selections || 0) / 6);
-  return Math.log2(lift) * support;
-}
+const relationshipLookup = computed(() => indexRelationships(supportedRows.value));
 
 function directRelationship(relation, sourceId, targetId) {
-  return supportedRows.value
-    .filter(
-      (row) =>
-        row.relation === relation &&
-        Number(row.source_hero_id) === Number(sourceId) &&
-        Number(row.target_hero_id) === Number(targetId)
-    )
-    .sort((a, b) => relationshipWeight(b) - relationshipWeight(a))[0] || null;
+  return relationshipLookup.value(relation, sourceId, targetId);
 }
 
 function synergyRelationship(firstId, secondId) {
@@ -183,16 +174,20 @@ function fuzzyScore(hero, query) {
   return best;
 }
 
-const heroOptions = computed(() => {
-  const query = search.value.trim();
-  return props.heroes
+const candidateOptions = computed(() =>
+  props.heroes
     .filter((hero) => !selectedActiveSideIds.value.has(Number(hero.hero_id)))
     .map((hero) => ({
       hero,
       fit: candidateFit(hero.hero_id),
-      fuzzy: fuzzyScore(hero, query),
       laneConflict: laneConflict(hero),
     }))
+);
+
+const heroOptions = computed(() => {
+  const query = search.value.trim();
+  return candidateOptions.value
+    .map((item) => ({ ...item, fuzzy: fuzzyScore(item.hero, query) }))
     .filter((item) => !query || Number.isFinite(item.fuzzy))
     .sort(
       (a, b) =>
@@ -305,6 +300,7 @@ async function loadHistoricalScore(battle) {
   try {
     const result = await scoreLineup({
       league_id: props.leagueId,
+      model_version: props.modelVersion || undefined,
       blue_team_id: battle.blue_team_id,
       red_team_id: battle.red_team_id,
       blue_hero_ids: battle.blue.map((hero) => Number(hero.hero_id)),
@@ -354,6 +350,7 @@ async function loadNeutralScore(blueHeroIdsSnapshot, redHeroIdsSnapshot) {
   try {
     const result = await scoreNeutralLineup({
       league_id: props.leagueId,
+      model_version: props.modelVersion || undefined,
       blue_hero_ids: blueHeroIdsSnapshot,
       red_hero_ids: redHeroIdsSnapshot,
     });
@@ -391,7 +388,7 @@ async function loadUltimateLineups() {
   ultimateLoading.value = true;
   ultimateError.value = "";
   try {
-    ultimateResult.value = await fetchUltimateLineups(props.leagueId);
+    ultimateResult.value = await fetchUltimateLineups(props.leagueId, props.modelVersion);
   } catch (error) {
     ultimateResult.value = null;
     ultimateError.value = error.message || t("Could not calculate ultimate lineups.");
@@ -412,6 +409,7 @@ async function generateCounterLineup() {
   try {
     const result = await fetchUltimateCounterLineup({
       leagueId: props.leagueId,
+      modelVersion: props.modelVersion,
       targetHeroIds,
     });
     if (

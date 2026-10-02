@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
-import { fetchDailyMatches } from "./api";
+import { fetchMatchCalendar } from "./api";
+import { browserDate, shiftDate, matchStart, matchesOnLocalDate, firstAvailableDay } from "./matchCalendar.js";
 
 const emit = defineEmits(["predict"]);
 const props = defineProps({
@@ -14,21 +15,7 @@ const loading = ref(false);
 const error = ref("");
 const widgetRoot = ref(null);
 const hasAnyPrediction = computed(() => matches.value.some(hasPrediction));
-const dateRequests = new Map();
 let loadVersion = 0;
-
-function browserDate(value = new Date()) {
-  const year = value.getFullYear();
-  const month = String(value.getMonth() + 1).padStart(2, "0");
-  const day = String(value.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function shiftDate(value, days) {
-  const date = new Date(`${value}T12:00:00`);
-  date.setDate(date.getDate() + days);
-  return browserDate(date);
-}
 
 function browserTime(match) {
   const start = matchStart(match);
@@ -39,25 +26,6 @@ function browserTime(match) {
         minute: "2-digit",
         hour12: false,
       }).format(start);
-}
-
-function browserMatchDate(match) {
-  const start = matchStart(match);
-  return Number.isNaN(start.getTime()) ? "" : browserDate(start);
-}
-
-function matchStart(match) {
-  return new Date(`${match.start_time?.replace(" ", "T")}+08:00`);
-}
-
-function dailyPayload(date) {
-  if (!dateRequests.has(date)) {
-    // Keep fulfilled date payloads for this widget lifetime: a seven-day sweep
-    // shares adjacent China dates and therefore needs at most 17 distinct calls.
-    const request = fetchDailyMatches({ date });
-    dateRequests.set(date, request);
-  }
-  return dateRequests.get(date);
 }
 
 function hasPrediction(match) {
@@ -88,19 +56,8 @@ function openPredictions() {
 }
 
 async function matchesForLocalDate(date) {
-  // A local calendar date can span two adjacent China dates. Request all
-  // three candidates, then filter after converting timestamps in-browser.
-  const chinaDates = [shiftDate(date, -1), date, shiftDate(date, 1)];
-  const payloads = await Promise.all(
-    chinaDates.map((chinaDate) => dailyPayload(chinaDate))
-  );
-  const uniqueMatches = new Map();
-  payloads.flatMap((payload) => payload?.matches || []).forEach((match) => {
-    if (browserMatchDate(match) === date) uniqueMatches.set(match.match_id, match);
-  });
-  return [...uniqueMatches.values()].sort((a, b) =>
-    String(a.start_time).localeCompare(String(b.start_time))
-  );
+  const payload = await fetchMatchCalendar({ date });
+  return matchesOnLocalDate(payload?.matches || [], date);
 }
 
 async function loadMatches(date = selectedDate.value || browserDate()) {
@@ -126,33 +83,11 @@ async function loadFirstAvailableDay(startDate = browserDate()) {
   loading.value = true;
   error.value = "";
   try {
-    // Prefer the next scheduled local day. If the local catalogue has not
-    // been refreshed yet, check the nearby completed days instead of empty UI.
-    for (let offset = 0; offset <= 7; offset += 1) {
-      const date = shiftDate(today, offset);
-      const rows = await matchesForLocalDate(date);
-      const upcomingRows = offset === 0
-        ? rows.filter((match) => matchStart(match).getTime() >= Date.now())
-        : rows;
-      if (upcomingRows.length) {
-        if (version !== loadVersion) return;
-        selectedDate.value = date;
-        matches.value = upcomingRows;
-        return;
-      }
-    }
-    for (let offset = 1; offset <= 7; offset += 1) {
-      const date = shiftDate(today, -offset);
-      const rows = await matchesForLocalDate(date);
-      if (!rows.length) continue;
-      if (version !== loadVersion) return;
-      selectedDate.value = date;
-      matches.value = rows;
-      return;
-    }
+    const payload = await fetchMatchCalendar({ date: today });
     if (version !== loadVersion) return;
-    selectedDate.value = today;
-    matches.value = [];
+    const result = firstAvailableDay(payload?.matches || [], today);
+    selectedDate.value = result.date;
+    matches.value = result.matches;
   } catch {
     matches.value = [];
     error.value = "赛事暂时无法加载。";

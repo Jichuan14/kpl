@@ -95,6 +95,7 @@ def _save(path: Path, records: PredictionRecords) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--catalog", type=Path)
     parser.add_argument("--checkpoint", type=Path, required=True)
     parser.add_argument("--artifact", type=Path, help="Optional exported JSON for exact serving fingerprint")
     parser.add_argument("--split-manifest", type=Path, required=True)
@@ -111,7 +112,7 @@ def main() -> None:
     data = prepare_data(REPO_ROOT, target_season=target, previous_seasons=len(source_seasons)-1,
         validation_matches=len(manifest["splits"]["validation"]),
         holdout_matches=len(manifest["splits"]["calibration"])+len(manifest["splits"]["holdout"]),
-        holdout_offset_matches=int(manifest.get("holdout_offset_series", 0)), recency_decay=0.65, winning_pick_weight=1.5)
+        holdout_offset_matches=int(manifest.get("holdout_offset_series", 0)), recency_decay=0.65, winning_pick_weight=1.0 if manifest.get("mode")=="rolling" else 1.5, split_manifest=manifest if manifest.get("mode")=="rolling" else None)
     payload = torch.load(args.checkpoint, map_location="cpu", weights_only=False)
     if payload["hero_ids"] != data.hero_ids or payload["team_ids"] != data.team_ids:
         raise ValueError("Checkpoint vocabularies do not match the split's training-only vocabularies")
@@ -125,8 +126,8 @@ def main() -> None:
             all_logits.append(model(batch).numpy())
     logits = np.concatenate(all_logits)
     masks = data.holdout.legal_mask.numpy().copy()
-    base = load_model(target)
-    role_map = {str(key): int(value) for key, value in base["_hero_role_masks"].items()}
+    base = json.loads(args.catalog.read_text()) if args.catalog else load_model(target)
+    role_map = {str(key): int(value) for key, value in base.get("_hero_role_masks", {}).items()}
     policy_config = {"role_ids": base.get("role_ids", []), "global_bp_previous_game_pick_exclusion": True,
                      "ban_uses_opponent_open_roles": args.candidate_policy == LEGACY_POLICY_ID}
     policy_fingerprint = candidate_policy_fingerprint(args.candidate_policy,
@@ -161,6 +162,7 @@ def main() -> None:
         model_fingerprint = semantic_model_fingerprint(artifact, matrix)
     training_ids = sorted(str(row["match_id"]) for row in manifest["splits"]["train"])
     report = {
+        "rolling_context": manifest.get("mode")=="rolling",
         "schema_version": 1, "policy_model_type": "sequence", "model_fingerprint": model_fingerprint,
         "candidate_policy_id": args.candidate_policy, "candidate_policy_fingerprint": policy_fingerprint,
         "candidate_policy_provenance": ("current_full_season_role_map_operational_diagnostic_not_chronological" if args.candidate_policy == LEGACY_POLICY_ID else "decision_export_game_availability"),

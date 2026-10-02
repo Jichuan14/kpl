@@ -11,7 +11,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.api.analytics import (
     require_widget_token,
-    track_visit,
+    track_visit as record_visit,
     visitor_summary,
     widget_visitor_summary,
 )
@@ -20,6 +20,11 @@ from app.main import app
 from app.database import Base
 from app.models import VisitorDailyPage, VisitorDailyVisitor
 from app.schemas import VisitorTrackRequest
+
+
+def track_visit(body, db):
+    from hashlib import sha256
+    return record_visit(body, db, visitor_hash=sha256(str(body.visitor_id).encode()).hexdigest())
 
 
 class AnalyticsApiTest(unittest.TestCase):

@@ -99,6 +99,7 @@ def load_raw_mechanics(
             raw[hero_id] = {
                 name: float(vector[indexes[name]]) for name in REQUIRED_FEATURES
             }
+            raw[hero_id]["__mechanics_known"] = float(bool(vector[indexes["mechanics_feature_known"]]) if "mechanics_feature_known" in indexes else bool(row.get("feature_known",True)))
 
     metadata = {
         "path": str(path.resolve()),
@@ -129,7 +130,7 @@ def rule_density(
             opportunities += len(rules)
             source_values = mechanics.get(source)
             target_values = mechanics.get(target)
-            if source_values is None or target_values is None:
+            if source_values is None or target_values is None or not source_values.get("__mechanics_known",1.) or not target_values.get("__mechanics_known",1.):
                 continue
             known_pairs += 1
             for source_features, target_features in rules:
@@ -290,20 +291,22 @@ def fit_advantage_model(
     outcomes: np.ndarray,
     *,
     l2: float,
+    sample_weights: np.ndarray | None = None,
 ) -> dict[str, Any]:
     """Fit a monotonic advantage model and recalibrate its intercept."""
-    model = V1.fit_logistic(features, outcomes, l2=l2)
+    model = V1.fit_logistic(features, outcomes, l2=l2, sample_weights=sample_weights)
     coefficients = np.maximum(np.asarray(model["coefficients"], dtype=float), 0.0)
     means = np.asarray(model["means"], dtype=float)
     scales = np.asarray(model["scales"], dtype=float)
+    weights = np.ones(len(outcomes)) if sample_weights is None else sample_weights
     base_logits = ((features - means) / scales) @ coefficients
     intercept = float(model["intercept"])
     for _iteration in range(50):
         probabilities = 1.0 / (
             1.0 + np.exp(-np.clip(intercept + base_logits, -30.0, 30.0))
         )
-        gradient = float(np.sum(probabilities - outcomes))
-        hessian = max(float(np.sum(probabilities * (1.0 - probabilities))), 1e-9)
+        gradient = float(np.sum(weights * (probabilities - outcomes)))
+        hessian = max(float(np.sum(weights * probabilities * (1.0 - probabilities))), 1e-9)
         step = gradient / hessian
         intercept -= step
         if abs(step) < 1e-10:

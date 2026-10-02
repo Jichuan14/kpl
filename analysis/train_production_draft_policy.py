@@ -7,7 +7,7 @@ import argparse
 import json
 import subprocess
 import sys
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime, timezone
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
@@ -62,6 +62,10 @@ def context_cutoff(seasons: list[str]) -> str:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--league-id", required=True)
+    parser.add_argument("--rolling-manifest", type=Path)
+    parser.add_argument("--output-dir", type=Path)
+    parser.add_argument("--experimental", action="store_true")
+    parser.add_argument("--candidate-only", action="store_true")
     parser.add_argument("--previous-seasons", type=int, default=4)
     parser.add_argument("--validation-series", type=int, default=10)
     parser.add_argument("--calibration-series", type=int, default=10)
@@ -73,8 +77,11 @@ def main() -> None:
     if not args.league_id or not all(c.isalnum() or c in "-_" for c in args.league_id):
         raise ValueError("Invalid league id")
 
-    seasons = source_seasons(args.league_id, args.previous_seasons)
-    output = ANALYSIS / "outputs" / args.league_id
+    if (args.experimental or args.candidate_only) and args.output_dir is None:
+        parser.error("Experimental/candidate runs require an isolated --output-dir")
+    rolling = json.loads(args.rolling_manifest.read_text()) if args.rolling_manifest else None
+    seasons = rolling["source_seasons"] if rolling else source_seasons(args.league_id, args.previous_seasons)
+    output = args.output_dir or ANALYSIS / "outputs" / args.league_id
     work = output / "sequence_familiarity_training"
     work.mkdir(parents=True, exist_ok=True)
     python = sys.executable
@@ -84,7 +91,10 @@ def main() -> None:
     calibration = work / "personalized_draft_probability_calibration.json"
     context = work / "player_draft_context.json"
 
-    run([python, str(ANALYSIS / "build_draft_split_manifest.py"), "--target-season", args.league_id,
+    if rolling:
+        atomic_json(manifest, rolling)
+    else:
+        run([python, str(ANALYSIS / "build_draft_split_manifest.py"), "--target-season", args.league_id,
          "--source-seasons", ",".join(seasons), "--validation-series", str(args.validation_series),
          "--calibration-series", str(args.calibration_series), "--holdout-series", str(args.holdout_series),
          "--output", str(manifest)])
@@ -92,14 +102,14 @@ def main() -> None:
          "--previous-seasons", str(args.previous_seasons), "--validation-matches", str(args.validation_series),
          "--holdout-matches", str(args.calibration_series + args.holdout_series), "--epochs", str(args.epochs),
          "--seed", str(args.seed), "--threads", str(args.threads), "--winning-pick-weight", "1.0",
-         "--use-series-context", "--models", "bag_ablation,hybrid_bag_gru", "--output-dir", str(work)])
+         "--use-series-context", "--models", "bag_ablation,hybrid_bag_gru", "--output-dir", str(work)] + (["--split-manifest", str(manifest)] if rolling else []))
     run([python, str(ANALYSIS / "export_sequence_draft_choice_model.py"), "--league-id", args.league_id,
          "--checkpoint", str(work / "hybrid_bag_gru.pt"), "--experiment-results", str(work / "results.json"),
          "--output", str(base_artifact)])
     base_eval = work / "base_evaluation"
     run([python, str(ANALYSIS / "evaluate_draft_policy.py"), "--checkpoint", str(work / "hybrid_bag_gru.pt"),
          "--artifact", str(base_artifact), "--split-manifest", str(manifest), "--candidate-policy",
-         "game_availability_v1", "--output-dir", str(base_eval)])
+         "game_availability_v1", "--output-dir", str(base_eval)] + (["--catalog", str(output / "draft_model.json")] if rolling else []))
     run([python, str(ANALYSIS / "train_familiarity_draft_choice_model.py"), "--checkpoint",
          str(work / "hybrid_bag_gru.pt"), "--split-manifest", str(manifest), "--seed", str(args.seed),
          "--epochs", str(args.epochs), "--threads", str(args.threads), "--output-dir", str(work)])
@@ -116,28 +126,29 @@ def main() -> None:
 
     base_holdout = score_metrics(load_prediction_records(base_eval / "holdout_predictions.npz"))
     candidate_holdout = score_metrics(load_prediction_records(work / "holdout_predictions.npz"))
-    if candidate_holdout["negative_log_likelihood"] >= base_holdout["negative_log_likelihood"]:
+    gate_passed = candidate_holdout["negative_log_likelihood"] < base_holdout["negative_log_likelihood"] and candidate_holdout["top_5_accuracy"] >= base_holdout["top_5_accuracy"]
+    if not (args.experimental or args.candidate_only) and candidate_holdout["negative_log_likelihood"] >= base_holdout["negative_log_likelihood"]:
         raise RuntimeError("Familiarity candidate failed the holdout NLL promotion gate")
-    if candidate_holdout["top_5_accuracy"] < base_holdout["top_5_accuracy"]:
+    if not (args.experimental or args.candidate_only) and candidate_holdout["top_5_accuracy"] < base_holdout["top_5_accuracy"]:
         raise RuntimeError("Familiarity candidate failed the holdout top-5 promotion gate")
     sidecar = json.loads(calibration.read_text(encoding="utf-8"))
     if sidecar.get("status") != "experimental" or sidecar.get("coverage", {}).get("target_excluded"):
         raise RuntimeError("Familiarity calibration is not eligible for production")
-    sidecar["status"] = "eligible"
+    sidecar["status"] = "experimental" if args.experimental or args.candidate_only else "eligible"
     sidecar["promotion_gate"] = {"base_holdout": base_holdout, "candidate_holdout": candidate_holdout}
     atomic_json(calibration, sidecar)
     artifact = json.loads(candidate_artifact.read_text(encoding="utf-8"))
-    artifact["status"] = "production"
-    artifact["calibration"] = {"status": "eligible", "temperature": sidecar["temperature"], "sidecar": "personalized_draft_probability_calibration.json"}
+    artifact["status"] = "experimental" if args.experimental or args.candidate_only else "production"
+    artifact["calibration"] = {"status": sidecar["status"], "temperature": sidecar["temperature"], "sidecar": "personalized_draft_probability_calibration.json"}
     atomic_json(candidate_artifact, artifact)
-    context_as_of = context_cutoff(seasons)
+    context_as_of = min(datetime.fromisoformat(r["start_time"]).astimezone(timezone(timedelta(hours=8))).date().isoformat() for r in rolling["splits"]["validation"]) if rolling else context_cutoff(seasons)
     run([python, str(ANALYSIS / "export_player_draft_context.py"), "--source-seasons", ",".join(seasons),
-         "--hero-ids", str(candidate_artifact), "--context-as-of", context_as_of, "--output", str(context)])
+         "--hero-ids", str(candidate_artifact), "--context-as-of", context_as_of, "--output", str(context)] + (["--split-manifest",str(manifest)] if rolling else []))
 
     validation = {"schema_version": 1, "model": "sequence_familiarity_residual_choice",
                   "candidate_policy": "game_availability_v1", "source_seasons": seasons,
-                  "context_as_of": context_as_of,
-                  "split_manifest": str(manifest.relative_to(ROOT)), "base_holdout": base_holdout,
+                  "context_as_of": context_as_of, "familiarity_gate_passed": gate_passed, "experimental": args.experimental,
+                  "split_manifest": str(manifest.resolve()), "base_holdout": base_holdout,
                   "candidate_holdout": candidate_holdout, "temperature": sidecar["temperature"]}
     atomic_json(work / "production_validation.json", validation)
     for staged, destination in (

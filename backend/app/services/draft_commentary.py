@@ -18,6 +18,7 @@ from typing import Any
 from app.agent.service import KimiConfigurationError, build_kimi_client
 from app.config import get_settings
 from app.services.analysis_pipeline import ANALYSIS_DIR, OUTPUT_ROOT
+from app.services.model_registry import component_path
 
 
 ACTION_ZH = {"pick": "选择", "ban": "禁用"}
@@ -204,7 +205,7 @@ def _read_jsonl(path: Path) -> tuple[dict[str, Any], ...]:
 
 
 def _mechanics_artifact() -> dict[str, Any]:
-    return _read_json(ANALYSIS_DIR / "hero_ability_mechanics.json")
+    return _read_json(component_path("hero_ability_mechanics.json", ANALYSIS_DIR / "hero_ability_mechanics.json"))
 
 
 def _mechanics() -> dict[int, dict[str, Any]]:
@@ -216,7 +217,7 @@ def _mechanics() -> dict[int, dict[str, Any]]:
 
 
 def _tactical_artifact() -> dict[str, Any]:
-    return _read_json(ANALYSIS_DIR / "hero_tactical_roles.json")
+    return _read_json(component_path("hero_tactical_roles.json", ANALYSIS_DIR / "hero_tactical_roles.json"))
 
 
 def _tactics() -> dict[int, dict[str, Any]]:
@@ -1023,7 +1024,7 @@ def build_selection_commentary(*, league_id: str, state: dict[str, Any], selecte
         raise ValueError("Selected hero is already present on this draft board.")
     allies = [profiles_by_id[hero_id] for hero_id in own_ids if hero_id in profiles_by_id]
     enemies = [profiles_by_id[hero_id] for hero_id in enemy_ids if hero_id in profiles_by_id]
-    trend_rows = _read_jsonl(OUTPUT_ROOT / league_id / "team_recent_trends.jsonl")
+    trend_rows = _read_jsonl(component_path("team_recent_trends.jsonl", OUTPUT_ROOT / league_id / "team_recent_trends.jsonl"))
     evidence: list[dict[str, Any]] = []
     own_trend = _trend_claim(trend_rows, team_id=team_id, team_name=team_name, hero_id=selected_hero_id, action=action, role="acting")
     if own_trend:
@@ -1072,11 +1073,11 @@ def build_selection_commentary(*, league_id: str, state: dict[str, Any], selecte
         evidence.extend(mechanic_interactions)
         evidence.extend(reverse_enemy_interactions)
         evidence.extend(_official_relationship_claims(selected, enemies))
-        pairing = _pairing_claim(_read_jsonl(OUTPUT_ROOT / league_id / "team_synergy_stats.jsonl"), team_id=team_id, team_name=team_name, selected_id=selected_hero_id, own_ids=own_ids)
+        pairing = _pairing_claim(_read_jsonl(component_path("team_synergy_stats.jsonl", OUTPUT_ROOT / league_id / "team_synergy_stats.jsonl")), team_id=team_id, team_name=team_name, selected_id=selected_hero_id, own_ids=own_ids)
         if pairing:
             evidence.append(pairing)
         historical_counter = _historical_counter_claim(
-            _read_jsonl(OUTPUT_ROOT / league_id / "counter_pick_stats.jsonl"),
+            _read_jsonl(component_path("counter_pick_stats.jsonl", OUTPUT_ROOT / league_id / "counter_pick_stats.jsonl")),
             selected=selected,
             enemies=enemies,
         )

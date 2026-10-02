@@ -12,6 +12,9 @@ deploy/.htpasswd
 # Data / local DB
 backend/data/*.db
 backend/data/*.sqlite*
+backend/data/pipeline.lock
+backend/data/public_session.key
+backend/celerybeat-schedule*
 *.db
 *.sqlite
 *.sqlite3
@@ -51,3 +54,6 @@ dist/
 # Locally generated deployment archives; upload these directly to servers.
 releases/
 FRONTEND_VUE_LEARNING_GUIDE.md
+
+# Versioned registry includes generated candidate logs and reports of all types.
+analysis/outputs/models/

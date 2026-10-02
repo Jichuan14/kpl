@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta, timezone
-from hashlib import sha256
 import hmac
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
@@ -16,6 +15,7 @@ from app.config import get_settings
 from app.database import get_db
 from app.models import VisitorDailyPage, VisitorDailyVisitor
 from app.schemas import ApiResponse, VisitorTrackRequest
+from app.services.public_requests import limit_public_writes, public_visitor
 
 router = APIRouter(prefix="/api/analytics", tags=["analytics"])
 widget_bearer = HTTPBearer(auto_error=False)
@@ -59,14 +59,20 @@ def require_widget_token(
         )
 
 
-@router.post("/visits")
-def track_visit(body: VisitorTrackRequest, db: Session = Depends(get_db)) -> ApiResponse:
+PUBLIC_PAGES = {"/", "/feature-space", "/simulator", "/teams", "/rankings", "/bp-data", "/methodology"}
+
+
+@router.post("/visits", dependencies=[Depends(limit_public_writes)])
+def track_visit(body: VisitorTrackRequest, db: Session = Depends(get_db),
+                visitor_hash: str = Depends(public_visitor)) -> ApiResponse:
     """Record one public page view without saving IP addresses or raw IDs."""
-    if body.page_path.startswith("/management"):
-        raise HTTPException(status_code=400, detail="Management routes are not tracked")
+    page_path = body.page_path.rstrip("/") or "/"
+    if page_path != "/":
+        page_path = "/" + page_path.split("/", 2)[1]
+    if page_path not in PUBLIC_PAGES:
+        raise HTTPException(status_code=400, detail="Unknown public page")
 
     today = datetime.now(timezone.utc).date()
-    visitor_hash = sha256(str(body.visitor_id).encode()).hexdigest()
     db.execute(
         insert(VisitorDailyVisitor)
         .values(day=today, visitor_hash=visitor_hash)
@@ -74,7 +80,7 @@ def track_visit(body: VisitorTrackRequest, db: Session = Depends(get_db)) -> Api
     )
     db.execute(
         insert(VisitorDailyPage)
-        .values(day=today, page_path=body.page_path, page_views=1)
+        .values(day=today, page_path=page_path, page_views=1)
         .on_conflict_do_update(
             index_elements=["day", "page_path"],
             set_={"page_views": VisitorDailyPage.page_views + 1},

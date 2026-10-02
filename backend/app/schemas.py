@@ -15,6 +15,7 @@ class UltimateCounterLineupRequest(BaseModel):
 
     model_config = {"extra": "forbid"}
 
+    model_version: str | None = Field(default=None, min_length=1, max_length=128)
     league_id: str = Field(min_length=1, max_length=32)
     target_hero_ids: list[int] = Field(min_length=5, max_length=5)
 
@@ -156,6 +157,7 @@ class AnalysisRunRequest(BaseModel):
         "draft_evidence",
         "draft_model",
         "learnable_draft_model",
+        "rolling_model",
         "sequence_draft_model",
         "ban_value_model",
         "lineup_value_model",
@@ -169,6 +171,7 @@ class DraftSimulationRequest(BaseModel):
     # compute-affecting field such as ``rollouts``.
     model_config = {"extra": "forbid"}
 
+    model_version: str | None = Field(default=None, min_length=1, max_length=128)
     league_id: str = Field(min_length=1, max_length=32)
     model_type: Literal["stats", "learnable", "sequence", "personalized"] = "personalized"
     blue_team_id: str = Field(min_length=1, max_length=32)
@@ -176,13 +179,13 @@ class DraftSimulationRequest(BaseModel):
     red_team_id: str = Field(min_length=1, max_length=32)
     red_team_name: str = Field(min_length=1, max_length=64)
     bp_order: int = Field(ge=1, le=20)
-    blue_picks: list[int] = Field(default_factory=list)
-    red_picks: list[int] = Field(default_factory=list)
-    blue_bans: list[int] = Field(default_factory=list)
-    red_bans: list[int] = Field(default_factory=list)
-    blue_used_previous_battles: list[int] = Field(default_factory=list)
-    red_used_previous_battles: list[int] = Field(default_factory=list)
-    legal_hero_ids: list[int] | None = None
+    blue_picks: list[int] = Field(default_factory=list, max_length=5)
+    red_picks: list[int] = Field(default_factory=list, max_length=5)
+    blue_bans: list[int] = Field(default_factory=list, max_length=5)
+    red_bans: list[int] = Field(default_factory=list, max_length=5)
+    blue_used_previous_battles: list[int] = Field(default_factory=list, max_length=30)
+    red_used_previous_battles: list[int] = Field(default_factory=list, max_length=30)
+    legal_hero_ids: list[int] | None = Field(default=None, max_length=512)
     seed: int | None = None
 
     @model_validator(mode="after")
@@ -210,6 +213,7 @@ class LineupScoreRequest(BaseModel):
 
     model_config = {"extra": "forbid"}
 
+    model_version: str | None = Field(default=None, min_length=1, max_length=128)
     league_id: str = Field(min_length=1, max_length=32)
     blue_team_id: str = Field(min_length=1, max_length=32)
     red_team_id: str = Field(min_length=1, max_length=32)
@@ -234,6 +238,7 @@ class NeutralLineupScoreRequest(BaseModel):
 
     model_config = {"extra": "forbid"}
 
+    model_version: str | None = Field(default=None, min_length=1, max_length=128)
     league_id: str = Field(min_length=1, max_length=32)
     blue_hero_ids: list[int] = Field(min_length=5, max_length=5)
     red_hero_ids: list[int] = Field(min_length=5, max_length=5)
@@ -252,6 +257,7 @@ class NeutralLineupScoreRequest(BaseModel):
 class HeroMatchupRecommendationRequest(BaseModel):
     model_config = {"extra": "forbid"}
 
+    model_version: str | None = Field(default=None, min_length=1, max_length=128)
     league_id: str = Field(min_length=1, max_length=32)
     favorite_hero_ids: list[int] = Field(default_factory=list, max_length=12)
     opponent_hero_ids: list[int] = Field(min_length=1, max_length=5)
@@ -282,6 +288,7 @@ class DraftMoveEvidenceRequest(BaseModel):
 
     model_config = {"extra": "forbid"}
 
+    model_version: str | None = Field(default=None, min_length=1, max_length=128)
     league_id: str = Field(min_length=1, max_length=32)
     schedule: Literal["standard_18", "standard_20"]
     battle_seq: int = Field(ge=1, le=7)
@@ -295,8 +302,8 @@ class DraftMoveEvidenceRequest(BaseModel):
     red_picks: list[int] = Field(default_factory=list, max_length=5)
     blue_bans: list[int] = Field(default_factory=list, max_length=5)
     red_bans: list[int] = Field(default_factory=list, max_length=5)
-    blue_used_previous_battles: list[int] = Field(default_factory=list)
-    red_used_previous_battles: list[int] = Field(default_factory=list)
+    blue_used_previous_battles: list[int] = Field(default_factory=list, max_length=30)
+    red_used_previous_battles: list[int] = Field(default_factory=list, max_length=30)
     available_hero_ids: list[int] = Field(min_length=1)
     hero_names: dict[int, str] = Field(default_factory=dict)
 

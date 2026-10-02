@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from app.services.analysis_pipeline import OUTPUT_ROOT
+from app.services.model_registry import component_path, current_bundle
 
 _COUNTER_CACHE: dict[Path, tuple[int, list[dict[str, Any]]]] = {}
 PLAYABLE_LANES = {"clash", "mid", "jungle", "farm", "roam"}
@@ -18,7 +19,7 @@ def _counter_rows(league_id: str) -> list[dict[str, Any]]:
         character.isalnum() or character in "-_" for character in league_id
     ):
         raise ValueError("Invalid league id")
-    path = OUTPUT_ROOT / league_id / "counter_pick_stats.jsonl"
+    path = component_path("counter_pick_stats.jsonl", OUTPUT_ROOT / league_id / "counter_pick_stats.jsonl")
     if not path.is_file():
         raise FileNotFoundError(
             f"No counter-pick statistics have been generated for {league_id}"

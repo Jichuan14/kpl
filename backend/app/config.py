@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     )
 
     database_url: str = DEFAULT_SQLITE
+    rabbitmq_url: str = "amqp://guest:guest@localhost:5672//"
     comp_base_url: str = "https://prod.comp.smoba.qq.com"
     tga_base_url: str = "https://tga-openapi.tga.qq.com"
     sync_request_delay: float = 0.2
@@ -59,6 +60,9 @@ class Settings(BaseSettings):
     simulation_ip_max_active_requests: int = 5
     simulation_server_max_active_requests: int = 100
     simulation_trust_proxy_headers: bool = False
+    public_trust_proxy_headers: bool = False
+    public_session_secret: SecretStr | None = None
+    public_session_key_path: str = str(BACKEND_ROOT / "data" / "public_session.key")
     # Dedicated credential for the read-only macOS visitor widget.  It is
     # deliberately separate from management Basic Auth and must never be put
     # in frontend code.
@@ -92,6 +96,13 @@ class Settings(BaseSettings):
         # assignment. Treat that as disabled instead of blocking app startup.
         if isinstance(value, str) and not value.strip():
             return None
+        return value
+
+    @field_validator("public_session_secret")
+    @classmethod
+    def valid_public_session_secret(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is not None and len(value.get_secret_value()) < 32:
+            raise ValueError("PUBLIC_SESSION_SECRET must be at least 32 characters")
         return value
 
     @field_validator("analytics_widget_token")

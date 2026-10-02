@@ -1,11 +1,5 @@
-import { shallowRef } from "vue";
-import { fetchVisualizationSeasons } from "../api";
-import { selectAvailableLeague } from "../selectedLeague";
-export function useSeasonCatalog(ready = () => true) {
-  const seasons = shallowRef([]);
-  async function loadSeasons() {
-    seasons.value = ((await fetchVisualizationSeasons()) || []).filter(ready);
-    selectAvailableLeague(seasons.value); return seasons.value;
-  }
-  return { seasons, loadSeasons };
+import { publicSeasonState } from "../selectedLeague.js";
+// The full local catalog includes new seasons with zero model artifacts.
+export function useSeasonCatalog() {
+  return { seasons: publicSeasonState.seasons, loadSeasons: publicSeasonState.loadSeasons };
 }

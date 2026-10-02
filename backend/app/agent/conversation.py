@@ -48,7 +48,9 @@ def looks_like_id(value: str | None) -> bool:
 
 
 def board_fingerprint(league_id: str, draft_state: dict[str, Any] | None) -> str:
-    payload = {"league_id": league_id, "draft_state": draft_state or None}
+    from app.services.model_registry import current_bundle
+    handle = current_bundle()
+    payload = {"league_id": league_id, "draft_state": draft_state or None, "model_version": handle.version if handle else None}
     encoded = json.dumps(payload, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()[:16]
 
@@ -162,8 +164,32 @@ class ConversationStore:
         self._conversations: dict[str, ConversationRecord] = {}
         self._locks: dict[str, threading.Lock] = {}
         self._guard = threading.Lock()
+        self._delete_checkpoint = None
+        self._last_prune = 0.0
+
+    def bind_checkpointer(self, checkpointer) -> None:
+        self._delete_checkpoint = getattr(checkpointer, "delete_thread", None)
+        self.prune_expired(force=True)
+        # Reconcile records orphaned by older versions, once at startup.
+        thread_ids = getattr(checkpointer, "thread_ids", None)
+        if callable(thread_ids) and callable(self._delete_checkpoint):
+            for thread_id in set(thread_ids()) - set(self._conversations):
+                self._delete_checkpoint(thread_id)
+
+    def prune_expired(self, *, force=False) -> None:
+        now = _now()
+        with self._guard:
+            if not force and now - self._last_prune < 60:
+                return
+            for record in list(self._conversations.values()):
+                if not record.in_flight_request_id and now - record.updated_at > CONVERSATION_TTL_SECONDS:
+                    self.delete(record.conversation_id, record.session_id)
+            self._last_prune = now
+            self._sessions = {key: touched for key, touched in self._sessions.items()
+                              if now - touched <= SESSION_TTL_SECONDS}
 
     def ensure_session(self, session_id: str | None) -> str:
+        self.prune_expired()
         token = session_id if looks_like_id(session_id) else new_session_id()
         self._sessions[token] = _now()
         return token
@@ -206,6 +232,7 @@ class ConversationStore:
         *,
         client_request_id: str | None,
         request_id: str,
+        current_board: str | None = None,
     ) -> dict[str, Any] | None:
         lock = self._lock_for(record.conversation_id)
         if not lock.acquire(blocking=False):
@@ -219,6 +246,8 @@ class ConversationStore:
                 and client_request_id == record.last_client_request_id
                 and record.last_result is not None
             ):
+                if current_board is not None and (not record.turns or record.turns[-1].get("board_fingerprint") != current_board):
+                    raise CoachConversationError("conversation_request_mismatch", "This request ID belongs to another draft or model version. Use a new request ID.")
                 return record.last_result
             if record.in_flight_request_id:
                 raise CoachConversationError(
@@ -256,7 +285,10 @@ class ConversationStore:
             return
         if record.session_id != session_id:
             raise CoachConversationError()
+        if callable(self._delete_checkpoint):
+            self._delete_checkpoint(conversation_id)
         self._conversations.pop(conversation_id, None)
+        self._locks.pop(conversation_id, None)
 
     def clear_session(self, session_id: str) -> None:
         stale = [
@@ -265,7 +297,7 @@ class ConversationStore:
             if record.session_id == session_id
         ]
         for key in stale:
-            self._conversations.pop(key, None)
+            self.delete(key, session_id)
 
     def conversation_ids_for_session(self, session_id: str) -> list[str]:
         return [
@@ -303,12 +335,7 @@ class SqliteConversationStore(ConversationStore):
         rows = self._db.execute(
             "SELECT conversation_id, session_id, payload, updated_at FROM conversations"
         ).fetchall()
-        now = _now()
-        expired: list[str] = []
         for conversation_id, session_id, payload, updated_at in rows:
-            if now - float(updated_at) > CONVERSATION_TTL_SECONDS:
-                expired.append(conversation_id)
-                continue
             data = json.loads(payload)
             self._conversations[conversation_id] = ConversationRecord(
                 conversation_id=conversation_id,
@@ -320,12 +347,6 @@ class SqliteConversationStore(ConversationStore):
                 last_client_request_id=data.get("last_client_request_id"),
                 last_result=data.get("last_result"),
             )
-        if expired:
-            self._db.executemany(
-                "DELETE FROM conversations WHERE conversation_id = ?",
-                [(conversation_id,) for conversation_id in expired],
-            )
-            self._db.commit()
 
     def _persist(self, record: ConversationRecord) -> None:
         payload = {
@@ -416,4 +437,9 @@ def build_checkpointer(persistent: bool = False, path: str | Path | None = None)
     checkpoint_path = Path(path or "coach_checkpoints.sqlite")
     checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(str(checkpoint_path), check_same_thread=False)
-    return SqliteSaver(connection)
+    class RetainedSqliteSaver(SqliteSaver):
+        def thread_ids(self):
+            with self.cursor(transaction=False) as cursor:
+                return [row[0] for row in cursor.execute(
+                    "SELECT thread_id FROM checkpoints UNION SELECT thread_id FROM writes")]
+    return RetainedSqliteSaver(connection)

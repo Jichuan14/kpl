@@ -1,19 +1,20 @@
 <script setup>
-import { computed, onMounted, ref, shallowRef, watch } from "vue";
+import { createSeasonStartup } from "./seasonStartup.js";
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import { fetchPowerRankings } from "./api";
-import { useLatestRequest } from "./composables/useLatestRequest";
-import { useSeasonCatalog } from "./composables/useSeasonCatalog";
+import { createFactualLoader, hasSeasonObservations, neutralSeasonRankings, isSeasonOnlyRanking } from "./factualResource.js";
+import { useFactualSeasonCatalog } from "./composables/useFactualSeasonCatalog";
 import { heroAsset } from "./heroAssets";
-import { language } from "./i18n";
-import { selectAvailableLeague, selectedLeagueId } from "./selectedLeague";
+import { language, t } from "./i18n";
+import { selectedFactualLeagueId } from "./selectedFactualLeague";
 import { finishStartupLoading } from "./startupLoader";
 
-const { seasons, loadSeasons } = useSeasonCatalog((season) => season.rankings_ready);
-const latestRequest = useLatestRequest();
-const leagueId = selectedLeagueId;
+const { seasons, loadSeasons } = useFactualSeasonCatalog();
+const leagueId = selectedFactualLeagueId;
 const payload = shallowRef(null);
 const loading = ref(false);
 const error = ref("");
+const noInformation = ref(false);
 const board = ref("teams");
 const selectedHeroId = ref(0);
 const selectedPositionId = ref(0);
@@ -70,7 +71,6 @@ const shownPositionPlayers = computed(() => {
         player.current_team_name.toLocaleLowerCase().includes(needle))
   );
 });
-const topTeams = computed(() => teams.value.slice(0, 3));
 const maxTeamScore = computed(() => Math.max(...teams.value.map((row) => row.hybrid_score), 1));
 const maxHeroPlayerScore = computed(() =>
   Math.max(...shownPlayers.value.map((row) => row.hybrid_score), 1)
@@ -92,14 +92,15 @@ function positionLabel(position) {
 }
 
 function number(value, digits = 0) {
-  return Number(value || 0).toLocaleString(language.value, {
+  if (value == null) return t("No current information");
+  return Number(value).toLocaleString(language.value, {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   });
 }
 
 function percent(value) {
-  return `${(Number(value || 0) * 100).toFixed(1)}%`;
+  return value == null ? t("No current information") : `${(Number(value) * 100).toFixed(1)}%`;
 }
 
 function scoreWidth(score, maximum) {
@@ -112,32 +113,39 @@ function selectHero(heroId) {
   playerSearch.value = "";
 }
 
-async function loadRankings() {
-  if (!leagueId.value) return;
-  loading.value = true;
-  error.value = "";
-  try {
-    const next = await latestRequest((signal, current) => fetchPowerRankings(leagueId.value, { cache: false, signal }).then((value) => current() ? value : null));
-    if (!next) return;
-    payload.value = next;
-    if (!heroes.value.some((hero) => hero.hero_id === selectedHeroId.value)) {
-      selectedHeroId.value = filteredHeroes.value[0]?.hero_id || 0;
-    }
-    if (!positions.value.some((position) => position.position === selectedPositionId.value)) {
-      selectedPositionId.value = positions.value[0]?.position || 0;
-    }
-  } catch (err) {
+const loadRankings = createFactualLoader({
+  start() {
     payload.value = null;
-    error.value = err.message || "Could not load power rankings.";
-  } finally {
-    loading.value = false;
-  }
-}
+    noInformation.value = false;
+    loading.value = true;
+    error.value = "";
+  },
+  async load(signal) {
+    const id = leagueId.value;
+    const season = seasons.value.find((item) => item.league_id === id);
+    if (!id || !season) return null;
+    if (!hasSeasonObservations(season)) return neutralSeasonRankings(season);
+    if (!season.rankings_ready) return null;
+    const result = await fetchPowerRankings(id, { cache: false, signal });
+    return isSeasonOnlyRanking(result, id) ? result : null;
+  },
+  value(next) {
+    payload.value = next;
+    noInformation.value = !next.team_rankings?.some((team) => team.games > 0) &&
+      !(next.hero_rankings || []).some((hero) => hero.players?.length);
+    if (!heroes.value.some((hero) => hero.hero_id === selectedHeroId.value)) selectedHeroId.value = filteredHeroes.value[0]?.hero_id || 0;
+    if (!positions.value.some((position) => position.position === selectedPositionId.value)) selectedPositionId.value = positions.value[0]?.position || 0;
+  },
+  missing() { noInformation.value = true; },
+  error(err) { error.value = err.message || "Could not load season data."; },
+  finish() { loading.value = false; },
+});
+onBeforeUnmount(() => loadRankings.cancel());
 
+const seasonStartup = createSeasonStartup(loadSeasons, loadRankings);
 onMounted(async () => {
   try {
-    await loadSeasons();
-    await loadRankings();
+    await seasonStartup.initialize();
   } catch (err) {
     error.value = err.message || "Could not load ranking data.";
   } finally {
@@ -145,31 +153,24 @@ onMounted(async () => {
   }
 });
 
-watch(leagueId, loadRankings);
+watch(leagueId, seasonStartup.changed, { flush: "sync" });
 </script>
 
 <template>
   <main class="rankings-page">
     <header class="rankings-hero">
       <div>
-        <p class="rankings-eyebrow">{{ $t("Cross-season form · Decayed evidence") }}</p>
+        <p class="rankings-eyebrow">{{ $t("Selected-season form · Season-only evidence") }}</p>
         <h1>{{ $t("Power Rankings") }}</h1>
-        <p>{{ $t("Current strength without pretending old results last forever. Compare team Elo, compare players within each position, or open any hero to see which active player performs best.") }}</p>
+        <p>{{ $t("Every season starts at 1500 Elo. Compare teams and players using only results from the selected season.") }}</p>
       </div>
-      <label class="season-control">
-        <span>{{ $t("Competition") }}</span>
-        <select v-model="leagueId">
-          <option v-if="!seasons.length" value="">{{ $t("No ranking data yet") }}</option>
-          <option v-for="season in seasons" :key="season.league_id" :value="season.league_id">
-            {{ season.year }} · {{ season.league_name }}{{ $t("· S") }}{{ season.season }}
-          </option>
-        </select>
-      </label>
     </header>
 
     <p v-if="error" class="rankings-message error">{{ error }}</p>
     <p v-else-if="loading" class="rankings-message">{{ $t("Calculating the form table…") }}</p>
 
+    <p v-if="noInformation && !loading && !error" class="rankings-message">{{ $t("No current information") }}</p>
+    <p v-if="!loading && !error" class="rankings-message">{{ $t("Each season starts at 1500 Elo; teams without results are unranked.") }}</p>
     <template v-if="payload && !loading">
       <div class="board-switch" role="tablist" :aria-label="$t('Ranking board')">
         <button
@@ -207,7 +208,8 @@ watch(leagueId, loadRankings);
         </button>
       </div>
 
-      <section v-if="board === 'teams'" class="team-board">
+      <p v-if="board === 'teams' && !teams.length && !noInformation" class="empty-board">{{ $t("No current information") }}</p>
+      <section v-if="board === 'teams' && teams.length" class="team-board">
         <div class="section-heading">
           <div>
             <p class="rankings-eyebrow">{{ $t("Selected-season field") }}</p>
@@ -218,18 +220,6 @@ watch(leagueId, loadRankings);
               ? "72% 时间衰减 Elo · 28% 贝叶斯衰减胜率"
               : "72% decayed Elo · 28% Bayesian decayed win rate" }}
           </p>
-        </div>
-
-        <div class="podium">
-          <article v-for="team in topTeams" :key="team.team_id" :class="`place-${team.rank}`">
-            <span class="podium-rank">#{{ team.rank }}</span>
-            <div class="team-monogram">{{ team.team_name.slice(0, 2) }}</div>
-            <h3>{{ team.team_name }}</h3>
-            <strong>{{ number(team.hybrid_score, 1) }}</strong>
-            <small>
-              {{ number(team.elo) }} {{ language === "zh-CN" ? "Elo 分" : "Elo" }}
-            </small>
-          </article>
         </div>
 
         <div class="ranking-table-card">
@@ -248,16 +238,16 @@ watch(leagueId, loadRankings);
               </thead>
               <tbody>
                 <tr v-for="team in teams" :key="team.team_id">
-                  <td class="rank-cell">{{ String(team.rank).padStart(2, "0") }}</td>
+                  <td class="rank-cell">{{ team.rank == null ? $t("Unranked") : String(team.rank).padStart(2, "0") }}</td>
                   <td><strong>{{ team.team_name }}</strong></td>
                   <td class="score-cell">
                     <strong>{{ number(team.hybrid_score, 1) }}</strong>
-                    <span><i :style="{ width: scoreWidth(team.hybrid_score, maxTeamScore) }"></i></span>
+                    <span v-if="team.hybrid_score != null"><i :style="{ width: scoreWidth(team.hybrid_score, maxTeamScore) }"></i></span>
                   </td>
                   <td>{{ number(team.elo) }}</td>
                   <td>{{ percent(team.decayed_win_rate) }}</td>
                   <td>{{ number(team.effective_games, 1) }}</td>
-                  <td>{{ team.recent_10_wins }}–{{ team.recent_10_games - team.recent_10_wins }}</td>
+                  <td>{{ team.recent_10_games ? `${team.recent_10_wins}–${team.recent_10_games - team.recent_10_wins}` : $t("No current information") }}</td>
                 </tr>
               </tbody>
             </table>
@@ -376,14 +366,14 @@ watch(leagueId, loadRankings);
               </div>
               <div class="player-stat">
                 <strong>{{ player.games }}</strong>
-                <span>{{ $t("career games") }}</span>
+                <span>{{ $t("season games") }}</span>
               </div>
               <div class="player-stat confidence">
                 <strong>{{ percent(player.confidence) }}</strong>
                 <span>{{ $t("confidence") }}</span>
               </div>
             </article>
-            <p v-if="!shownPlayers.length" class="empty-board">{{ $t("No players match these filters.") }}</p>
+            <p v-if="!shownPlayers.length" class="empty-board">{{ $t(selectedHero?.players?.length ? "No players match these filters." : "No current information") }}</p>
           </div>
 
           <aside class="formula-note">
@@ -397,7 +387,7 @@ watch(leagueId, loadRankings);
         </div>
       </section>
 
-      <section v-else class="position-board">
+      <section v-else-if="board === 'positions'" class="position-board">
         <div class="section-heading position-heading">
           <div>
             <p class="rankings-eyebrow">{{ $t("Active players · All heroes") }}</p>
@@ -423,6 +413,7 @@ watch(leagueId, loadRankings);
           </button>
         </div>
 
+        <p v-if="!selectedPosition && !noInformation" class="empty-board">{{ $t("No current information") }}</p>
         <template v-if="selectedPosition">
           <section class="hero-filters position-filters">
             <label>
@@ -480,14 +471,14 @@ watch(leagueId, loadRankings);
               </div>
               <div class="player-stat">
                 <strong>{{ player.games }}</strong>
-                <span>{{ $t("career games") }}</span>
+                <span>{{ $t("season games") }}</span>
               </div>
               <div class="player-stat confidence">
                 <strong>{{ percent(player.confidence) }}</strong>
                 <span>{{ $t("confidence") }}</span>
               </div>
             </article>
-            <p v-if="!shownPositionPlayers.length" class="empty-board">{{ $t("No players match these filters.") }}</p>
+            <p v-if="!shownPositionPlayers.length" class="empty-board">{{ $t(selectedPosition?.players?.length ? "No players match these filters." : "No current information") }}</p>
           </div>
 
           <aside class="formula-note">
@@ -517,12 +508,11 @@ select,input { min-height:43px; padding:.62rem .75rem; border:1px solid var(--li
 .board-switch { display:grid; grid-template-columns:repeat(3,1fr); gap:.7rem; margin-top:.75rem; }
 .board-switch button { display:grid; grid-template-columns:40px 1fr; gap:.12rem .7rem; padding:1.1rem; border:1px solid var(--line); background:rgba(255,255,255,.72); color:var(--ink); text-align:left; }.board-switch button>span{grid-row:1/3;color:var(--accent);font:700 .7rem var(--mono)}.board-switch strong{font:700 1.15rem var(--display)}.board-switch small{color:var(--ink-soft)}.board-switch button.active{border-color:var(--ink);background:var(--ink);color:#fff}.board-switch button.active small{color:#b9cbc8}
 .team-board { margin-top:2.4rem; }.section-heading,.player-board-head { display:flex; align-items:flex-end; justify-content:space-between; gap:2rem; }.section-heading h2{margin:0;font:800 clamp(2.2rem,5vw,4.5rem)/.9 var(--display);letter-spacing:-.06em}.section-heading>p{max-width:340px;margin:0;color:var(--ink-soft);font-size:.68rem;text-align:right}
-.podium { display:grid; grid-template-columns:repeat(3,1fr); gap:.7rem; margin-top:1.5rem; }.podium article{position:relative;min-height:210px;padding:1.35rem;border:1px solid var(--line);background:rgba(255,255,255,.82);overflow:hidden}.podium article::after{content:"";position:absolute;width:150px;height:150px;right:-65px;bottom:-70px;border-radius:50%;background:rgba(15,138,107,.09)}.podium-rank{color:var(--accent);font-weight:700}.team-monogram{display:grid;width:50px;height:50px;margin-top:1.4rem;place-items:center;border-radius:50%;background:var(--ink);color:#fff;font:700 .82rem var(--display)}.podium h3{margin:1rem 0 .5rem;font:700 1.45rem var(--display)}.podium article>strong{font:800 2.4rem var(--display)}.podium article>small{margin-left:.5rem;color:var(--ink-soft)}.podium .place-1{background:linear-gradient(135deg,#fff8e7,#edf4ef);border-color:rgba(196,92,38,.35)}
 .ranking-table-card,.player-board-card{margin-top:.75rem;padding:1rem 1.2rem;border:1px solid var(--line);background:rgba(255,255,255,.84)}.table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;min-width:850px}th,td{padding:.9rem .65rem;border-bottom:1px solid var(--line);text-align:left}th{color:var(--ink-soft);font-size:.6rem;letter-spacing:.08em;text-transform:uppercase}.rank-cell{color:var(--accent);font-weight:700}.score-cell{min-width:170px}.score-cell>strong{display:inline-block;width:42px}.score-cell>span,.player-identity>span{display:inline-block;width:95px;height:5px;overflow:hidden;background:rgba(16,42,46,.08);vertical-align:middle}.score-cell i,.player-identity i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),#c45c26)}
 .hero-board { display:grid; grid-template-columns:255px minmax(0,1fr); gap:.75rem; margin-top:.75rem; align-items:start; }.hero-directory{position:sticky;top:.75rem;max-height:calc(100vh - 1.5rem);padding:1rem;border:1px solid var(--line);background:rgba(255,255,255,.88);overflow:auto}.directory-head h2{margin:0;font:700 1.45rem var(--display)}.directory-toggle{display:none}.hero-search{display:grid;gap:.3rem;margin:1rem 0 .65rem}.hero-list{display:grid;gap:.25rem}.hero-list button{display:grid;grid-template-columns:40px 1fr;gap:.65rem;align-items:center;width:100%;padding:.55rem;border:1px solid transparent;background:transparent;color:var(--ink);text-align:left}.hero-list button.active{border-color:rgba(15,138,107,.3);background:rgba(15,138,107,.08)}.hero-list button>img,.hero-list button>span{width:40px;height:40px;object-fit:cover;border-radius:50%;background:#dce8e2}.hero-list button>span{display:grid;place-items:center}.hero-list strong,.hero-list small{display:block}.hero-list strong{font-family:var(--display)}.hero-list small{color:var(--ink-soft);font-size:.6rem}
 .hero-banner{display:flex;align-items:center;gap:1.2rem;padding:1.4rem;border:1px solid var(--line);background:linear-gradient(120deg,rgba(255,255,255,.9),rgba(231,241,236,.88))}.hero-portrait{display:grid;width:94px;height:94px;place-items:center;overflow:hidden;border-radius:50%;background:#dce8e2;font:800 2rem var(--display)}.hero-portrait img{width:100%;height:100%;object-fit:cover}.hero-banner h2{margin:0;font:800 clamp(2.5rem,6vw,5rem)/.9 var(--display);letter-spacing:-.06em}.hero-banner>div:last-child>span{display:block;margin-top:.5rem;color:var(--ink-soft)}
 .hero-filters{display:grid;grid-template-columns:minmax(180px,.5fr) minmax(240px,1fr);gap:.65rem;margin-top:.7rem;padding:1rem;border:1px solid var(--line);background:rgba(255,255,255,.76)}.hero-filters label{display:grid;gap:.3rem}.player-board-head h3{margin:0;font:700 1.55rem var(--display)}.player-board-head>span{color:var(--ink-soft);font-size:.65rem}.player-row{display:grid;grid-template-columns:30px minmax(180px,1fr) repeat(5,minmax(75px,.35fr));gap:.65rem;align-items:center;padding:.9rem 0;border-top:1px solid var(--line)}.player-row:first-of-type{margin-top:1rem}.player-rank{color:var(--accent);font-weight:700}.player-identity{min-width:0}.player-identity strong,.player-identity small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.player-identity strong{font:700 1rem var(--display)}.player-identity small{margin:.1rem 0 .42rem;color:var(--ink-soft);font-size:.62rem}.player-identity>span{width:min(150px,100%)}.player-stat strong,.player-stat span{display:block}.player-stat strong{font:700 .95rem var(--display)}.player-stat span{color:var(--ink-soft);font-size:.55rem;text-transform:uppercase}.player-stat.primary strong{color:var(--accent-deep);font-size:1.2rem}.formula-note{margin-top:.7rem;padding:1rem 1.2rem;border-left:3px solid var(--accent);background:rgba(255,255,255,.72)}.formula-note strong{font-family:var(--display)}.formula-note p{margin:.35rem 0 0;color:var(--ink-soft);font-size:.68rem;line-height:1.65}.empty-board{padding:2rem 0;color:var(--ink-soft);text-align:center}
 .position-board{margin-top:2.4rem}.position-tabs{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:.45rem;margin-top:1.5rem}.position-tabs button{display:grid;gap:.2rem;padding:1rem;border:1px solid var(--line);background:rgba(255,255,255,.76);color:var(--ink);text-align:left}.position-tabs button.active{border-color:var(--ink);background:var(--ink);color:#fff}.position-tabs strong{font:700 1rem var(--display)}.position-tabs small{color:var(--ink-soft);font-size:.6rem}.position-tabs button.active small{color:#b9cbc8}.position-filters{margin-top:.45rem}.position-player-card{margin-top:.45rem}
 @media(max-width:980px){.rankings-hero{display:grid;gap:2rem}.season-control{min-width:0}.hero-board{grid-template-columns:1fr}.hero-directory{position:static;max-height:none}.directory-head{display:flex;align-items:center;justify-content:space-between}.directory-toggle{display:block;padding:.6rem .75rem;border:1px solid var(--line);background:#fff;color:var(--ink)}.hero-search{display:none}.hero-list{display:none;grid-template-columns:repeat(3,1fr);margin-top:.8rem}.hero-list.open{display:grid}.player-row{grid-template-columns:28px minmax(160px,1fr) repeat(3,minmax(72px,.35fr))}.player-stat:nth-last-child(-n+2){display:none}}
-@media(max-width:680px){.rankings-page{width:min(100% - 1rem,640px);padding-top:.6rem}.rankings-hero{padding:1.5rem}.board-switch{grid-template-columns:repeat(3,minmax(0,1fr));gap:.35rem}.board-switch button{display:flex;min-height:44px;align-items:center;justify-content:center;padding:.5rem .4rem;text-align:center}.board-switch button>span,.board-switch button>small{display:none}.board-switch strong{font-size:.68rem;white-space:nowrap}.podium{grid-template-columns:repeat(3,minmax(0,1fr));gap:.35rem}.podium article{min-height:0;padding:.7rem}.podium article::after{width:90px;height:90px;right:-42px;bottom:-45px}.podium .team-monogram{width:34px;height:34px;margin-top:.7rem;font-size:.62rem}.podium h3{margin:.65rem 0 .3rem;font-size:.9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.podium article>strong{font-size:1.4rem}.podium article>small{display:block;margin:.2rem 0 0;font-size:.58rem}.hero-list.open{grid-template-columns:1fr}.hero-banner{align-items:flex-start}.hero-portrait{width:66px;height:66px}.hero-filters{display:none}.position-tabs{grid-template-columns:repeat(3,minmax(0,1fr));margin-top:1rem}.position-tabs button{padding:.7rem}.player-row{grid-template-columns:25px minmax(130px,1fr) 70px 75px}.player-stat:nth-of-type(n+5){display:none}.player-stat.confidence{display:none}.section-heading,.player-board-head{align-items:flex-start;flex-direction:column;gap:.5rem}.section-heading>p{text-align:left}}
+@media(max-width:680px){.rankings-page{width:min(100% - 1rem,640px);padding-top:.6rem}.rankings-hero{padding:1.5rem}.board-switch{grid-template-columns:repeat(3,minmax(0,1fr));gap:.35rem}.board-switch button{display:flex;min-height:44px;align-items:center;justify-content:center;padding:.5rem .4rem;text-align:center}.board-switch button>span,.board-switch button>small{display:none}.board-switch strong{font-size:.68rem;white-space:nowrap}.hero-list.open{grid-template-columns:1fr}.hero-banner{align-items:flex-start}.hero-portrait{width:66px;height:66px}.hero-filters{display:none}.position-tabs{grid-template-columns:repeat(3,minmax(0,1fr));margin-top:1rem}.position-tabs button{padding:.7rem}.player-row{grid-template-columns:25px minmax(130px,1fr) 70px 75px}.player-stat:nth-of-type(n+5){display:none}.player-stat.confidence{display:none}.section-heading,.player-board-head{align-items:flex-start;flex-direction:column;gap:.5rem}.section-heading>p{text-align:left}}
 </style>

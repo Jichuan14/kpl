@@ -288,7 +288,13 @@ def invoke_tool(
     started = perf_counter()
     try:
         validated = tool.arguments_model.model_validate(arguments)
-        result = tool.handler(validated)
+        from app.services.model_registry import current_bundle, bundle_scope
+        handle=current_bundle()
+        model_tools={"predict_next_draft_action","simulate_future_draft","recommend_value_draft_action","score_current_lineup"}
+        with bundle_scope(handle if name in model_tools else None):
+            result = tool.handler(validated)
+        if handle and name in model_tools:
+            result={**result,**handle.metadata()}
     except ValidationError:
         logger.warning(
             "agent_tool_invalid_arguments",

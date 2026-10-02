@@ -7,6 +7,7 @@ import { language } from "./i18n";
 
 const props = defineProps({
   leagueId: { type: String, required: true },
+  modelVersion: { type: String, default: "" },
   seasonName: { type: String, default: "" },
   draftState: { type: Object, default: null },
   forceChinese: { type: Boolean, default: false },
@@ -89,7 +90,8 @@ let messageId = Math.max(0, ...messages.value.map((message) => Number(message.id
 const isChinese = computed(() => props.forceChinese || language.value === "zh-CN");
 
 const contextKey = computed(() =>
-  JSON.stringify({ league_id: props.leagueId, draft_state: props.draftState })
+  JSON.stringify({ league_id: props.leagueId,
+      model_version: props.modelVersion || undefined, draft_state: props.draftState })
 );
 const hasBoardContext = computed(() => Boolean(props.draftState));
 const canPrepareScoutReport = computed(() =>
@@ -396,6 +398,7 @@ async function submitQuestion(suggestedQuestion = null) {
   const payload = {
     message,
     league_id: props.leagueId,
+      model_version: props.modelVersion || undefined,
     draft_state: props.draftState,
     history,
     response_mode: responseMode.value,
@@ -470,6 +473,7 @@ async function submitScoutReport() {
   try {
     activeEntry.response = await prepareScoutReport({
       league_id: props.leagueId,
+      model_version: props.modelVersion || undefined,
       blue_team_id: state.blue_team_id,
       blue_team_name: state.blue_team_name,
       red_team_id: state.red_team_id,

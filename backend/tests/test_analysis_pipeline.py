@@ -24,15 +24,23 @@ class AnalysisPipelineTests(unittest.TestCase):
             result = pipeline.run("all")
 
         self.assertEqual(
-            completed[-4:],
+            completed,
             [
-                "learnable_draft_model",
-                "sequence_draft_model",
-                "ban_value_model",
-                "lineup_value_model",
+                "export", "decisions", "statistics", "meta",
+                "team_synergy", "team_profiles", "power_rankings", "draft_model",
+                "rolling_model",
             ],
         )
-        self.assertEqual(result["steps"][-1]["step"], "lineup_value_model")
+        self.assertNotIn("learnable_draft_model", completed)
+        self.assertIn("draft_model", completed)
+        self.assertEqual(result["steps"][-1]["step"], "rolling_model")
+
+    def test_explicit_legacy_training_remains_available(self) -> None:
+        pipeline = analysis_pipeline.AnalysisPipeline("20260003")
+        self.assertTrue(pipeline._command("learnable_draft_model")[1].endswith("train_learnable_draft_choice_model.py"))
+        with patch.object(pipeline, "_run_step", return_value={"step": "learnable_draft_model"}) as run:
+            pipeline.run("learnable_draft_model")
+        run.assert_called_once_with("learnable_draft_model")
 
     def test_display_pipeline_skips_all_draft_models(self) -> None:
         pipeline = analysis_pipeline.AnalysisPipeline("20250004")
@@ -79,7 +87,7 @@ class AnalysisPipelineTests(unittest.TestCase):
                 )
 
         self.assertEqual(result["steps"][0]["step"], "sequence_draft_model")
-        self.assertEqual(run.call_count, 2)
+        self.assertEqual(run.call_count, 3)
         feature_command = run.call_args_list[0].args[0]
         training_command = run.call_args_list[1].args[0]
         self.assertTrue(feature_command[1].endswith("build_hero_draft_feature_vectors.py"))
@@ -91,6 +99,7 @@ class AnalysisPipelineTests(unittest.TestCase):
                 "20260003",
             ],
         )
+        self.assertTrue(run.call_args_list[2].args[0][1].endswith("export_production_hero_feature_space.py"))
         self.assertNotIn("--train-on-all-data", training_command)
         self.assertNotIn("poc", str(training_command))
         self.assertTrue(
