@@ -45,6 +45,7 @@ class LiveMatchService:
         client: KplApiClient | Any | None = None,
         cache_seconds: int | None = None,
         manual_refresh_seconds: int | None = None,
+        max_cache_entries: int = 256,
     ) -> None:
         settings = settings or get_settings()
         self.client = client or KplApiClient(settings)
@@ -57,15 +58,19 @@ class LiveMatchService:
         self._state_flights: dict[Any, Future] = {}
         self._fixture_flights: dict[Any, Future] = {}
         self._lock = Lock()
+        self.max_cache_entries = max(1, max_cache_entries)
+
+    def _fixtures(self, league_id: str, ttl: int):
+        return self._cached_fetch(
+            self._fixture_cache, self._fixture_flights, league_id, ttl,
+            lambda: _results(self.client.get_matches(league_id)),
+        )[0]
 
     def get_current_fixture(
         self, league_id: str, *, selectable_team_ids: set[str]
     ) -> dict[str, Any] | None:
         """Return the current official fixture, without touching the database."""
-        rows, _, _ = self._cached_fetch(
-            self._fixture_cache, self._fixture_flights, str(league_id), self.cache_seconds,
-            lambda: _results(self.client.get_matches(str(league_id))),
-        )
+        rows = self._fixtures(str(league_id), self.cache_seconds)
         live = sorted(
             (
                 row
@@ -138,13 +143,18 @@ class LiveMatchService:
         key = (str(league_id), str(match_id), tuple(sorted(team_ids)))
         state, cache_age, refreshed = self._cached_fetch(
             self._cache, self._state_flights, key, refresh_after_seconds,
-            lambda: self._fetch_state(str(league_id), team_ids, str(match_id)),
+            lambda: self._fetch_state(str(league_id), team_ids, str(match_id), refresh_after_seconds),
         )
         return self._response(state, cache_age=cache_age, refreshed=refreshed)
 
     def _cached_fetch(self, cache, flights, key, ttl, fetch):
         with self._lock:
             now = monotonic()
+            # TTL determines refresh eligibility; eviction bounds retention
+            # even for keys that will never be requested again.
+            for expired in [k for k, (published, _) in cache.items()
+                            if now - published >= self.cache_seconds]:
+                del cache[expired]
             cached = cache.get(key)
             if cached and now - cached[0] < ttl:
                 return cached[1], now - cached[0], False
@@ -160,6 +170,8 @@ class LiveMatchService:
             value = fetch()
             with self._lock:
                 published = monotonic()
+                if key not in cache and len(cache) >= self.max_cache_entries:
+                    del cache[min(cache, key=lambda k: cache[k][0])]
                 cache[key] = (published, value)
             # Future callbacks and waiter wakeups run outside the cache lock.
             future.set_result((published, value))
@@ -186,12 +198,12 @@ class LiveMatchService:
         return response
 
     def _fetch_state(
-        self, league_id: str, team_ids: set[str], match_id: str
+        self, league_id: str, team_ids: set[str], match_id: str, fixture_ttl: int | None = None
     ) -> dict[str, Any]:
-        matches_payload = self.client.get_matches(league_id)
+        fixture_rows = self._fixtures(league_id, fixture_ttl or self.cache_seconds)
         candidates = [
             row
-            for row in _results(matches_payload)
+            for row in fixture_rows
             if str(row.get("match_id") or "") == match_id
             and {
                 str((row.get("camp1") or {}).get("team_id") or ""),

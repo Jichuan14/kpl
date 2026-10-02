@@ -24,9 +24,8 @@ def client_key(request: Request, *, trust_proxy_headers: bool) -> str:
     proxies. Invalid values fall back to the actual connected peer.
     """
     if trust_proxy_headers:
-        cloudflare_ip = _normalized_ip(request.headers.get("CF-Connecting-IP"))
-        if cloudflare_ip:
-            return cloudflare_ip
+        # The trusted gateway supplies X-Forwarded-For. Never prioritize a
+        # provider-specific header that an anonymous caller can supply.
         forwarded_for = request.headers.get("X-Forwarded-For")
         if forwarded_for:
             forwarded_ip = _normalized_ip(forwarded_for.split(",", 1)[0])

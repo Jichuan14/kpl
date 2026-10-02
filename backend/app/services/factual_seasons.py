@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Battle, League, Match
 from app.services.sync import FINISHED_MATCH_STATUS
+from app.services.file_summary_cache import file_summary
 
 RANKING_SCOPE = "season_only"
 RANKING_SCHEMA_VERSION = 3
@@ -18,13 +19,15 @@ def season_rankings_ready(path: Path, league_id: str) -> bool:
     if not path.is_file():
         return False
     try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-        return (
-            value.get("schema_version") == RANKING_SCHEMA_VERSION
-            and value.get("evidence_scope") == RANKING_SCOPE
-            and value.get("league", {}).get("league_id") == league_id
-            and value.get("history_league_ids") == [league_id]
-        )
+        def validate(source):
+            value = json.loads(source.read_text(encoding="utf-8"))
+            return (
+                value.get("schema_version") == RANKING_SCHEMA_VERSION
+                and value.get("evidence_scope") == RANKING_SCOPE
+                and value.get("league", {}).get("league_id") == league_id
+                and value.get("history_league_ids") == [league_id]
+            )
+        return file_summary(path, validate, variant=("rankings", league_id))
     except (OSError, ValueError, TypeError, AttributeError):
         return False
 

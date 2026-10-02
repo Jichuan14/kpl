@@ -31,6 +31,7 @@ from app.services.season_teams import validate_season_team_pair
 from app.services.model_tool_scope import pinned_model_operation
 from app.services.model_registry import resolve_bundle, current_bundle
 from app.services.coach_rate_limit import CoachRateLimiter
+from app.services import provider_budget
 from app.services.request_identity import client_key
 from app.services.hero_matchup import recommend_heroes
 from app.services.lineup_recommender import recommend_lineup
@@ -72,7 +73,7 @@ def active_model(model_version: str | None = Query(None, max_length=128)) -> Api
         raise HTTPException(400, detail=str(exc)) from exc
 
 
-@router.post("/commentary")
+@router.post("/commentary", dependencies=[Depends(provider_budget.limit_provider_requests)])
 @pinned_model_operation
 def selection_commentary(
     body: DraftSelectionCommentaryRequest,

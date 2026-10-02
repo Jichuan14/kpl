@@ -252,8 +252,8 @@ def publish_league(db: Session, league_id: str) -> dict[str, object]:
         }
         _write_json(directory / "overview.json", manifest)
         published.append("overview.json")
-        for relation in {row["relation"] for row in rows}:
-            for context in {row["context_level"] for row in rows if row["relation"] == relation}:
+        for relation in ("ban_response", "pick_synergy", "counter_pick", "counter_ban"):
+            for context in ("overall", "slot_context"):
                 _write_json(
                     directory / "patterns" / relation / f"{context}.json",
                     {"rows": [row for row in rows if row["relation"] == relation and row["context_level"] == context]},

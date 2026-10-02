@@ -1,4 +1,5 @@
 <script setup>
+import { createRequestScope } from "./requestScope.js";
 import { createSeasonStartup } from "./seasonStartup.js";
 import ModelCoverageNote from "./ModelCoverageNote.vue";
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
@@ -69,7 +70,15 @@ const pan = ref({ x: 0, y: 0 });
 const dragState = ref(null);
 const activePointers = new Map();
 let pinchState = null;
-let matchupRequestNumber = 0;
+const matchupRequests = createRequestScope();
+function invalidateMatchup() {
+  matchupRequests.invalidate();
+  matchupLoading.value = false;
+  matchupResult.value = null;
+  matchupError.value = "";
+  matchupRecommendationsExpanded.value = false;
+}
+onBeforeUnmount(() => matchupRequests.dispose());
 let featureLoadVersion = 0;
 
 const laneLabels = {
@@ -337,7 +346,8 @@ function removeOpponent(heroId) {
 
 async function recommendForMatchup(limit = INITIAL_MATCHUP_RECOMMENDATION_LIMIT) {
   if (!opponentHeroIds.value.length || matchupLoading.value) return;
-  const requestNumber = ++matchupRequestNumber;
+  const operation = matchupRequests.begin();
+  if (!operation) return;
   matchupLoading.value = true;
   matchupError.value = "";
   try {
@@ -362,20 +372,20 @@ async function recommendForMatchup(limit = INITIAL_MATCHUP_RECOMMENDATION_LIMIT)
     // Older running API processes do not yet accept `limit`. Keep the normal
     // recommendation flow usable until that process is refreshed.
     const result = limit === INITIAL_MATCHUP_RECOMMENDATION_LIMIT
-      ? await fetchHeroMatchupRecommendations(request)
-      : await fetchHeroMatchupRecommendations({ ...request, limit }).catch(async (err) => {
+      ? await fetchHeroMatchupRecommendations(request, { signal: operation.signal })
+      : await fetchHeroMatchupRecommendations({ ...request, limit }, { signal: operation.signal }).catch(async (err) => {
           if (err.status !== 422) throw err;
           matchupRecommendationsExpanded.value = false;
-          return fetchHeroMatchupRecommendations(request);
+          return fetchHeroMatchupRecommendations(request, { signal: operation.signal });
         });
-    if (requestNumber === matchupRequestNumber) matchupResult.value = result;
+    if (operation.isCurrent()) matchupResult.value = result;
   } catch (err) {
-    if (requestNumber === matchupRequestNumber) {
+    if (operation.isCurrent()) {
       matchupResult.value = null;
       matchupError.value = err.message || t("Could not calculate hero recommendations.");
     }
   } finally {
-    if (requestNumber === matchupRequestNumber) matchupLoading.value = false;
+    if (operation.isCurrent()) matchupLoading.value = false;
   }
 }
 
@@ -572,7 +582,7 @@ async function loadFeatureSpace() {
   }
 }
 
-const seasonStartup = createSeasonStartup(loadSeasons, () => { matchupRequestNumber += 1; return loadFeatureSpace(); });
+const seasonStartup = createSeasonStartup(loadSeasons, () => { invalidateMatchup(); return loadFeatureSpace(); });
 onMounted(async () => {
   try {
     await seasonStartup.initialize();
@@ -582,6 +592,8 @@ onMounted(async () => {
 });
 
 watch(leagueId, seasonStartup.changed, { flush: "sync" });
+watch(() => [favoriteHeroIds.value.join(","), opponentHeroIds.value.join(","), preferredLane.value, modelVersion.value],
+  invalidateMatchup, { flush: "sync" });
 </script>
 
 <template>

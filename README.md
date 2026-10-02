@@ -312,6 +312,39 @@ accept a current draft state from the simulator.
 
 ## Development checks
 
+Public commentary and Draft Coach share the same paid-provider admission
+budget, including concurrency, per-client and server-wide request limits.
+Live-match requests and public writes have separate budgets. Live requests
+validate local fixtures before contacting KPL and use bounded, expiring caches.
+Visitor and prediction identity comes from a signed HttpOnly cookie; the old
+client UUID remains accepted for request compatibility but cannot create a
+second vote within that cookie session. Predictions require the authoritative
+fixture, its best-of format, and an open pre-match or current-game window.
+Anonymous cookies identify sessions, not unique people. Analytics preserves
+its historical aggregate totals and stores only canonical public route names.
+
+The visitor signing key is generated once at
+`backend/data/public_session.key` with owner-only permissions and persists
+through API restarts. It is ignored by Git. A configured
+`PUBLIC_SESSION_SECRET` (at least 32 random characters) overrides that file.
+Proxy identity settings remain opt-in; sanitize forwarded headers at the
+trusted gateway before enabling them. `CF-Connecting-IP` is not used as client
+authority and is removed by the supplied Nginx proxy configuration.
+
+Coach retention deletes expired conversation metadata and checkpoints
+together. Service initialization also reconciles checkpoints orphaned by
+older versions, and session activity triggers expiry cleanup at most once per
+minute. Match-data SQLite remains separate from Coach persistence.
+
+The public calendar uses one shared, short-lived 17-day range request for the
+widget and welcome popup. The API still supports existing single-day calls.
+Ranking readiness and JSONL record counts are cached by file identity, size,
+and modification timestamps; the public season catalog and default remain
+uncached HTTP reads. Sync skips only series with the expected game count,
+complete supported drafts and player detail, and persists each fetched battle
+in a short transaction. Publication replaces all supported relationship shards,
+including empty ones.
+
 Run the backend test suite from the repository root. `pytest` is intentionally
 not a runtime dependency, so install it once in the backend environment:
 

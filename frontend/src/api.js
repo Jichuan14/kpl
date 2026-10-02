@@ -1,3 +1,5 @@
+import { browserDate, shiftDate } from "./matchCalendar.js";
+
 async function request(path, options = {}) {
   let res;
   try {
@@ -124,15 +126,37 @@ export function fetchDailyMatches({ date } = {}) {
   return request(`/api/leagues/daily-matches${query}`);
 }
 
-export function fetchLiveMatch({ leagueId, teamAId, teamBId, matchId }) {
-  const params = new URLSearchParams({ team_a_id: teamAId, team_b_id: teamBId, match_id: matchId });
-  return request(`/api/leagues/${encodeURIComponent(leagueId)}/live-match?${params}`);
+const calendarCache = new Map();
+export function resetCalendarCacheForTests() { calendarCache.clear(); }
+export function fetchMatchCalendar({ date = browserDate() } = {}) {
+  const now = Date.now();
+  for (const [key, entry] of calendarCache) {
+    if (entry.expiresAt <= now) calendarCache.delete(key);
+  }
+  if (calendarCache.has(date)) return calendarCache.get(date).promise;
+  while (calendarCache.size >= 4) calendarCache.delete(calendarCache.keys().next().value);
+  const params = new URLSearchParams({ start_date: shiftDate(date, -8), end_date: shiftDate(date, 8) });
+  const entry = { expiresAt: Infinity };
+  entry.promise = request(`/api/leagues/daily-matches?${params}`).then((value) => {
+    entry.expiresAt = Date.now() + 60_000;
+    return value;
+  }).catch((error) => {
+    if (calendarCache.get(date) === entry) calendarCache.delete(date);
+    throw error;
+  });
+  calendarCache.set(date, entry);
+  return entry.promise;
 }
 
-export function refreshLiveMatch({ leagueId, teamAId, teamBId, matchId }) {
+export function fetchLiveMatch({ leagueId, teamAId, teamBId, matchId, signal }) {
+  const params = new URLSearchParams({ team_a_id: teamAId, team_b_id: teamBId, match_id: matchId });
+  return request(`/api/leagues/${encodeURIComponent(leagueId)}/live-match?${params}`, { signal });
+}
+
+export function refreshLiveMatch({ leagueId, teamAId, teamBId, matchId, signal }) {
   const params = new URLSearchParams({ team_a_id: teamAId, team_b_id: teamBId, match_id: matchId });
   return request(`/api/leagues/${encodeURIComponent(leagueId)}/live-match/refresh?${params}`, {
-    method: "POST",
+    method: "POST", signal,
   });
 }
 
@@ -245,10 +269,11 @@ export function fetchLearnedFeatureSpace(leagueId, modelVersion) {
   });
 }
 
-export function fetchHeroMatchupRecommendations(payload) {
+export function fetchHeroMatchupRecommendations(payload, { signal } = {}) {
   return request("/api/simulations/hero-matchup", {
     method: "POST",
     body: JSON.stringify(payload),
+    signal,
   });
 }
 

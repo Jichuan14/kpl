@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from ipaddress import ip_address
 from typing import NoReturn
+from threading import Lock
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
@@ -48,6 +49,7 @@ from app.database import get_db
 from app.config import get_settings
 from app.schemas import ApiResponse, CoachLimitsUpdate
 from app.services.coach_rate_limit import CoachRateLimiter
+from app.services import provider_budget
 from app.services.request_identity import client_key
 from app.services.season_teams import validate_season_team_pair
 from app.services.model_tool_scope import pinned_model_operation
@@ -78,32 +80,34 @@ def _new_rate_limiter() -> CoachRateLimiter:
     )
 
 
-rate_limiter = _new_rate_limiter()
+rate_limiter = provider_budget.rate_limiter
 _coach_service: KimiCoachService | None = None
+_service_lock = Lock()
 
 
 def get_coach_service() -> KimiCoachService:
     """Reuse one service so the compiled graph is not rebuilt per request."""
     global _coach_service
-    if _coach_service is None:
-        settings = get_settings()
-        persistent = (
-            settings.coach_enable_conversations
-            and settings.coach_orchestration == "langgraph"
-        )
-        _coach_service = KimiCoachService(
-            settings=settings,
-            conversation_store=(
-                SqliteConversationStore(settings.coach_conversation_path)
-                if persistent
-                else None
-            ),
-            checkpointer=(
-                build_checkpointer(True, settings.coach_checkpoint_path)
-                if persistent
-                else None
-            ),
-        )
+    with _service_lock:
+        if _coach_service is None:
+            settings = get_settings()
+            persistent = (
+                settings.coach_enable_conversations
+                and settings.coach_orchestration == "langgraph"
+            )
+            _coach_service = KimiCoachService(
+                settings=settings,
+                conversation_store=(
+                    SqliteConversationStore(settings.coach_conversation_path)
+                    if persistent
+                    else None
+                ),
+                checkpointer=(
+                    build_checkpointer(True, settings.coach_checkpoint_path)
+                    if persistent
+                    else None
+                ),
+            )
     return _coach_service
 
 
@@ -118,6 +122,7 @@ def reset_coach_rate_limiter() -> None:
     """Reset process-local counters for isolated application tests."""
     global rate_limiter
     rate_limiter = _new_rate_limiter()
+    provider_budget.rate_limiter = rate_limiter
 
 
 def _public_coach_data(result: dict) -> dict:

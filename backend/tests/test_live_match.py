@@ -141,7 +141,7 @@ class LiveMatchConcurrencyTest(unittest.TestCase):
             def result(self, *args, **kwargs):
                 joined.set()
                 return super().result(*args, **kwargs)
-        def fetch(league, teams, match):
+        def fetch(league, teams, match, ttl):
             if match == "blocked":
                 entered.set()
                 if not release.wait(3): raise TimeoutError("release")
@@ -202,11 +202,11 @@ class LiveMatchConcurrencyTest(unittest.TestCase):
         service.get_match_state("s4", "lgd", "hero", "live-1")
         other = service.get_match_state("s4", "lgd", "other", "live-1")
         self.assertIsNone(other["match"])
-        self.assertEqual(client.matches_calls, 3)
+        self.assertEqual(client.matches_calls, 1)
 
     def test_slow_fetch_ttl_starts_at_publication_and_boundary_expires(self):
         service = LiveMatchService(client=FakeKplClient(), cache_seconds=180)
-        with patch("app.services.live_match.monotonic", side_effect=[0, 200]):
+        with patch("app.services.live_match.monotonic", side_effect=[0, 0, 200, 200]):
             first = service.get_match_state("s4", "lgd", "hero", "live-1")
         with patch("app.services.live_match.monotonic", return_value=379):
             self.assertFalse(service.get_match_state("s4", "lgd", "hero", "live-1")["official_refresh"]["performed"])
@@ -216,6 +216,26 @@ class LiveMatchConcurrencyTest(unittest.TestCase):
 
 
 class LiveMatchApiTest(unittest.TestCase):
+    def setUp(self):
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import Session
+        from sqlalchemy.pool import StaticPool
+        from app.database import Base, get_db
+        from app.models import Match
+        self.engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+        Base.metadata.create_all(self.engine)
+        with Session(self.engine) as db:
+            db.add(Match(league_id="season", match_id="live-1", camp1_team_id="lgd", camp2_team_id="hero"))
+            db.commit()
+        def database():
+            with Session(self.engine) as db:
+                yield db
+        app.dependency_overrides[get_db] = database
+    def tearDown(self):
+        from app.database import get_db
+        app.dependency_overrides.pop(get_db, None)
+        self.engine.dispose()
+
     def test_endpoint_returns_read_only_live_state(self) -> None:
         client = TestClient(app)
         state = {"is_live": True, "hero_selection_locked": True, "match": {"match_id": "live-1"}}

@@ -71,8 +71,11 @@ def artifact(path: Path, key: str, label: str) -> dict[str, Any]:
     exists = path.is_file()
     records = 0
     if exists and path.suffix == ".jsonl":
-        with path.open("rb") as source:
-            records = sum(1 for line in source if line.strip())
+        from app.services.file_summary_cache import file_summary
+        def count_records(source_path):
+            with source_path.open("rb") as source:
+                return sum(1 for line in source if line.strip())
+        records = file_summary(path, count_records, variant="jsonl_count")
     stat = path.stat() if exists else None
     return {
         "key": key,

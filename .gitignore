@@ -13,6 +13,7 @@ deploy/.htpasswd
 backend/data/*.db
 backend/data/*.sqlite*
 backend/data/pipeline.lock
+backend/data/public_session.key
 backend/celerybeat-schedule*
 *.db
 *.sqlite

@@ -1,14 +1,19 @@
 import unittest
 from hashlib import sha256
 from uuid import UUID
+from unittest.mock import patch
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.api.leagues import live_winner_predictions, save_live_winner_prediction
+from app.api.leagues import live_winner_predictions, save_live_winner_prediction as save_prediction
 from app.database import Base
-from app.models import LiveMatchWinnerPrediction
+from app.models import LiveMatchWinnerPrediction, Match
 from app.schemas import LiveWinnerPredictionRequest
+
+
+def save_live_winner_prediction(league_id, body, db):
+    return save_prediction(league_id, body, db, visitor_hash=sha256(str(body.visitor_id).encode()).hexdigest())
 
 
 class LiveWinnerPredictionApiTest(unittest.TestCase):
@@ -16,6 +21,12 @@ class LiveWinnerPredictionApiTest(unittest.TestCase):
         self.engine = create_engine("sqlite:///:memory:")
         Base.metadata.create_all(self.engine)
         self.session = sessionmaker(bind=self.engine)()
+        self.session.add(Match(league_id="season", match_id="match-1", camp1_team_id="team-a",
+                               camp2_team_id="team-b", bo=5, start_time="2099-01-01 00:00:00"))
+        self.session.commit()
+        live = patch("app.api.leagues.live_match_service.get_match_state", return_value={"is_live": True, "current_game": 2})
+        live.start()
+        self.addCleanup(live.stop)
 
     def tearDown(self) -> None:
         self.session.close()
@@ -88,6 +99,8 @@ class LiveWinnerPredictionApiTest(unittest.TestCase):
             )
 
     def test_allows_a_legacy_winner_pick_to_add_its_score_once(self) -> None:
+        self.session.query(Match).update({Match.bo: 3})
+        self.session.commit()
         visitor_id = "00000000-0000-4000-8000-000000000005"
         self.session.add(
             LiveMatchWinnerPrediction(

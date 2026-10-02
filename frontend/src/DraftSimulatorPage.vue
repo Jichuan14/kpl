@@ -1,4 +1,5 @@
 <script setup>
+import { createRequestScope } from "./requestScope.js";
 import { createSeasonStartup } from "./seasonStartup.js";
 import ModelCoverageNote from "./ModelCoverageNote.vue";
 import { computed, onBeforeUnmount, onMounted, ref, toRaw, watch } from "vue";
@@ -89,7 +90,11 @@ const liveScheduleClock = ref(Date.now());
 let liveMatchPollTimer = null;
 let liveMatchCheckTimer = null;
 let liveScheduleTimer = null;
-let liveMatchRequestNumber = 0;
+const liveRequests = createRequestScope();
+function invalidateLiveMatch() {
+  liveRequests.invalidate();
+  liveMatchLoading.value = false;
+}
 const selectedTeamIds = ref({ [TEAM_A]: "", [TEAM_B]: "" });
 
 function clearCommentary() {
@@ -788,7 +793,7 @@ function selectedTeamsMatchFixture() {
 
 function scheduleLiveScheduleClock() {
   stopLiveScheduleClock();
-  if (!teamsReady.value || !selectedTeamsMatchFixture()) return;
+  if (liveRequests.disposed || !teamsReady.value || !selectedTeamsMatchFixture()) return;
   const checkDelay = scheduledLiveCheckDelay(upcomingMatch.value);
   if (checkDelay === null) return;
   const waits = [checkDelay - 5 * 60_000, checkDelay].filter((wait) => wait > 0);
@@ -802,7 +807,7 @@ function scheduleLiveScheduleClock() {
 
 function scheduleLiveMatchCheck() {
   stopLiveMatchCheckSchedule();
-  if (!teamsReady.value || !selectedTeamsMatchFixture()) return;
+  if (liveRequests.disposed || !teamsReady.value || !selectedTeamsMatchFixture()) return;
   const delay = scheduledLiveCheckDelay(upcomingMatch.value);
   if (delay === null) return;
   const wait = Math.max(0, delay);
@@ -813,6 +818,7 @@ function scheduleLiveMatchCheck() {
 }
 
 function startLiveMatchPolling() {
+  if (liveRequests.disposed) return;
   stopLiveMatchPolling();
   // The browser checks in frequently enough to react to cache expiry, while
   // the backend itself limits official KPL requests to one per three minutes.
@@ -870,12 +876,14 @@ async function applyLiveMatchState(state) {
 }
 
 async function moveToNextScheduledFixture() {
+  const targetLeague = leagueId.value;
   let fixture;
   try {
-    fixture = await fetchUpcomingMatch(leagueId.value, { nextOnly: true });
+    fixture = await fetchUpcomingMatch(targetLeague, { nextOnly: true });
   } catch {
     return;
   }
+  if (liveRequests.disposed || targetLeague !== leagueId.value) return;
   if (!fixture || String(fixture.match_id || "") === String(liveMatch.value?.match?.match_id || "")) {
     return;
   }
@@ -911,7 +919,8 @@ async function moveToNextScheduledFixture() {
 
 async function refreshLiveMatch(manual = false) {
   if (!leagueId.value || !teamsReady.value || !upcomingMatch.value?.match_id) return;
-  const requestNumber = ++liveMatchRequestNumber;
+  const operation = liveRequests.begin();
+  if (!operation) return;
   liveMatchLoading.value = true;
   try {
     const payload = {
@@ -919,11 +928,12 @@ async function refreshLiveMatch(manual = false) {
       teamAId: String(selectedTeamIds.value[TEAM_A]),
       teamBId: String(selectedTeamIds.value[TEAM_B]),
       matchId: String(upcomingMatch.value.match_id),
+      signal: operation.signal,
     };
     const state = manual
       ? await requestLiveMatchRefresh(payload)
       : await fetchLiveMatch(payload);
-    if (requestNumber !== liveMatchRequestNumber) return;
+    if (!operation.isCurrent()) return;
     liveMatch.value = state;
     if (!liveFollowing.value && shouldRestoreLiveFollow(state)) {
       await followLiveMatch({ persist: false });
@@ -931,6 +941,7 @@ async function refreshLiveMatch(manual = false) {
     }
     if (isOfficialSeriesComplete(state)) {
       if (liveFollowing.value) await applyLiveMatchState(state);
+      if (!operation.isCurrent()) return;
       stopFollowingLiveMatch();
       stopLiveMatchPolling();
       stopLiveMatchCheckSchedule();
@@ -944,12 +955,14 @@ async function refreshLiveMatch(manual = false) {
       return;
     }
     await loadLiveWinnerPredictions();
+    if (!operation.isCurrent()) return;
     const gameSignature = completedGameSignature(state);
     if (gameSignature !== liveAppliedGameSignature.value) {
       // Only a newly completed official battle replaces the temporary local BP
       // board. Late hero-detail updates for that battle keep the same stable
       // battle signature and therefore leave the current game's BP untouched.
       await applyLiveMatchState(state);
+      if (!operation.isCurrent()) return;
       liveAppliedGameSignature.value = gameSignature;
     }
     startLiveMatchPolling();
@@ -957,7 +970,7 @@ async function refreshLiveMatch(manual = false) {
     // A temporary official API failure should not remove the last usable live
     // context from a visitor's simulator.
   } finally {
-    if (requestNumber === liveMatchRequestNumber) liveMatchLoading.value = false;
+    if (operation.isCurrent()) liveMatchLoading.value = false;
   }
 }
 
@@ -986,6 +999,7 @@ function stopFollowingLiveMatch({ forget = true } = {}) {
 let modelLoadVersion = 0;
 async function loadModel() {
   const version = ++modelLoadVersion;
+  invalidateLiveMatch();
   const operationLeagueId = leagueId.value;
   if (!operationLeagueId) return;
   loading.value = true;
@@ -1707,9 +1721,13 @@ onMounted(async () => {
 });
 
 watch(leagueId, seasonStartup.changed, { flush: "sync" });
+watch(() => [leagueId.value, selectedTeamIds.value[TEAM_A], selectedTeamIds.value[TEAM_B], upcomingMatch.value?.match_id],
+  invalidateLiveMatch, { flush: "sync" });
 watch(
   selectedTeamIds,
   async () => {
+    invalidateLiveMatch();
+    const target = JSON.stringify([leagueId.value, selectedTeamIds.value]);
     clearCommentary();
     clearMoveEvidence();
     stopFollowingLiveMatch({ forget: false });
@@ -1719,6 +1737,7 @@ watch(
     liveAppliedGameSignature.value = "";
     liveScheduleClock.value = Date.now();
     await forecast();
+    if (liveRequests.disposed || target !== JSON.stringify([leagueId.value, selectedTeamIds.value])) return;
     if (shouldRestoreScheduledFollow()) {
       liveFollowing.value = true;
       liveFollowDismissed.value = true;
@@ -1730,6 +1749,8 @@ watch(
 );
 
 onBeforeUnmount(() => {
+  liveRequests.dispose();
+  modelLoadVersion += 1;
   clearCommentary();
   clearMoveEvidence();
   scenarioAbortController?.abort();

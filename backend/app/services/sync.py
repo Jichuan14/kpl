@@ -244,16 +244,40 @@ class SyncService:
         return match_id in self._complete_match_ids([match_id])
 
     def _complete_match_ids(self, match_ids: list[str]) -> set[str]:
+        """Only skip a final series when every expected game has full detail."""
         complete = set()
-        has_bp = select(BattleBp.id).where(BattleBp.battle_id == Battle.battle_id).exists()
-        # Bound SQLite parameters while checking each locally known battle once.
         for offset in range(0, len(match_ids), 500):
-            rows = self.db.scalars(
-                select(Battle.match_id)
-                .where(Battle.match_id.in_(match_ids[offset:offset + 500]))
-                .group_by(Battle.match_id)
-                .having(func.sum(case((has_bp, 0), else_=1)) == 0)
-            )
+            ids = match_ids[offset:offset + 500]
+            battle_ids = select(Battle.battle_id).where(Battle.match_id.in_(ids))
+            def bp_count(action, camp):
+                return func.count(func.distinct(case(
+                    ((BattleBp.action_type == action) & (BattleBp.camp == camp) & (BattleBp.hero_id > 0), BattleBp.hero_id))))
+            bp = select(BattleBp.battle_id, bp_count(1, 1).label("blue_picks"),
+                        bp_count(1, 2).label("red_picks"), bp_count(0, 1).label("blue_bans"),
+                        bp_count(0, 2).label("red_bans")).where(
+                            BattleBp.battle_id.in_(battle_ids)).group_by(BattleBp.battle_id).subquery()
+            def player_count(camp):
+                return func.count(func.distinct(case(
+                    ((BattlePlayer.camp == camp) & (BattlePlayer.hero_id > 0) & (BattlePlayer.player_name != ""), BattlePlayer.hero_id))))
+            players = select(BattlePlayer.battle_id, player_count(1).label("blue"),
+                             player_count(2).label("red")).where(
+                                 BattlePlayer.battle_id.in_(battle_ids)).group_by(BattlePlayer.battle_id).subquery()
+            full_game = ((bp.c.blue_picks == 5) & (bp.c.red_picks == 5)
+                         & (((bp.c.blue_bans == 4) & (bp.c.red_bans == 4))
+                            | ((bp.c.blue_bans == 5) & (bp.c.red_bans == 5))
+                            | ((bp.c.blue_bans == 0) & (bp.c.red_bans == 0)))
+                         & (players.c.blue == 5) & (players.c.red == 5)
+                         & Battle.win_camp.in_([1, 2]))
+            expected = Match.camp1_score + Match.camp2_score
+            rows = self.db.scalars(select(Match.match_id).join(Battle, Battle.match_id == Match.match_id)
+                .outerjoin(bp, bp.c.battle_id == Battle.battle_id)
+                .outerjoin(players, players.c.battle_id == Battle.battle_id)
+                .where(Match.match_id.in_(ids), Match.status == FINISHED_MATCH_STATUS, expected > 0)
+                .group_by(Match.match_id, Match.camp1_score, Match.camp2_score)
+                .having(func.count(Battle.id) == expected,
+                        func.count(func.distinct(Battle.battle_seq)) == expected,
+                        func.min(Battle.battle_seq) == 1, func.max(Battle.battle_seq) == expected,
+                        func.sum(case((full_game, 0), else_=1)) == 0))
             complete.update(rows)
         return complete
 
@@ -337,50 +361,55 @@ class SyncService:
             battle_id = str(node.get("battle_id") or "")
             if not battle_id:
                 continue
-            existing = self.db.scalar(select(Battle).where(Battle.battle_id == battle_id))
-            fields = {
-                "match_id": match.match_id,
-                "league_id": match.league_id,
-                "battle_seq": int(node.get("battle_seq") or 0),
-                "win_camp": int(node.get("win_camp") or 0),
-                "game_duration": int(node.get("game_duration") or 0),
-                "status": int(node.get("status") or 0),
-            }
-            if existing:
-                for key, value in fields.items():
-                    setattr(existing, key, value)
-            else:
-                self.db.add(Battle(battle_id=battle_id, **fields))
-            battle_count += 1
-            self.db.flush()
-
             self._sleep()
             payload = self.api.get_battle_detail(battle_id)
-            if not payload or payload.get("code") != 200:
-                logger.warning("Battle detail missing for %s", battle_id)
-                detail_errors += 1
-                continue
-            data = payload.get("data") or {}
-            if not isinstance(data, dict):
-                logger.warning("Unexpected battle detail shape for %s", battle_id)
-                detail_errors += 1
-                continue
+            try:
+                existing = self.db.scalar(select(Battle).where(Battle.battle_id == battle_id))
+                fields = {
+                    "match_id": match.match_id,
+                    "league_id": match.league_id,
+                    "battle_seq": int(node.get("battle_seq") or 0),
+                    "win_camp": int(node.get("win_camp") or 0),
+                    "game_duration": int(node.get("game_duration") or 0),
+                    "status": int(node.get("status") or 0),
+                }
+                if existing:
+                    for key, value in fields.items():
+                        setattr(existing, key, value)
+                else:
+                    self.db.add(Battle(battle_id=battle_id, **fields))
+                battle_count += 1
+                self.db.flush()
 
-            result = self._persist_battle_detail(
-                battle=existing or self.db.scalar(
-                    select(Battle).where(Battle.battle_id == battle_id)
-                ),
-                match=match,
-                data=data,
-            )
-            bp_total += result["bp_rows"]
-            battle_player_total += result["battle_player_rows"]
-            performance_rows += result["performance_rows"]
-            team_ids.update(result["team_ids"])
-            player_keys.update(result["player_keys"])
-            self.db.flush()
+                if not payload or payload.get("code") != 200:
+                    logger.warning("Battle detail missing for %s", battle_id)
+                    detail_errors += 1
+                    self.db.commit()
+                    continue
+                data = payload.get("data") or {}
+                if not isinstance(data, dict):
+                    logger.warning("Unexpected battle detail shape for %s", battle_id)
+                    detail_errors += 1
+                    self.db.commit()
+                    continue
 
-        self.db.commit()
+                result = self._persist_battle_detail(
+                    battle=existing or self.db.scalar(
+                        select(Battle).where(Battle.battle_id == battle_id)
+                    ),
+                    match=match,
+                    data=data,
+                )
+                bp_total += result["bp_rows"]
+                battle_player_total += result["battle_player_rows"]
+                performance_rows += result["performance_rows"]
+                team_ids.update(result["team_ids"])
+                player_keys.update(result["player_keys"])
+                self.db.commit()
+            except BaseException:
+                self.db.rollback()
+                raise
+
         return {
             "battles": battle_count,
             "bp_rows": bp_total,

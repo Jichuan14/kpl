@@ -234,6 +234,7 @@ class KimiCoachService:
         self._compiled_coach_graph = None
         self.conversation_store = conversation_store or ConversationStore()
         self.checkpointer = checkpointer
+        self.conversation_store.bind_checkpointer(checkpointer)
         self.clock = None
 
     def compiled_coach_graph(self):

@@ -42,28 +42,35 @@ class UnifiedBattleSyncTest(unittest.TestCase):
         self.db.close()
         self.engine.dispose()
 
-    def test_batch_completeness_requires_bp_for_every_known_battle(self):
-        self.db.add_all([
-            Battle(battle_id="complete", match_id="complete-match", league_id="league-1"),
-            Battle(battle_id="partial", match_id="match-1", league_id="league-1"),
-            BattleBp(battle_id="complete", league_id="league-1", action_type=1),
-            BattleBp(battle_id="battle-1", league_id="league-1", action_type=1),
-        ])
+    def complete_game(self, battle):
+        battle.win_camp = 1
+        for camp in (1, 2):
+            for slot in range(5):
+                hero_id = camp * 100 + slot
+                self.db.add(BattleBp(battle_id=battle.battle_id, league_id=battle.league_id,
+                                    action_type=1, camp=camp, hero_id=hero_id, bp_order=slot + 1))
+                self.db.add(BattlePlayer(battle_id=battle.battle_id, match_id=battle.match_id, league_id=battle.league_id,
+                                        camp=camp, hero_id=hero_id, player_name=f"{camp}-{slot}"))
         self.db.commit()
+
+    def test_batch_completeness_requires_expected_games_and_full_detail(self):
+        self.match.camp1_score = 1
+        self.complete_game(self.battle)
         statements = []
         def record(conn, cursor, statement, parameters, context, executemany):
             statements.append(statement)
         event.listen(self.engine, "before_cursor_execute", record)
         try:
-            result = self.service._complete_match_ids(["complete-match", "match-1", "no-battles"])
+            result = self.service._complete_match_ids(["match-1", "no-battles"])
         finally:
             event.remove(self.engine, "before_cursor_execute", record)
-        self.assertEqual(result, {"complete-match"})
+        self.assertEqual(result, {"match-1"})
         self.assertEqual(len(statements), 1)
         self.assertEqual(self.service._complete_match_ids([]), set())
-        self.db.add(BattleBp(battle_id="partial", league_id="league-1", action_type=0))
+        self.match.camp1_score = 3
+        self.match.camp2_score = 1
         self.db.commit()
-        self.assertTrue(self.service._match_has_complete_battle_data("match-1"))
+        self.assertFalse(self.service._match_has_complete_battle_data("match-1"))
 
     def detail(self) -> dict:
         return {
@@ -239,16 +246,9 @@ class UnifiedBattleSyncTest(unittest.TestCase):
 
     def test_incremental_sync_downloads_only_finished_matches_without_battles(self) -> None:
         calls: list[str] = []
-        # This existing match is fully stored, so it must not be downloaded.
-        self.db.add(
-            BattleBp(
-                battle_id="battle-1",
-                league_id="league-1",
-                action_type=0,
-                hero_id=1,
-            )
-        )
-        self.db.commit()
+        # This existing match has one complete peak-duel game.
+        self.match.camp1_score = 1
+        self.complete_game(self.battle)
         self.service._sleep = lambda: None
         self.service.api.get_matches = lambda league_id: {
             "code": 200,
@@ -256,13 +256,13 @@ class UnifiedBattleSyncTest(unittest.TestCase):
                 {
                     "match_id": "match-1",
                     "status": 2,
-                    "camp1": {"team_id": "team-a", "team_name": "Team A"},
+                    "camp1": {"team_id": "team-a", "team_name": "Team A", "score": 1},
                     "camp2": {"team_id": "team-b", "team_name": "Team B"},
                 },
                 {
                     "match_id": "match-new",
                     "status": 2,
-                    "camp1": {"team_id": "team-a", "team_name": "Team A"},
+                    "camp1": {"team_id": "team-a", "team_name": "Team A", "score": 1},
                     "camp2": {"team_id": "team-b", "team_name": "Team B"},
                 },
             ],
@@ -270,12 +270,17 @@ class UnifiedBattleSyncTest(unittest.TestCase):
 
         def battles(match_id: str) -> dict:
             calls.append(f"battles:{match_id}")
-            return {"code": 200, "results": [{"battle_id": "battle-new"}]}
+            return {"code": 200, "results": [{"battle_id": "battle-new", "battle_seq": 1, "win_camp": 1}]}
 
         def detail(battle_id: str) -> dict:
             calls.append(f"detail:{battle_id}")
             data = self.detail()
             data["battle_id"] = battle_id
+            data["bp_list"] = [{"is_ban_or_pick": 1, "camp": camp, "hero_id": camp * 100 + slot,
+                                "hero_name": f"Hero {camp}-{slot}"} for camp in (1, 2) for slot in range(5)]
+            data["battle_player_list"] = [{"camp": camp, "hero_id": camp * 100 + slot,
+                "actual_player_name": f"Player {camp}-{slot}", "team_id": "team-a" if camp == 1 else "team-b"}
+                for camp in (1, 2) for slot in range(5)]
             return {"code": 200, "data": data}
 
         self.service.api.get_match_battles = battles
@@ -288,7 +293,7 @@ class UnifiedBattleSyncTest(unittest.TestCase):
         self.assertEqual(first["finished_matches_found"], 2)
         self.assertEqual(first["finished_matches_processed"], 1)
         self.assertEqual(first["finished_matches_skipped"], 1)
-        self.assertEqual(first["performance_rows_written"], 1)
+        self.assertEqual(first["performance_rows_written"], 0)
         self.assertEqual(calls, ["battles:match-new", "detail:battle-new"])
 
         calls.clear()

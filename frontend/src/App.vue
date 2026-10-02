@@ -1,7 +1,7 @@
 <script setup>
 import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { RouterView, useRoute, useRouter } from "vue-router";
-import { fetchDailyMatches, trackVisitor } from "./api";
+import { fetchMatchCalendar, trackVisitor } from "./api";
 import { selectPublicLeague, selectedLeagueId } from "./selectedLeague";
 import { useSeasonCatalog } from "./composables/useSeasonCatalog";
 import { language } from "./i18n";
@@ -58,9 +58,9 @@ function trackCurrentPublicPage() {
 
 async function loadDailyPredictions() {
   try {
-    const payload = await fetchDailyMatches();
+    const payload = await fetchMatchCalendar();
     const date = String(payload?.date || "");
-    const matches = payload?.matches || [];
+    const matches = (payload?.matches || []).filter((match) => String(match.start_time || "").startsWith(date));
     dailyMatchesDate.value = date;
     dailyMatches.value = matches;
     if (date && matches.length && getStored(dailyPredictionSeenKey) !== date) {
