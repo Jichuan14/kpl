@@ -22,6 +22,8 @@ backend/celerybeat-schedule*
 analysis/outputs/*/draft_model.json
 # Reproducible intention research; includes generated Markdown summaries.
 analysis/outputs/draft_intention_research/
+# Reproducible full-update memory benchmarks and generated reports.
+analysis/outputs/memory_profiles/
 *.json
 *.pt
 *.npz

@@ -42,7 +42,7 @@ def test_unchanged_production_skips_and_historical_seed_refits(tmp_path):
     registry=tmp_path/'registry';registry.mkdir();(registry/'current.json').write_text('{}')
     args=SimpleNamespace(output_root=tmp_path/'out',weight_mode='season_recency',decay=.65,maximum_age_days=None,cutoff=None,seed=7,epochs=30,smoke=False,activate=True,version='new',threads=1)
     incumbent=SimpleNamespace(version='current',manifest={'promotion_status':'production_all_data','retrain_identity':identity})
-    with patch.object(production,'REGISTRY_ROOT',registry),patch.object(production,'build_rolling_manifest',return_value=m),patch.object(production,'ensure_hero_vocabulary'),patch.object(production,'resolve_bundle',return_value=incumbent),patch.object(production,'train_all_data') as train:
+    with patch.object(production,'REGISTRY_ROOT',registry),patch.object(production,'build_rolling_manifest',return_value=m),patch.object(production,'run_production_stage',return_value={'identity':identity,'inputs':inputs,'raw_inputs':{}}),patch.object(production,'resolve_bundle',return_value=incumbent),patch.object(production,'train_all_data') as train:
         assert production.production_update(args)['status']=='NO_CHANGE';train.assert_not_called()
         incumbent.manifest={'promotion_status':'seed'};train.side_effect=RuntimeError('training attempted')
         with pytest.raises(RuntimeError,match='attempted'):production.production_update(args)
@@ -76,3 +76,53 @@ def test_unknown_mechanics_reduce_coverage_and_remain_finite():
     for function in (rule_density,_rule_density):
         value,coverage=function([9999],[105],raw,ALLY_RULES,exclude_self=False)
         assert value==0. and coverage==0.
+
+
+def test_identity_subprocess_preserves_canonical_identity_and_inputs(tmp_path):
+    manifest = all_manifest(exports(tmp_path/'exports', 2))
+    identity, inputs = production.retrain_identity(manifest)
+    result = production.run_production_stage('identity', manifest, tmp_path)
+    assert result['identity'] == identity
+    assert result['inputs'] == inputs
+    assert result['raw_inputs'] == {str(p): production.file_sha256(p) for p in production.maintained_inputs()}
+
+
+def test_failed_neural_stage_never_exports_or_starts_later_training(tmp_path):
+    with patch.object(production, 'run_production_stage', side_effect=RuntimeError('killed stage')) as stage, patch.object(production, 'command') as export:
+        with pytest.raises(RuntimeError, match='killed stage'):
+            production.train_neural({}, tmp_path, 30, 1, 7)
+    assert stage.call_count == 1
+    export.assert_not_called()
+
+
+def test_compact_neural_inputs_preserve_every_tensor_weight_and_prefix(tmp_path):
+    import torch
+    from sequence_training import models
+    root = tmp_path
+    exports_root = exports(root/'analysis/exports', 2)
+    path = exports_root/'A/bp_decisions.jsonl'
+    rows = [json.loads(line) for line in path.read_text().splitlines()]
+    for index, row in enumerate(rows):
+        row.update(action='ban' if index % 3 == 0 else 'pick', side='blue' if index % 2 else 'red',
+                   acting_team_id='1' if index % 2 else '2', opponent_team_id='2' if index % 2 else '1',
+                   team_action_type_number=index % 5 + 1, acting_team_won_battle=index % 2 == 1,
+                   team_used_in_previous_battles=[106], opponent_used_in_previous_battles=[107],
+                   unused_evidence={'large': ['unused'] * 100})
+    path.write_text(''.join(json.dumps(row)+'\n' for row in rows))
+    features = root/'analysis/hero_draft_feature_vectors.json'
+    features.write_text(json.dumps({'feature_names':['test'], 'rows':[
+        {'hero_id': hero, 'hero_name':str(hero), 'vector':[float(hero == 105)], 'feature_known':True}
+        for hero in (105, 106, 107)]}))
+    manifest = all_manifest(exports_root)
+    kwargs = dict(target_season='A', previous_seasons=0, validation_matches=0, holdout_matches=0,
+                  holdout_offset_matches=0, recency_decay=.65, winning_pick_weight=1., split_manifest=manifest)
+    with patch.object(models, '_compact_training_row', side_effect=lambda row: row):
+        full = models.prepare_data(root, **kwargs)
+    compact = models.prepare_data(root, **kwargs)
+    for split in ('train', 'validation', 'holdout'):
+        for name, expected in vars(getattr(full, split)).items():
+            actual = getattr(getattr(compact, split), name)
+            if isinstance(expected, torch.Tensor):
+                assert torch.equal(actual, expected), name
+            else:
+                assert actual == expected, name

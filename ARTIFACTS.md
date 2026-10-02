@@ -148,3 +148,13 @@ Production feature maps derive vectors from the active artifact’s self-contain
 `analysis/published/data/models/versions/{version}/` contains immutable `feature-space.json`, `draft-model.json` and `metadata.json`, verified and readable by the web server before activation. These registry, candidate, report and browser artifacts remain generated and ignored, like season model outputs. Back up the complete server registry together with its published versions; restoring a pointer alone is insufficient. Existing season artifacts are preserved for explicitly requested legacy calls.
 
 All-data production records `production_all_data`, a canonical retrain identity, fixed recipe, pinned maintained-input hashes and an explicit uncalibrated temperature1 sidecar. `analysis/outputs/models/inputs/herolist.json` is a generated, validated Tencent catalog cache used when a new legal hero lacks a lane in maintained data. It is copied into each new bundle. Automatic vocabulary expansion changes only missing rows in maintained `analysis/hero_draft_feature_vectors.json`; such rows mark unknown traits explicitly and preserve existing vectors. Historical seed bundles retain copied old inputs.
+
+Production training appends diagnostic stage/process peaks and available Linux
+cgroup memory, swap, OOM and pressure readings to
+`analysis/outputs/models/candidates/training_memory.jsonl`. `KPL_MEMORY_LOG`
+can redirect these diagnostics. `deploy/profile-update.py` writes isolated
+full-update benchmark logs, sampled process/container memory, summary and job
+result to `analysis/outputs/memory_profiles/{run}/`. Its temporary snapshot owns
+a separate SQLite backup, exports, registry and publication; it forces a fresh
+full-budget model fit without changing the normal workspace's active pointer.
+These diagnostic and benchmark artifacts remain generated and ignored.

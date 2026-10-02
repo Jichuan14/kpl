@@ -37,7 +37,15 @@ CRITERIA={'minimum_eval_series':10,'minimum_policy_decisions':100,
 
 
 def command(script: str, *args: str) -> None:
-    subprocess.run([sys.executable,str(ANALYSIS/script),*map(str,args)],cwd=ROOT,check=True)
+    from memory_telemetry import record
+    label = script
+    if '--stage' in args:
+        label += ':' + str(args[args.index('--stage') + 1])
+    record('command_start', label)
+    try:
+        subprocess.run([sys.executable,str(ANALYSIS/script),*map(str,args)],cwd=ROOT,check=True)
+    finally:
+        record('command_end', label)
 
 
 def iter_corpus_rows(manifest: dict, names: tuple[str,...]):

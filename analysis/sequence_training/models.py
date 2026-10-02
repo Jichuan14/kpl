@@ -591,6 +591,22 @@ def _usable(row: dict[str, Any], hero_to_index: dict[int, int]) -> bool:
     )
 
 
+def _compact_training_row(row: dict[str, Any]) -> dict[str, Any]:
+    """Retain only inputs consumed by prefix reconstruction and loss weighting.
+
+    Full decisions also carry descriptive evidence and redundant hero/context
+    metadata. Keeping those alongside tensor-building lists inflated peak RAM.
+    Preserve missing keys (rather than supplying defaults) and every field used
+    below, including peak-battle exclusions and cross-game legal context.
+    """
+    fields = ('_season', 'match_id', 'battle_id', 'bp_order', 'selected_hero_id',
+              'legal_hero_ids', 'is_peak_battle', 'action', 'side',
+              'acting_team_id', 'opponent_team_id', 'team_action_type_number',
+              'team_used_in_previous_battles', 'opponent_used_in_previous_battles',
+              'acting_team_won_battle')
+    return {key: row[key] for key in fields if key in row}
+
+
 def _ordered_match_ids(
     matches_path: Path,
     eligible_match_ids: set[str],
@@ -772,6 +788,7 @@ def prepare_data(
                     continue
                 if split_manifest is not None and (season, str(row["match_id"])) not in split_by_series:
                     continue
+                row = _compact_training_row(row)
                 all_rows.append(row)
                 rows_by_battle.setdefault(
                     (season, str(row["battle_id"])), []

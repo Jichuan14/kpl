@@ -127,6 +127,57 @@ overlap but is not proof that the complete neural refit fits 1 GiB. Monitor
 the first full training run on the small host to verify adequate headroom.
 More swap or a higher worker RAM limit alone does not protect website latency.
 
+Production refits now run input hashing, references, base neural training,
+familiarity training, ban training, lineup training and catalog export in fresh
+processes. Exporters start after the training process exits. Corpus coverage is
+counted as a stream; neural preparation retains only consumed input fields.
+Freed preparation allocations are also returned where Linux/glibc supports it.
+This releases process-owned memory between stages without reducing the corpus,
+epochs, historical-context rules, recipe or activation checks. Production
+training writes `analysis/outputs/models/candidates/training_memory.jsonl`;
+follow it while the worker runs to see stage names, individual process peaks
+and available Linux cgroup memory/swap/OOM/pressure readings. Diagnostics
+also record available host RAM, swap and host memory/I/O pressure to distinguish
+container limits from host pressure. A failed stage
+aborts candidate activation. A container kill can prevent its final log record.
+
+To measure a complete update using the local database and exports, run:
+
+```bash
+backend/.venv/bin/python deploy/profile-update.py
+```
+
+This profiles official sync, factual analysis/publication, all three 30-epoch
+neural stages, ban/lineup models and validated model activation in a temporary
+snapshot. It copies current tracked working-tree edits and backs up SQLite;
+it never redirects the original active-model pointer. Reports go to
+`analysis/outputs/memory_profiles/`. The snapshot omits credentials and existing
+model versions so a genuine refit is exercised instead of a no-change shortcut.
+`--offline` explicitly skips network sync and labels that limitation.
+
+For a Linux container test using production's 1 GiB RAM, 2500 MiB RAM-plus-swap,
+1.5 CPU and 256-process limits, build the training image and use:
+
+```bash
+docker build -f backend/Dockerfile -t kpl-memory-profile:local .
+backend/.venv/bin/python deploy/profile-update.py --docker-image kpl-memory-profile:local --interval 2
+```
+
+The Docker profiling driver uses only the Python standard library; on a server
+without a host virtual environment, `python3 deploy/profile-update.py
+--docker-image kpl-memory-profile:local --interval 2` also works. Training
+dependencies come from the image.
+
+The report includes kernel cgroup peak memory and sampled swap, OOM events,
+pressure and container status. A small sampling process is included in measured
+container memory. Native process-tree RSS can double-count shared pages and
+does not include charged file cache, so use the Linux cgroup test when checking
+the container cap. Neither test includes the separate API, RabbitMQ, web or OS
+memory budgets. Local Docker architecture and swap availability can differ
+from the server; repeat on a staging host with the server's actual corpus.
+The tool leaves the stopped diagnostic container and temporary snapshot for
+inspection; remove the named container and snapshot after collecting results.
+
 ### Install the daily trigger
 
 Install the repository-managed refresh script. It submits one idempotent job
