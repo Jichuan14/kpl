@@ -10,6 +10,7 @@ const savedLanguage = getStored(storageKey);
 
 export const messages = {
   "zh-CN": {
+    "Date (Beijing time)": "查看日期（北京时间）",
     "Historical model context": "历史模型参照",
     "Uncalibrated probabilities": "未经独立校准的概率",
   "Active model coverage": "当前模型训练覆盖",

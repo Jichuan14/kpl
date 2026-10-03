@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import distinct, func, select
+from sqlalchemy import distinct, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models import BattlePlayer, Match, Team
@@ -57,11 +57,15 @@ def next_scheduled_match(
             Match.league_id == league_id,
             Match.start_time.is_not(None),
             Match.start_time >= cutoff,
+            Match.status != 2,
+            Match.win_camp.not_in([1, 2]),
         )
         .order_by(Match.start_time.asc(), Match.match_id.asc())
     ).all()
     for match in rows:
         team_ids = {str(match.camp1_team_id), str(match.camp2_team_id)}
+        if len(team_ids) != 2 or team_ids.intersection({"", "0"}):
+            continue
         if selectable_team_ids is not None and not team_ids.issubset(selectable_team_ids):
             continue
         return {
@@ -112,6 +116,8 @@ def current_or_next_scheduled_match(
             Match.league_id == league_id,
             Match.start_time.is_not(None),
             Match.start_time <= cutoff,
+            Match.status != 2,
+            Match.win_camp.not_in([1, 2]),
         )
         .order_by(Match.start_time.desc(), Match.match_id.desc())
     ).all()
@@ -123,6 +129,8 @@ def current_or_next_scheduled_match(
         if scheduled_at < recent_cutoff:
             break
         team_ids = {str(match.camp1_team_id), str(match.camp2_team_id)}
+        if len(team_ids) != 2 or team_ids.intersection({"", "0"}):
+            continue
         if selectable_team_ids is not None and not team_ids.issubset(selectable_team_ids):
             continue
         return as_fixture(match)
@@ -147,6 +155,25 @@ def validate_season_team_pair(
     if blue_team_id == red_team_id:
         raise ValueError("Blue and Red must be different teams.")
     teams = {str(row["team_id"]): row for row in list_season_teams(db, league_id)}
+    # A season's fixture is evidence of participation even before its first
+    # recorded game. Do not give these teams synthetic observation statistics.
+    selected_ids = [blue_team_id, red_team_id]
+    fixtures = db.execute(select(
+        Match.camp1_team_id, Match.camp1_team_name, Match.camp2_team_id, Match.camp2_team_name,
+    ).where(
+        Match.league_id == league_id,
+        or_(Match.camp1_team_id.in_(selected_ids), Match.camp2_team_id.in_(selected_ids)),
+    ).order_by(Match.id.desc()))
+    for match in fixtures:
+        for team_id, team_name in (
+            (match.camp1_team_id, match.camp1_team_name),
+            (match.camp2_team_id, match.camp2_team_name),
+        ):
+            if team_id in selected_ids and team_id != "0":
+                teams.setdefault(str(team_id), {
+                    "team_id": str(team_id), "team_name": team_name or str(team_id),
+                    "evidence_scope": "season_fixture",
+                })
     from app.services.model_registry import current_bundle
     handle = current_bundle()
     if handle:

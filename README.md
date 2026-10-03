@@ -324,6 +324,11 @@ minute. Match-data SQLite remains separate from Coach persistence.
 
 The public calendar uses one shared, short-lived 17-day range request for the
 widget and welcome popup. The API still supports existing single-day calls.
+Both views group fixtures by Beijing date. The widget labels times as Beijing
+time and includes the full day's schedule, including matches already started.
+The simulator chooses its current or next unfinished fixture from the selected
+season's full schedule, including teams without recorded games. Fixture teams
+are selectable without being counted as player observations or ranked teams.
 Ranking readiness and JSONL record counts are cached by file identity, size,
 and modification timestamps; the public season catalog and default remain
 uncached HTTP reads. Sync skips only series with the expected game count,

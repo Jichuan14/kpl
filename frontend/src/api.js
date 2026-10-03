@@ -1,4 +1,4 @@
-import { browserDate, shiftDate } from "./matchCalendar.js";
+import { chinaDate, shiftDate } from "./matchCalendar.js";
 
 async function request(path, options = {}) {
   let res;
@@ -128,7 +128,7 @@ export function fetchDailyMatches({ date } = {}) {
 
 const calendarCache = new Map();
 export function resetCalendarCacheForTests() { calendarCache.clear(); }
-export function fetchMatchCalendar({ date = browserDate() } = {}) {
+export function fetchMatchCalendar({ date = chinaDate() } = {}) {
   const now = Date.now();
   for (const [key, entry] of calendarCache) {
     if (entry.expiresAt <= now) calendarCache.delete(key);

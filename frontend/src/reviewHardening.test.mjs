@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createRequestScope } from "./requestScope.js";
-import { firstAvailableDay, matchesOnLocalDate } from "./matchCalendar.js";
+import { chinaDate, firstAvailableDay, matchesOnScheduleDate, shiftDate, matchStart } from "./matchCalendar.js";
 import { fetchMatchCalendar, resetCalendarCacheForTests } from "./api.js";
 import { ref, watch } from "vue";
 
@@ -129,12 +129,91 @@ test("calendar consumers share one bounded request, expire cached results, and r
   }
 });
 
-test("an empty calendar needs no further requests and local timezone conversion is preserved", () => {
+test("calendar uses Beijing dates and still finds nearby scheduled days", () => {
   assert.deepEqual(firstAvailableDay([], "2026-10-01"), { date: "2026-10-01", matches: [] });
   const rows = [{ match_id: "next", start_time: "2026-10-03 18:00:00" }, { match_id: "previous", start_time: "2026-09-30 18:00:00" }];
-  const date = new Date("2026-10-03T18:00:00+08:00");
-  const localDate = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-  assert.equal(matchesOnLocalDate(rows, localDate)[0].match_id, "next");
-  const choice = firstAvailableDay(rows, "2026-10-01", new Date("2026-10-01T00:00:00").getTime());
+  assert.equal(matchesOnScheduleDate(rows, "2026-10-03")[0].match_id, "next");
+  const choice = firstAvailableDay(rows, "2026-10-01");
   assert.equal(choice.matches[0].match_id, "next");
+  assert.equal(firstAvailableDay([rows[1]], "2026-10-01").date, "2026-09-30");
+});
+
+test("calendar and voting popup retain the whole Beijing day across timezone boundaries", () => {
+  assert.equal(chinaDate(new Date("2026-10-02T17:00:00Z")), "2026-10-03");
+  assert.equal(chinaDate(new Date("2026-10-02T15:59:59Z")), "2026-10-02");
+  assert.equal(shiftDate("2026-12-31", 1), "2027-01-01");
+  const rows = [
+    { match_id: "evening", start_time: "2026-10-03 20:00:00" },
+    { match_id: "early", start_time: "2026-10-03 00:30:00" },
+    { match_id: "tomorrow", start_time: "2026-10-04 18:00:00" },
+    { match_id: "unscheduled", start_time: null },
+  ];
+  assert.equal(matchStart(rows[1]).toISOString(), "2026-10-02T16:30:00.000Z");
+  const day = matchesOnScheduleDate(rows, "2026-10-03");
+  assert.deepEqual(day.map((match) => match.match_id), ["early", "evening"]);
+  // Even when these fixtures are in the past, opening the calendar keeps every
+  // fixture for the selected day, just like the voting popup.
+  assert.deepEqual(firstAvailableDay(rows, "2026-10-03"), { date: "2026-10-03", matches: day });
+});
+
+test("calendar initialization uses the same API day and matches as the voting popup", async () => {
+  const payload = { date: "2026-10-03", matches: [
+    { match_id: "early", start_time: "2026-10-03 00:30:00" },
+    { match_id: "today", start_time: "2026-10-03 18:00:00" },
+    { match_id: "next", start_time: "2026-10-04 18:00:00" },
+  ] };
+  const context = { loading: ref(false), error: ref(""), matches: ref([]), selectedDate: ref(""),
+    fetchMatchCalendar: async () => payload, firstAvailableDay,
+    chinaDate: () => "2026-10-02" };
+  const load = componentFunctions("./DailyMatchesWidget.vue", ["loadFirstAvailableDay"], { ...context, loadVersion: 0 });
+  await load.loadFirstAvailableDay();
+  assert.equal(context.selectedDate.value, payload.date);
+  assert.deepEqual(context.matches.value, matchesOnScheduleDate(payload.matches, payload.date));
+  assert.equal(context.loading.value, false);
+});
+
+test("simulator selects the scheduled teams before they have season observations and advances to new fixture teams", async () => {
+  for (const emptyRoster of [false, true]) {
+    let fixture = { match_id: "first", bo: 5, teams: [
+      { team_id: "wb", team_name: "WB" }, { team_id: "lgd", team_name: "LGD" },
+    ] };
+    const priorTeams = [{ team_id: "wolves", team_name: "Wolves" }, { team_id: "ttg", team_name: "TTG" }];
+    const context = {
+      leagueId: ref("20260004"), modelLoadVersion: 0, lineupScoreRequestNumber: 0,
+      TEAM_A: "team-a", TEAM_B: "team-b", liveRequests: { disposed: false },
+      modelSession: { version: async () => "pinned-model" },
+      fetchDraftModel: async () => ({ model_reference_teams: priorTeams }),
+      fetchSeasonTeams: async () => {
+        if (emptyRoster) throw Object.assign(new Error("No recorded teams"), { status: 404 });
+        return priorTeams;
+      },
+      fetchUpcomingMatch: async () => fixture,
+      emptyBoard: () => ({}), t: (key) => key,
+    };
+    for (const name of ["loading", "error", "result", "lineupScore", "lineupScoreLoading", "lineupScoreError",
+      "model", "modelVersion", "seasonTeams", "upcomingMatch", "liveMatch", "liveFollowDismissed",
+      "liveAppliedGameSignature", "selectedTeamIds", "board", "history", "bpOrder", "globalMode",
+      "seriesGame", "bestOf", "pickerTarget"]) context[name] = ref(null);
+    for (const name of ["invalidateLiveMatch", "clearCommentary", "stopFollowingLiveMatch", "stopLiveMatchPolling",
+      "stopLiveMatchCheckSchedule", "stopLiveScheduleClock", "clearVersionTree", "resetSeriesTeams"]) context[name] = () => {};
+    const functions = componentFunctions("./DraftSimulatorPage.vue",
+      ["teamsWithUpcomingFixtureFirst", "loadModel", "moveToNextScheduledFixture"], context);
+    await functions.loadModel();
+    assert.equal(context.error.value, "");
+    assert.deepEqual(context.selectedTeamIds.value, { "team-a": "wb", "team-b": "lgd" });
+    assert.deepEqual(context.seasonTeams.value.slice(0, 2).map((team) => team.team_id), ["wb", "lgd"]);
+    assert.equal(context.seasonTeams.value[0].evidence_scope, "season_fixture");
+    assert.equal(context.seasonTeams.value[0].battle_count, undefined);
+    assert.equal(context.bestOf.value, 5);
+
+    fixture = { match_id: "second", bo: 7, teams: [
+      { team_id: "jdg", team_name: "JDG" }, { team_id: "edg", team_name: "EDG" },
+    ] };
+    context.liveMatch.value = { match: { match_id: "first" } };
+    await functions.moveToNextScheduledFixture();
+    assert.equal(context.upcomingMatch.value.match_id, "second");
+    assert.deepEqual(context.selectedTeamIds.value, { "team-a": "jdg", "team-b": "edg" });
+    assert.equal(context.bestOf.value, 7);
+    assert.equal(context.liveMatch.value, null);
+  }
 });

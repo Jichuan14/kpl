@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { fetchMatchCalendar } from "./api";
-import { browserDate, shiftDate, matchStart, matchesOnLocalDate, firstAvailableDay } from "./matchCalendar.js";
+import { chinaDate, shiftDate, matchStart, matchesOnScheduleDate, firstAvailableDay } from "./matchCalendar.js";
 
 const emit = defineEmits(["predict"]);
 const props = defineProps({
@@ -17,11 +17,12 @@ const widgetRoot = ref(null);
 const hasAnyPrediction = computed(() => matches.value.some(hasPrediction));
 let loadVersion = 0;
 
-function browserTime(match) {
+function scheduleTime(match) {
   const start = matchStart(match);
   return Number.isNaN(start.getTime())
     ? "待定"
     : new Intl.DateTimeFormat(undefined, {
+        timeZone: "Asia/Shanghai",
         hour: "2-digit",
         minute: "2-digit",
         hour12: false,
@@ -55,21 +56,22 @@ function openPredictions() {
   });
 }
 
-async function matchesForLocalDate(date) {
+async function matchesForScheduleDate(date) {
   const payload = await fetchMatchCalendar({ date });
-  return matchesOnLocalDate(payload?.matches || [], date);
+  return matchesOnScheduleDate(payload?.matches || [], date);
 }
 
-async function loadMatches(date = selectedDate.value || browserDate()) {
+async function loadMatches(date = selectedDate.value || chinaDate()) {
   const version = ++loadVersion;
   loading.value = true;
   error.value = "";
   try {
-    const rows = await matchesForLocalDate(date);
+    const rows = await matchesForScheduleDate(date);
     if (version !== loadVersion) return;
     matches.value = rows;
     selectedDate.value = date;
   } catch {
+    if (version !== loadVersion) return;
     matches.value = [];
     error.value = "赛事暂时无法加载。";
   } finally {
@@ -77,18 +79,18 @@ async function loadMatches(date = selectedDate.value || browserDate()) {
   }
 }
 
-async function loadFirstAvailableDay(startDate = browserDate()) {
+async function loadFirstAvailableDay() {
   const version = ++loadVersion;
-  const today = startDate;
   loading.value = true;
   error.value = "";
   try {
-    const payload = await fetchMatchCalendar({ date: today });
+    const payload = await fetchMatchCalendar();
     if (version !== loadVersion) return;
-    const result = firstAvailableDay(payload?.matches || [], today);
+    const result = firstAvailableDay(payload?.matches || [], payload?.date || chinaDate());
     selectedDate.value = result.date;
     matches.value = result.matches;
   } catch {
+    if (version !== loadVersion) return;
     matches.value = [];
     error.value = "赛事暂时无法加载。";
   } finally {
@@ -97,7 +99,7 @@ async function loadFirstAvailableDay(startDate = browserDate()) {
 }
 
 function moveDay(days) {
-  loadMatches(shiftDate(selectedDate.value || browserDate(), days));
+  loadMatches(shiftDate(selectedDate.value || chinaDate(), days));
 }
 
 function toggleWidget() {
@@ -117,6 +119,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  loadVersion += 1;
   window.removeEventListener("pointerdown", closeWhenClickingOutside);
 });
 </script>
@@ -136,7 +139,7 @@ onBeforeUnmount(() => {
     </button>
     <div v-if="!minimized" class="widget-content">
       <label>
-        <span>查看日期</span>
+        <span>{{ $t("Date (Beijing time)") }}</span>
         <div class="date-control">
           <button type="button" aria-label="前一天" @click="moveDay(-1)">‹</button>
           <input v-model="selectedDate" type="date" @change="loadMatches()" />
@@ -148,7 +151,7 @@ onBeforeUnmount(() => {
       <p v-else-if="!matches.length" class="widget-note">当天暂无已排定赛事。</p>
       <ol v-else class="widget-match-list">
         <li v-for="match in matches" :key="match.match_id">
-          <small>{{ browserTime(match) }}{{ $t("· BO") }}{{ match.bo || '?' }}</small>
+          <small>{{ scheduleTime(match) }}{{ $t("· BO") }}{{ match.bo || '?' }}</small>
           <strong>{{ match.teams[0].team_name }} <i>{{ $t("vs") }}</i> {{ match.teams[1].team_name }}</strong>
           <footer>
             <span>{{ match.league_name }}</span>

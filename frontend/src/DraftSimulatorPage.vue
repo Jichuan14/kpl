@@ -362,7 +362,10 @@ const upcomingMatchLabel = computed(() => {
   if (!upcomingMatch.value) return "";
   const teams = upcomingMatch.value.teams || [];
   if (teams.length !== 2) return "";
-  const prefix = upcomingMatch.value.is_live ? "正在进行" : "下一场赛程";
+  const confirmedLive = liveMatch.value?.is_live
+    && String(liveMatch.value?.match?.match_id) === String(upcomingMatch.value.match_id);
+  const delay = scheduledLiveCheckDelay(upcomingMatch.value);
+  const prefix = confirmedLive ? "正在进行" : delay !== null && delay <= 5 * 60_000 ? "当前赛程" : "下一场赛程";
   return `${prefix} · ${teams[0].team_name} 对阵 ${teams[1].team_name} · ${upcomingMatch.value.start_time}（中国时间）`;
 });
 
@@ -608,10 +611,11 @@ function resetSeriesTeams() {
 
 function teamsWithUpcomingFixtureFirst(teams, fixture) {
   const fixtureIds = (fixture?.teams || []).map((team) => String(team.team_id));
-  if (fixtureIds.length !== 2 || fixtureIds[0] === fixtureIds[1]) return teams;
+  if (fixtureIds.length !== 2 || fixtureIds[0] === fixtureIds[1] || fixtureIds.some((id) => !id || id === "0")) return teams;
   const byId = new Map(teams.map((team) => [String(team.team_id), team]));
-  const scheduled = fixtureIds.map((teamId) => byId.get(teamId)).filter(Boolean);
-  if (scheduled.length !== 2) return teams;
+  const scheduled = fixture.teams.map((team) => byId.get(String(team.team_id)) || {
+    ...team, team_id: String(team.team_id), evidence_scope: "season_fixture",
+  });
   const scheduledIds = new Set(fixtureIds);
   return [...scheduled, ...teams.filter((team) => !scheduledIds.has(String(team.team_id)))];
 }
@@ -886,9 +890,10 @@ async function moveToNextScheduledFixture() {
   if (!fixture || String(fixture.match_id || "") === String(liveMatch.value?.match?.match_id || "")) {
     return;
   }
+  const teams = teamsWithUpcomingFixtureFirst(seasonTeams.value, fixture);
   const fixtureTeams = (fixture.teams || [])
     .map((fixtureTeam) =>
-      seasonTeams.value.find(
+      teams.find(
         (team) => String(team.team_id) === String(fixtureTeam.team_id)
       )
     )
@@ -897,7 +902,7 @@ async function moveToNextScheduledFixture() {
     return;
   }
   upcomingMatch.value = fixture;
-  seasonTeams.value = teamsWithUpcomingFixtureFirst(seasonTeams.value, fixture);
+  seasonTeams.value = teams;
   globalMode.value = "match";
   seriesGame.value = 1;
   if ([5, 7].includes(Number(fixture.bo))) bestOf.value = Number(fixture.bo);
@@ -1033,7 +1038,10 @@ async function loadModel() {
     modelVersion.value = await modelSession.version();
     const [draftModel, factualTeams, fixture] = await Promise.all([
       fetchDraftModel(operationLeagueId, modelVersion.value),
-      fetchSeasonTeams(operationLeagueId),
+      fetchSeasonTeams(operationLeagueId).catch((err) => {
+        if (err.status === 404) return [];
+        throw err;
+      }),
       fetchUpcomingMatch(operationLeagueId),
     ]);
     if (version !== modelLoadVersion || operationLeagueId !== leagueId.value) return;
@@ -1044,20 +1052,20 @@ async function loadModel() {
     seasonTeams.value = teamsWithUpcomingFixtureFirst(teams, fixture);
     const scheduledTeams = (fixture?.teams || [])
       .map((fixtureTeam) =>
-        teams.find((team) => String(team.team_id) === String(fixtureTeam.team_id))
+        seasonTeams.value.find((team) => String(team.team_id) === String(fixtureTeam.team_id))
       )
       .filter(Boolean);
     const wolves = teams.find((team) => /狼队|wolves/i.test(team.team_name));
     const ttg = teams.find((team) => /ttg/i.test(team.team_name));
-    if (wolves && ttg && String(wolves.team_id) !== String(ttg.team_id)) {
-      selectedTeamIds.value = {
-        [TEAM_A]: String(wolves.team_id),
-        [TEAM_B]: String(ttg.team_id),
-      };
-    } else if (scheduledTeams.length === 2 && String(scheduledTeams[0].team_id) !== String(scheduledTeams[1].team_id)) {
+    if (scheduledTeams.length === 2 && String(scheduledTeams[0].team_id) !== String(scheduledTeams[1].team_id)) {
       selectedTeamIds.value = {
         [TEAM_A]: String(scheduledTeams[0].team_id),
         [TEAM_B]: String(scheduledTeams[1].team_id),
+      };
+    } else if (wolves && ttg && String(wolves.team_id) !== String(ttg.team_id)) {
+      selectedTeamIds.value = {
+        [TEAM_A]: String(wolves.team_id),
+        [TEAM_B]: String(ttg.team_id),
       };
     }
   } catch (err) {

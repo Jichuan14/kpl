@@ -160,19 +160,17 @@ def upcoming_match(
     """
     if not db.scalar(select(League.id).where(League.league_id == league_id)):
         raise HTTPException(status_code=404, detail="League not found")
-    teams = list_season_teams(db, league_id)
-    selectable_team_ids = {str(team["team_id"]) for team in teams}
+    # Upcoming fixtures must include teams that have not played this season yet.
+    # The observed-player roster remains separate from the schedule catalogue.
     fixture = (
         next_scheduled_match(
             db,
             league_id,
-            selectable_team_ids=selectable_team_ids,
         )
-        if next_only
+        if next_only is True
         else current_or_next_scheduled_match(
             db,
             league_id,
-            selectable_team_ids=selectable_team_ids,
         )
     )
     if fixture is not None:
