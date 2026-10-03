@@ -6,6 +6,7 @@ from typing import Any
 import httpx
 
 from app.config import Settings
+from app.services.pipeline_execution import check_interrupted
 
 logger = logging.getLogger(__name__)
 
@@ -43,11 +44,14 @@ class KplApiClient:
         )
 
     def _get(self, url: str, params: dict[str, Any] | None = None) -> dict[str, Any] | None:
+        check_interrupted()
         try:
             logger.debug("KPL GET %s params=%s", url, params)
             response = self._client.get(url, params=params)
             response.raise_for_status()
-            return response.json()
+            result = response.json()
         except Exception:
             logger.exception("KPL API request failed: %s", url)
             return None
+        check_interrupted()
+        return result

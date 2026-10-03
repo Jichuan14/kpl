@@ -6,9 +6,10 @@ services:
     env_file:
       - .env.production
     restart: unless-stopped
+    stop_grace_period: 45s
     # This host has about 1.6 GiB of usable RAM. Keep enough physical memory
-    # available for Linux, Docker, Caddy, and Nginx while allowing the private
-    # model-training pipeline to spill into a bounded amount of host swap.
+    # available for Linux, Docker, Caddy, and Nginx. API requests and sequential
+    # training subprocesses share this cap and a bounded amount of host swap.
     # memswap_limit is the combined RAM + swap ceiling, not swap alone.
     mem_limit: 1g
     memswap_limit: 2500m
@@ -22,48 +23,6 @@ services:
       - ./analysis/published:/app/analysis/published
     expose:
       - "8000"
-    networks:
-      - kpl_internal
-
-  worker:
-    build:
-      context: .
-      dockerfile: backend/Dockerfile
-    command: ["celery", "-A", "app.services.pipeline_jobs:celery_app", "worker", "--beat", "--loglevel=INFO", "--concurrency=1", "--pool=solo", "--without-mingle", "--without-gossip"]
-    env_file:
-      - .env.production
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-    restart: unless-stopped
-    healthcheck:
-      disable: true
-    mem_limit: 1g
-    memswap_limit: 2500m
-    cpus: 1.5
-    pids_limit: 256
-    volumes:
-      - ./backend/data:/app/backend/data
-      - ./analysis/exports:/app/analysis/exports
-      - ./analysis/outputs:/app/analysis/outputs
-      - ./analysis/published:/app/analysis/published
-    networks:
-      - kpl_internal
-
-  rabbitmq:
-    image: rabbitmq:4.3.6-alpine
-    hostname: rabbitmq
-    env_file:
-      - .env.production
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
-      interval: 15s
-      timeout: 10s
-      retries: 8
-    volumes:
-      - ./deploy/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
-      - rabbitmq_data:/var/lib/rabbitmq
     networks:
       - kpl_internal
 
@@ -112,4 +71,3 @@ networks:
 volumes:
   caddy_data:
   caddy_config:
-  rabbitmq_data:

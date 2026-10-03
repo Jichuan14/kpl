@@ -11,6 +11,7 @@ from contextlib import ExitStack
 from datetime import datetime, timezone, timedelta
 import importlib.util
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -43,7 +44,8 @@ def command(script: str, *args: str) -> None:
         label += ':' + str(args[args.index('--stage') + 1])
     record('command_start', label)
     try:
-        subprocess.run([sys.executable,str(ANALYSIS/script),*map(str,args)],cwd=ROOT,check=True)
+        subprocess.run([sys.executable,str(ANALYSIS/script),*map(str,args)],cwd=ROOT,check=True,
+                       pass_fds=((int(os.environ['KPL_PIPELINE_LOCK_FD']),) if os.environ.get('KPL_PIPELINE_LOCK_FD') else ()))
     finally:
         record('command_end', label)
 

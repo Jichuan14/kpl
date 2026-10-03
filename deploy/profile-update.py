@@ -48,7 +48,8 @@ def snapshot(destination: Path):
     # Copy tracked files from the working tree, including current edits. Never
     # copy local credentials, virtual environments, Git state or live outputs.
     paths = subprocess.check_output(['git', 'ls-files', '-z'], cwd=ROOT).decode().split('\0')
-    paths += ['analysis/production_training_stage.py', 'analysis/memory_telemetry.py', 'deploy/profile-update.py']
+    paths += ['analysis/production_training_stage.py', 'analysis/memory_telemetry.py', 'deploy/profile-update.py', 'backend/app/services/pipeline_runner.py',
+              'backend/app/services/pipeline_execution.py', 'backend/app/services/pipeline_worker.py']
     for relative in set(paths):
         if not relative or relative.startswith(('.env', 'backend/.env')):
             continue
@@ -182,7 +183,7 @@ def profile_container(args, workspace, report):
                'epochs_each_stage': 30, 'threads': 1, 'ram_limit_bytes': 1073741824,
                'ram_plus_swap_limit_bytes': 2621440000,
                'limitations': ['Includes a small memory-sampling Python process.',
-                               'Excludes separate API, RabbitMQ and web containers.',
+                               'Excludes separate API and web containers.',
                                'Local Docker CPU architecture and host swap may differ from production.']}
     (report/'summary.json').write_text(json.dumps(summary, indent=2))
     print(json.dumps(summary, indent=2))
@@ -248,7 +249,7 @@ def main():
                'platform': sys.platform, 'workspace': str(workspace), 'league_id': args.league_id,
                'network_sync': not args.offline, 'epochs_each_stage': 30, 'threads': 1,
                'limitations': ['Sampled RSS can miss short spikes and double-count shared pages.',
-                               'Excludes website, RabbitMQ and other host services; Linux cgroup memory may differ.']}
+                               'Excludes website and other host services; Linux cgroup memory may differ.']}
     (report / 'summary.json').write_text(json.dumps(summary, indent=2))
     print(json.dumps(summary, indent=2))
     raise SystemExit(exit_code)

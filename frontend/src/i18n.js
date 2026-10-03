@@ -60,7 +60,6 @@ export const messages = {
     "queued": "已排队",
     "starting": "启动中",
     "retry_wait": "等待重试",
-    "waiting_for_broker": "等待消息队列恢复",
     "sync_bp": "同步赛事数据",
     "sync_leagues": "同步赛事目录",
     "select_league": "选择当前赛事",

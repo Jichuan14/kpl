@@ -24,13 +24,13 @@ class PipelineJob(Base):
     status: Mapped[str] = mapped_column(String(16), default="pending", index=True)
     stage: Mapped[str] = mapped_column(String(64), default="queued")
     attempts: Mapped[int] = mapped_column(Integer, default=0)
-    dispatched_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     result: Mapped[str | None] = mapped_column(Text, nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    execution_token: Mapped[str | None] = mapped_column(String(36), nullable=True)
 
 
 class League(Base):

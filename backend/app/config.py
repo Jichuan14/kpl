@@ -17,7 +17,6 @@ class Settings(BaseSettings):
     )
 
     database_url: str = DEFAULT_SQLITE
-    rabbitmq_url: str = "amqp://guest:guest@localhost:5672//"
     # Small hosts may publish season facts without automatically refitting models.
     auto_model_training_enabled: bool = True
     comp_base_url: str = "https://prod.comp.smoba.qq.com"

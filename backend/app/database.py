@@ -52,15 +52,17 @@ def ensure_schema_compatibility(target_engine: Engine = engine) -> list[str]:
             "team_a_score": "INTEGER",
             "team_b_score": "INTEGER",
         },
+        "pipeline_jobs": {"execution_token": "VARCHAR(36)"},
     }
     added: list[str] = []
     with target_engine.begin() as connection:
+        connection.exec_driver_sql("BEGIN IMMEDIATE")
         for table, columns in tables.items():
-            if not inspect(target_engine).has_table(table):
+            if not inspect(connection).has_table(table):
                 continue
             existing = {
                 column["name"]
-                for column in inspect(target_engine).get_columns(table)
+                for column in inspect(connection).get_columns(table)
             }
             for name, declaration in columns.items():
                 if name in existing:

@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import JSONResponse
 
 from app.api import (
     analytics,
@@ -17,6 +18,7 @@ from app.api import (
 )
 from app.config import get_settings
 from app.database import init_db
+from app.services.pipeline_runner import runner as pipeline_runner
 
 settings = get_settings()
 
@@ -61,8 +63,16 @@ app.include_router(analytics.router)
 @app.on_event("startup")
 def on_startup() -> None:
     init_db()
+    pipeline_runner.start()
+
+
+@app.on_event("shutdown")
+def on_shutdown() -> None:
+    pipeline_runner.stop()
 
 
 @app.get("/health")
-def health() -> dict[str, str]:
+def health():
+    if pipeline_runner.thread is not None and not pipeline_runner.thread.is_alive():
+        return JSONResponse(status_code=503, content={"status": "degraded", "pipeline": "stopped"})
     return {"status": "ok"}
