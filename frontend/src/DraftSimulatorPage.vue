@@ -1,7 +1,6 @@
 <script setup>
 import { createRequestScope } from "./requestScope.js";
 import { createSeasonStartup } from "./seasonStartup.js";
-import ModelCoverageNote from "./ModelCoverageNote.vue";
 import { computed, onBeforeUnmount, onMounted, ref, toRaw, watch } from "vue";
 import {
   fetchActiveModel,  fetchDraftModel,
@@ -1812,7 +1811,6 @@ onBeforeUnmount(() => {
               </div>
             </div>
           </div>
-          <ModelCoverageNote :metadata="model" />
           <small v-if="model">{{ number(model.training_decisions) }}{{ $t("条历史 BP 操作") }}</small>
         </div>
       </div>
@@ -2360,7 +2358,7 @@ onBeforeUnmount(() => {
 .simulator-header-controls { display:grid; justify-items:end; }
 .simulator-season { display:grid; min-width:420px; gap:.4rem; }
 .simulator-season>label, .simulator-actions label span { color: var(--ink-soft); font-size: .64rem; letter-spacing: .1em; text-transform: uppercase; }
-.simulator-control-row { display:flex; align-items:stretch; gap:.55rem; }
+.simulator-control-row { display:flex; align-items:stretch; justify-content:flex-end; gap:.55rem; }
 .simulator-season select, .simulator-actions select, .picker-heading input { min-height: 42px; padding: .55rem .7rem; border: 1px solid var(--line); background: rgba(255,255,255,.85); color: var(--ink); font: inherit; }
 .simulator-control-row>select { flex:1 1 auto; min-width:0; }
 .simulator-season small { color: var(--ink-soft); font-size: .66rem; }

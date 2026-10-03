@@ -1,17 +1,22 @@
+# syntax=docker/dockerfile:1
 FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1
+    PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-COPY backend/requirements.txt /app/backend/requirements.txt
+# Keep the large, rarely changed training installation ahead of API dependencies.
+# Cache downloads in the builder without adding them to the runtime image.
 COPY backend/requirements-training.txt /app/backend/requirements-training.txt
-RUN pip install --no-cache-dir -r /app/backend/requirements.txt
-RUN pip install --no-cache-dir \
+RUN --mount=type=cache,id=kpl-pip,target=/root/.cache/pip,sharing=locked \
+    pip install \
     --index-url https://download.pytorch.org/whl/cpu \
     -r /app/backend/requirements-training.txt
+
+COPY backend/requirements.txt /app/backend/requirements.txt
+RUN --mount=type=cache,id=kpl-pip,target=/root/.cache/pip,sharing=locked \
+    pip install -r /app/backend/requirements.txt
 
 COPY backend /app/backend
 COPY analysis /app/analysis

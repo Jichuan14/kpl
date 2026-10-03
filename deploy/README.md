@@ -105,6 +105,16 @@ docker compose -f docker-compose.production.yml up -d --build
 docker image prune -f
 ```
 
+The backend Dockerfile uses BuildKit package-download caches and installs the
+training dependencies before the API dependencies. Code-only changes reuse both
+installation layers; changing API requirements keeps the PyTorch layer cached.
+When an installation must rerun, unchanged downloads can be reused from the
+builder cache. The first build with this Dockerfile fills that cache and may
+download packages again. New package versions still need downloads. Keep using
+the same Docker builder; `docker builder prune` or `docker system prune` can
+remove build caches. Cached downloads stay in the builder, outside the runtime
+image, and use additional host disk space.
+
 ## Scheduled refresh
 
 ### Small-host operation and model training

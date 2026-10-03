@@ -1,7 +1,6 @@
 <script setup>
 import { createRequestScope } from "./requestScope.js";
 import { createSeasonStartup } from "./seasonStartup.js";
-import ModelCoverageNote from "./ModelCoverageNote.vue";
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import {
   fetchActiveModel,  fetchBattleLineups,
@@ -602,7 +601,6 @@ watch(() => [favoriteHeroIds.value.join(","), opponentHeroIds.value.join(","), p
     <p v-else-if="loading" class="message">{{ t("Loading learned feature space…") }}</p>
 
     <template v-else-if="payload">
-      <ModelCoverageNote :metadata="payload" />
       <LineupAnalyzerWidget
         :league-id="leagueId"
         :model-version="modelVersion"
