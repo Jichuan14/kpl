@@ -7,6 +7,7 @@ import sys
 import time
 from pathlib import Path
 from threading import Lock
+from app.services.pipeline_execution import check_interrupted, subprocess_options, PipelineInterrupted
 from typing import Any, Literal
 
 PipelineStep = Literal[
@@ -66,15 +67,25 @@ def _run_command(
     process = subprocess.Popen(
         command,
         cwd=cwd,
-        env={**os.environ, "MALLOC_ARENA_MAX": "2"},
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
         start_new_session=True,
+        **subprocess_options(),
     )
     try:
-        stdout, stderr = process.communicate(timeout=timeout_seconds)
-    except subprocess.TimeoutExpired:
+        deadline = time.monotonic() + timeout_seconds
+        while True:
+            check_interrupted()
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise subprocess.TimeoutExpired(command, timeout_seconds)
+            try:
+                stdout, stderr = process.communicate(timeout=min(1, remaining))
+                break
+            except subprocess.TimeoutExpired:
+                continue
+    except (subprocess.TimeoutExpired, PipelineInterrupted):
         _terminate_process_tree(process)
         raise
     return subprocess.CompletedProcess(

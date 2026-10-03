@@ -18,14 +18,14 @@ files are derived artifacts and can be rebuilt from the Management page or the
 pipeline API.
 
 Update requests now create rows in the `pipeline_jobs` table of
-`backend/data/kpl_bp.db`. The durable RabbitMQ queue carries job IDs; the
-SQLite rows hold status, attempts, progress, and results. Neither the database
-nor the RabbitMQ volume is a generated analysis artifact to commit. Back up
+`backend/data/kpl_bp.db`. These durable SQLite rows hold the queue,
+status, attempts, progress, and results. The API background runner executes
+one job at a time, launching trainer scripts sequentially. The database is not a generated artifact to commit. Back up
 SQLite with the season exports, analysis outputs, and published files. A
 scheduled 03:00 China-time job refreshes the official catalog, selects the
 newest started league with a completed match, performs incremental sync,
 rebuilds missing or stale analysis, and publishes changed assets; manual Full update forces a
-rebuild. See `deploy/README.md` for broker and worker recovery.
+rebuild. See `deploy/README.md` for API job recovery.
 
 ## Season exports
 

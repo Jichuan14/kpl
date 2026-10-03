@@ -79,7 +79,7 @@ class PipelineJobTests(unittest.TestCase):
             self.addCleanup(item.stop)
 
     def make_job(self, kind="scheduled", payload=None):
-        with self.sessions() as db, patch.object(pipeline_jobs, "dispatch_job", return_value=True):
+        with self.sessions() as db:
             return pipeline_jobs.enqueue_job(db, kind, "20260003", payload or {})
 
     def test_china_day_key_changes_at_local_midnight(self):
@@ -89,21 +89,22 @@ class PipelineJobTests(unittest.TestCase):
         self.assertEqual(pipeline_jobs.china_day_key("20260003", after), "scheduled:20260003:2026-09-27")
         self.assertEqual(pipeline_jobs.china_day_key(None, after), "scheduled:auto:2026-09-27")
 
-    def test_submission_is_idempotent_and_outbox_survives_broker_failure(self):
-        with self.sessions() as db, patch.object(pipeline_jobs.celery_app, "send_task", side_effect=OSError("broker down")):
-            first = pipeline_jobs.enqueue_job(db, "scheduled", "20260003", idempotency_key="scheduled:20260003:2026-09-27")
-            second = pipeline_jobs.enqueue_job(db, "scheduled", "20260003", idempotency_key="scheduled:20260003:2026-09-27")
-            self.assertEqual(first["id"], second["id"])
-            self.assertEqual(db.get(PipelineJob, first["id"]).status, "pending")
-            self.assertIsNone(db.get(PipelineJob, first["id"]).dispatched_at)
-        with patch.object(pipeline_jobs.celery_app, "send_task") as sent:
-            pipeline_jobs.recover_jobs()
-        sent.assert_called_once()
+    def test_submission_is_idempotent_and_durable_without_a_worker(self):
         with self.sessions() as db:
-            self.assertIsNotNone(db.get(PipelineJob, first["id"]).dispatched_at)
+            first = pipeline_jobs.enqueue_job(db, "scheduled", "20260003", idempotency_key="daily")
+            second = pipeline_jobs.enqueue_job(db, "scheduled", "20260003", idempotency_key="daily")
+            self.assertEqual(first["id"], second["id"])
+        with self.sessions() as db:
+            record = db.get(PipelineJob, first["id"])
+            self.assertEqual(record.status, "pending")
+            self.assertEqual(record.stage, "queued")
+        with patch.object(pipeline_jobs, "_perform", return_value={"ok": True}):
+            pipeline_jobs.run_job(first["id"])
+        with self.sessions() as db:
+            self.assertEqual(db.get(PipelineJob, first["id"]).status, "completed")
 
     def test_scheduled_api_returns_same_daily_job(self):
-        with self.sessions() as db, patch.object(pipeline_jobs, "dispatch_job", return_value=True):
+        with self.sessions() as db:
             request = jobs_api.ScheduledJobRequest(league_id="20260003")
             first = jobs_api.schedule_refresh(request, db=db).data
             second = jobs_api.schedule_refresh(request, db=db).data
@@ -119,7 +120,7 @@ class PipelineJobTests(unittest.TestCase):
             with self.sessions() as db:
                 yield db
         app.dependency_overrides[get_db] = temporary_db
-        with patch.object(pipeline_jobs, "dispatch_job", return_value=True), TestClient(app) as client:
+        with TestClient(app) as client:
             for endpoint, body in (
                 ("/api/jobs/scheduled", {}),
                 ("/api/jobs/scheduled", {"league_id": "20260003"}),
@@ -217,11 +218,9 @@ class PipelineJobTests(unittest.TestCase):
             record.status = "running"
             record.heartbeat_at = pipeline_jobs.now() - timedelta(minutes=3)
             db.commit()
-        with patch.object(pipeline_jobs, "dispatch_job", return_value=True) as dispatched:
-            pipeline_jobs.recover_jobs()
+        pipeline_jobs.recover_jobs()
         with self.sessions() as db:
             self.assertEqual(db.get(PipelineJob, job["id"]).status, "pending")
-        dispatched.assert_called_once()
 
     def test_deterministic_failure_is_not_retried(self):
         job = self.make_job("analysis", {"step": "display"})
@@ -304,7 +303,7 @@ class PipelineJobTests(unittest.TestCase):
             self.assertIn("candidate gate failed",record.error)
 
     def test_scheduled_auto_resolution_is_persisted_before_sync(self):
-        with self.sessions() as db, patch.object(pipeline_jobs, "dispatch_job", return_value=True):
+        with self.sessions() as db:
             db.add(League(league_id="20260004", year=2026, season=4,
                           start_time="2026-09-20 00:00:00"))
             db.commit()
@@ -349,7 +348,7 @@ class PipelineJobTests(unittest.TestCase):
         self.assertEqual(result["selected_league_id"], "20260003")
 
     def test_unknown_pinned_league_fails_before_sync_or_publish(self):
-        with self.sessions() as db, patch.object(pipeline_jobs, "dispatch_job", return_value=True):
+        with self.sessions() as db:
             job = pipeline_jobs.enqueue_job(db, "scheduled", "20990001", {"auto": False})
             record = db.get(PipelineJob, job["id"])
             record.status = "running"

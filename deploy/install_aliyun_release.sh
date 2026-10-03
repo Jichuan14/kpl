@@ -42,17 +42,6 @@ for required_path in \
   fi
 done
 
-for rabbitmq_key in RABBITMQ_DEFAULT_USER RABBITMQ_DEFAULT_PASS RABBITMQ_URL; do
-  if ! grep -Eq "^${rabbitmq_key}=.+" "$target_root/.env.production"; then
-    printf 'Missing %s in live .env.production; configure RabbitMQ before installing.\n' "$rabbitmq_key" >&2
-    exit 1
-  fi
-done
-if grep -q 'CHANGE_TO_A_LONG_RANDOM_PASSWORD' "$target_root/.env.production"; then
-  printf 'Replace the RabbitMQ password placeholders in live .env.production.\n' >&2
-  exit 1
-fi
-
 timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
 backup_parent="$(dirname "$target_root")/kpl-release-backups"
 backup_root="$backup_parent/$timestamp"
@@ -60,11 +49,11 @@ mkdir -p "$backup_root"
 
 printf 'Stopping the live containers...\n'
 if docker compose -f "$target_root/docker-compose.production.yml" config --services | grep -qx worker; then
-  # Celery's warm shutdown waits for the active job. The worker's own hard
-  # deadline is three hours; keep the timeout slightly above that deadline.
+  # Allow the legacy worker to finish before replacing its code. The new
+  # supervisor also handles interrupted execution safely.
   docker compose -f "$target_root/docker-compose.production.yml" stop -t 11100 worker
 fi
-docker compose -f "$target_root/docker-compose.production.yml" stop api web
+docker compose -f "$target_root/docker-compose.production.yml" stop -t 45 api web
 
 printf 'Backing up the existing backend, analysis data, and server secrets to %s\n' "$backup_root"
 cp -a "$target_root/backend" "$backup_root/backend"
@@ -110,7 +99,7 @@ for root_file in \
 done
 
 printf 'Building and starting the updated application...\n'
-docker compose -f "$target_root/docker-compose.production.yml" up -d --build
+docker compose -f "$target_root/docker-compose.production.yml" up -d --build --remove-orphans
 
 printf 'Waiting for the local health endpoint...\n'
 healthy=0

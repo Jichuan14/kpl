@@ -32,7 +32,7 @@ its sample size, baseline, and confidence information.
 KPL public APIs
       │
       ▼
-FastAPI ──► SQLite job ledger ──► RabbitMQ ──► one analysis worker
+FastAPI ──► SQLite job ledger ──► sequential API job runner ──► trainer subprocesses
   ▲                                                │
   │                                                ▼
   │                                   SQLite + published JSON assets
@@ -51,7 +51,6 @@ outputs rather than treated as source data.
 - Python 3.12 or newer
 - Node.js 20 or newer
 - npm
-- RabbitMQ 4.3 (or Docker to run it locally)
 
 ### 1. Start the API
 
@@ -71,32 +70,14 @@ It creates `backend/data/kpl_bp.db` on first start.
 PyTorch is needed only when the private management pipeline retrains the
 chronological model; normal inference remains NumPy-only.
 
-For local maintenance jobs, start RabbitMQ in another terminal:
+Maintenance updates execute directly in the API process. The API starts one
+background runner automatically, so running Uvicorn is sufficient. There is no
+separate pipeline worker or scheduler process to start.
 
-```bash
-docker run --rm --name kpl-rabbitmq -p 127.0.0.1:5672:5672 rabbitmq:4.3.6-alpine
-```
-
-Then start one worker from `backend/` using the same virtual environment:
-
-```bash
-celery -A app.services.pipeline_jobs:celery_app worker --pool=solo --concurrency=1 --without-mingle --without-gossip --loglevel=INFO
-```
-
-In another terminal with the same backend virtual environment, start the
-recovery scheduler:
-
-```bash
-celery -A app.services.pipeline_jobs:celery_app beat --loglevel=INFO
-```
-
-Run the scheduler separately during local development: embedded `--beat`
-can fail under macOS process spawning. The Linux production container embeds
-it in its worker. `npm run dev` starts only the website; keep the API, RabbitMQ,
-worker, and recovery scheduler running for management actions.
-
-The local default broker URL uses RabbitMQ's loopback-only `guest` account.
-Production uses the private Compose network and credentials in `.env.production`.
+Requests are committed to SQLite before returning HTTP 202 and a progress URL.
+The API runner handles one job at a time, launches sequential trainer scripts,
+and preserves queued work across API restarts. The current all-data model
+recipe and versioned activation remain unchanged. Run one Uvicorn process.
 
 ### 2. Start the web app
 
@@ -116,8 +97,8 @@ proxies `/api` calls to the API on port 8000.
 Use the **Management** screen to refresh the league catalog, select a season,
 download its finished matches, run the analysis pipeline, and publish frontend
 assets. The UI reports queued job progress and which artifacts are ready for
-the chosen season. The local backend now needs RabbitMQ and a Celery worker;
-the production Compose file runs both. Maintenance mutation calls return HTTP
+the chosen season. The API automatically executes these updates in its
+background runner; the production Compose file needs no separate worker. Maintenance mutation calls return HTTP
 202 with a job ID and `status_url` to poll.
 
 Automatic model training is enabled by default (`AUTO_MODEL_TRAINING_ENABLED=true`).

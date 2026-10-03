@@ -1,4 +1,4 @@
-"""Durable SQLite job ledger with RabbitMQ delivery for private maintenance work."""
+"""Durable SQLite maintenance jobs, executed sequentially inside the API."""
 from __future__ import annotations
 
 import fcntl
@@ -12,7 +12,6 @@ from pathlib import Path
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
-from celery import Celery
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -20,31 +19,14 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.database import SessionLocal, init_db
 from app.models import League, PipelineJob
+from app.services.pipeline_execution import (LOCK_FD_ENV, TOKEN_ENV, PipelineInterrupted,
+    check_interrupted, execution_context, execution_token, lock_fd as current_lock_fd)
 
 logger = logging.getLogger(__name__)
 MAX_ATTEMPTS = 3
 STALE_AFTER = timedelta(minutes=2)
-DISPATCH_AFTER = timedelta(minutes=5)
 JOB_TIMEOUT_SECONDS = 3 * 60 * 60
 LOCK_PATH = Path(__file__).resolve().parents[2] / "data" / "pipeline.lock"
-
-celery_app = Celery("kpl_pipeline", broker=get_settings().rabbitmq_url)
-celery_app.conf.update(
-    task_default_queue="pipeline",
-    task_default_queue_type="quorum",
-    task_serializer="json",
-    accept_content=["json"],
-    task_acks_late=True,
-    task_reject_on_worker_lost=True,
-    worker_prefetch_multiplier=1,
-    # Job status comes from SQLite. Celery's optional remote-control queues
-    # are transient/non-exclusive, which RabbitMQ 4.3 rejects by default.
-    worker_enable_remote_control=False,
-    broker_connection_retry_on_startup=True,
-    broker_connection_timeout=3,
-    broker_transport_options={"confirm_publish": True, "max_retries": 1},
-    beat_schedule={"recover-pipeline-jobs": {"task": "pipeline.recover", "schedule": 30.0}},
-)
 
 
 def now() -> datetime:
@@ -106,49 +88,60 @@ def enqueue_job(db: Session, kind: str, league_id: str | None = None,
             raise
         return job_data(db.scalar(select(PipelineJob).where(PipelineJob.idempotency_key == idempotency_key)))
     db.refresh(job)
-    dispatch_job(db, job)
     return job_data(job)
 
 
-def dispatch_job(db: Session, job: PipelineJob) -> bool:
-    """Best effort. The committed row is the outbox if RabbitMQ is unavailable."""
-    try:
-        celery_app.send_task("pipeline.run", args=[job.id], task_id=str(uuid4()),
-                             retry=False, delivery_mode=2)
-    except Exception:
-        logger.exception("RabbitMQ dispatch failed for job %s; recovery will retry", job.id)
-        job.stage = "waiting_for_broker"
-        db.commit()
-        return False
-    job.dispatched_at = now()
-    if job.status == "pending":
-        job.stage = "queued"
-    db.commit()
-    return True
-
-
 @contextmanager
-def global_pipeline_lock():
+def global_pipeline_lock(*, blocking: bool = True):
+    """Hold the execution lock, or reuse the supervisor's inherited descriptor.
+
+    Descendants inherit this descriptor so a surviving trainer keeps the lock
+    even if its job process dies. Recovery cannot overlap that execution.
+    """
+    inherited = current_lock_fd()
+    if inherited is not None:
+        fd = int(inherited)
+        stat = os.fstat(fd)
+        expected = LOCK_PATH.stat()
+        if (stat.st_dev, stat.st_ino) != (expected.st_dev, expected.st_ino):
+            raise RuntimeError("Inherited pipeline lock does not match this workspace")
+        yield fd
+        return
     LOCK_PATH.parent.mkdir(parents=True, exist_ok=True)
     with LOCK_PATH.open("a+") as handle:
-        fcntl.flock(handle, fcntl.LOCK_EX)
         try:
-            yield
+            fcntl.flock(handle, fcntl.LOCK_EX | (0 if blocking else fcntl.LOCK_NB))
+        except BlockingIOError:
+            yield None
+            return
+        try:
+            yield handle.fileno()
         finally:
-            fcntl.flock(handle, fcntl.LOCK_UN)
+            # Closing the last inherited descriptor releases the lock. Never
+            # explicitly unlock a description still held by a surviving trainer.
+            pass
 
 
-def _update_stage(job_id: str, stage: str) -> None:
+def execution_filter(job_id: str, token: str | None = None):
+    conditions = [PipelineJob.id == job_id, PipelineJob.status == "running"]
+    token = token or execution_token()
+    if token:
+        conditions.append(PipelineJob.execution_token == token)
+    return conditions
+
+
+def _update_stage(job_id: str, stage: str, token: str | None = None) -> None:
+    check_interrupted()
     with SessionLocal() as db:
-        db.execute(update(PipelineJob).where(PipelineJob.id == job_id, PipelineJob.status == "running")
+        db.execute(update(PipelineJob).where(*execution_filter(job_id, token))
                    .values(stage=stage, heartbeat_at=now()))
         db.commit()
 
 
-def _heartbeat(job_id: str, stop: threading.Event) -> None:
+def _heartbeat(job_id: str, stop: threading.Event, token: str) -> None:
     while not stop.wait(20):
         try:
-            _update_stage(job_id, _current_stage(job_id))
+            _update_stage(job_id, _current_stage(job_id), token)
         except Exception:
             logger.exception("Could not heartbeat pipeline job %s", job_id)
 
@@ -201,7 +194,7 @@ def _perform(job: PipelineJob) -> dict:
                     sync.close()
                 # Persist the resolution before syncing any source rows. A
                 # retry remains on the same league even if the catalog changes.
-                db.execute(update(PipelineJob).where(PipelineJob.id == job.id)
+                db.execute(update(PipelineJob).where(*execution_filter(job.id))
                            .values(league_id=league_id))
                 db.commit()
                 job.league_id = league_id
@@ -253,49 +246,46 @@ def _perform(job: PipelineJob) -> dict:
     raise ValueError("Unknown job kind")
 
 
-@celery_app.task(name="pipeline.run", ignore_result=True)
-def run_job(job_id: str) -> None:
+def run_job(job_id: str, *, stop: threading.Event | None = None, timeout: float = JOB_TIMEOUT_SECONDS) -> None:
     init_db()
-    with global_pipeline_lock():
+    with global_pipeline_lock() as lock_fd:
+        token = execution_token() or str(uuid4())
         with SessionLocal() as db:
             claimed = db.execute(update(PipelineJob)
                 .where(PipelineJob.id == job_id, PipelineJob.status == "pending",
                        PipelineJob.attempts < MAX_ATTEMPTS,
                        (PipelineJob.next_attempt_at.is_(None) | (PipelineJob.next_attempt_at <= now())))
                 .values(status="running", stage="starting", heartbeat_at=now(),
-                        attempts=PipelineJob.attempts + 1))
+                        attempts=PipelineJob.attempts + 1, execution_token=token))
             db.commit()
             if not claimed.rowcount:
                 return
             job = db.get(PipelineJob, job_id)
             db.expunge(job)
-        # The solo worker has no enforceable Celery hard task limit. Exiting
-        # PID 1 on timeout stops its subprocesses with the container; RabbitMQ
-        # redelivers and the stale-job sweep retries within the attempt budget.
-        watchdog = threading.Timer(JOB_TIMEOUT_SECONDS, lambda: os._exit(124))
-        watchdog.daemon = True
-        watchdog.start()
-        stop = threading.Event()
-        heartbeat = threading.Thread(target=_heartbeat, args=(job_id, stop), daemon=True)
+        context = execution_context(lock_fd, token, stop=stop, timeout=timeout)
+        context.__enter__()
+        heartbeat_stop = threading.Event()
+        heartbeat = threading.Thread(target=_heartbeat, args=(job_id, heartbeat_stop, token), daemon=True)
         heartbeat.start()
         try:
             result = _perform(job)
         except Exception as exc:
             logger.exception("Pipeline job %s failed", job_id)
             with SessionLocal() as db:
-                record = db.get(PipelineJob, job_id)
+                record = db.scalar(select(PipelineJob).where(*execution_filter(job_id, token)))
+                if record is None:
+                    return
                 record.error = str(exc)[:8000]
                 record.heartbeat_at = now()
                 retryable = not isinstance(exc, ValueError) and (
                     record.stage in {"sync_bp", "sync_leagues", "select_league"} or
-                    isinstance(exc, (OSError, TimeoutError)) or
+                    isinstance(exc, (OSError, TimeoutError, PipelineInterrupted)) or
                     "timed out" in str(exc).lower()
                 )
                 if retryable and record.attempts < MAX_ATTEMPTS:
                     record.status = "pending"
                     record.stage = "retry_wait"
                     record.next_attempt_at = now() + timedelta(seconds=30 * (2 ** (record.attempts - 1)))
-                    record.dispatched_at = None
                 else:
                     record.status = "failed"
                     record.stage = "failed"
@@ -303,7 +293,9 @@ def run_job(job_id: str) -> None:
                 db.commit()
         else:
             with SessionLocal() as db:
-                record = db.get(PipelineJob, job_id)
+                record = db.scalar(select(PipelineJob).where(*execution_filter(job_id, token)))
+                if record is None:
+                    return
                 record.status = "completed"
                 record.stage = ("Data updated; model training deferred"
                                 if result.get("model_update", {}).get("status") == "DEFERRED"
@@ -314,30 +306,55 @@ def run_job(job_id: str) -> None:
                 record.heartbeat_at = now()
                 db.commit()
         finally:
-            watchdog.cancel()
-            stop.set()
+            heartbeat_stop.set()
             heartbeat.join(timeout=2)
+            # Fresh trainer commands normally reap their children. Cancellation
+            # or failure also clears token-tagged descendants before releasing
+            # the inherited lock and allowing another job.
+            try:
+                from app.services.pipeline_worker import terminate_token
+                terminate_token(token)
+                with SessionLocal() as db:
+                    db.execute(update(PipelineJob).where(PipelineJob.id == job_id,
+                        PipelineJob.execution_token == token).values(execution_token=None))
+                    db.commit()
+            finally:
+                context.__exit__(None, None, None)
 
 
-@celery_app.task(name="pipeline.recover", ignore_result=True)
-def recover_jobs() -> None:
+
+def recover_jobs(*, force: bool = False, reason: str = "Worker stopped before completing the job") -> bool:
+    """Recover only while the execution lock proves no previous job can run.
+
+    The supervisor terminates token-tagged orphan processes before calling this.
+    A stale heartbeat alone never authorizes recovery of a live execution.
+    """
     init_db()
-    current = now()
-    with SessionLocal() as db:
-        stale = list(db.scalars(select(PipelineJob).where(
-            PipelineJob.status == "running", PipelineJob.heartbeat_at < current - STALE_AFTER)))
-        for job in stale:
-            job.error = "Worker stopped before completing the job"
-            if job.attempts >= MAX_ATTEMPTS:
+    with global_pipeline_lock(blocking=False) as lock_fd:
+        if lock_fd is None:
+            return False
+        current = now()
+        with SessionLocal() as db:
+            statement = select(PipelineJob).where(PipelineJob.status == "running")
+            if not force:
+                statement = statement.where((PipelineJob.heartbeat_at.is_(None)) |
+                                            (PipelineJob.heartbeat_at < current - STALE_AFTER))
+            for job in db.scalars(statement):
+                job.error = reason
+                job.execution_token = None
+                if job.attempts >= MAX_ATTEMPTS:
+                    job.status, job.stage, job.finished_at = "failed", "failed", current
+                else:
+                    job.status, job.stage = "pending", "retry_wait"
+                    job.next_attempt_at = current + timedelta(seconds=30 * (2 ** max(0, job.attempts - 1)))
+            exhausted = db.scalars(select(PipelineJob).where(PipelineJob.status == "pending",
+                                                           PipelineJob.attempts >= MAX_ATTEMPTS))
+            for job in exhausted:
                 job.status, job.stage, job.finished_at = "failed", "failed", current
-            else:
-                job.status, job.stage, job.dispatched_at = "pending", "retry_wait", None
-                job.next_attempt_at = current
-        db.commit()
-        pending = list(db.scalars(select(PipelineJob).where(
-            PipelineJob.status == "pending",
-            (PipelineJob.next_attempt_at.is_(None) | (PipelineJob.next_attempt_at <= current)),
-            (PipelineJob.dispatched_at.is_(None) | (PipelineJob.dispatched_at < current - DISPATCH_AFTER))
-        ).order_by(PipelineJob.created_at).limit(20)))
-        for job in pending:
-            dispatch_job(db, job)
+                job.error = job.error or "Maximum job attempts exhausted"
+            # Normalize pending delivery labels from older ledgers.
+            db.execute(update(PipelineJob).where(PipelineJob.status == "pending",
+                PipelineJob.stage != "retry_wait")
+                .values(stage="queued"))
+            db.commit()
+        return True

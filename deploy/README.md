@@ -1,7 +1,7 @@
 # ECS deployment with SQLite
 
-This deployment runs Vue/Nginx, FastAPI, RabbitMQ, and one Celery pipeline
-worker on one ECS instance. The application database is a SQLite file on that
+This deployment runs Vue/Nginx and FastAPI on one ECS instance. Maintenance
+updates run directly inside the API process, with sequential trainer scripts. The application database is a SQLite file on that
 instance's disk; no RDS instance is needed.
 
 SQLite is a good fit for this single-ECS deployment. Keep exactly one API
@@ -19,8 +19,6 @@ instances against the same database file or put the database on NFS/OSS.
 
    ```bash
    cp .env.production.example .env.production
-   # Generate a hex password and replace both RabbitMQ placeholders with it.
-   openssl rand -hex 24
    mkdir -p backend/data analysis/exports analysis/outputs deploy
    docker run --rm httpd:2.4-alpine htpasswd -nbB admin 'CHOOSE_A_LONG_PASSWORD' \
      > deploy/.htpasswd
@@ -28,8 +26,8 @@ instances against the same database file or put the database on NFS/OSS.
    ```
 
    On a small instance, create host swap before starting the containers. The
-   production Compose file limits each Python container to 1 GiB of physical
-   RAM and 2.5 GiB total RAM plus swap. The worker and RabbitMQ raise peak
+   production Compose file limits the API and its trainer subprocesses to 1 GiB of physical
+   RAM and 2.5 GiB total RAM plus swap. The API and active trainer share this limit and raise peak
    memory use; measure it during a full update on the target host:
 
    ```bash
@@ -61,17 +59,35 @@ instances against the same database file or put the database on NFS/OSS.
    ```
 
    Run one manual Full update from `/management` and watch
-   `docker stats` and `free -h` on the ECS host. Confirm the worker completes
+   `docker stats` and `free -h` on the ECS host. Confirm the update completes
    without an OOM restart before relying on the 03:00 schedule.
 
-The API and worker share SQLite, exports, outputs, and published data mounts.
-Management actions create persisted jobs; the single worker processes them
-under a shared file lock. RabbitMQ keeps durable quorum-queue messages on its
-own volume.
-If broker delivery fails, the committed SQLite job stays pending and a
-30-second recovery sweep dispatches it later. Jobs have up to three attempts,
-heartbeats, and a visible failure state. Pipeline commands use isolated process
-groups so a timeout terminates nested trainer processes.
+The API mounts SQLite, exports, outputs and published data. Maintenance requests
+commit durable SQLite jobs and return HTTP 202 with progress URLs. A background
+thread in the API executes one job at a time and launches trainer scripts
+sequentially. It does not start a separate pipeline/job process or container.
+Public requests keep using the API while the update runs. Keep one Uvicorn
+process, as configured; the runner's ownership lock prevents duplicate runners.
+
+Jobs retain three-attempt limits, 20-second heartbeats and visible failures.
+Interrupted jobs retry after 30 seconds, then 60 seconds. Deterministic analysis
+failures stay terminal. A three-hour execution deadline is checked between
+stages, during subprocess waits and at official API request boundaries. Each
+trainer also retains its step timeout. API shutdown requests cancellation;
+trainer process groups and token-tagged orphan processes are cleaned up before
+another execution. Cancellation is cooperative while API-side code is running;
+an outstanding official request has a 20-second network timeout. The API gets
+45 seconds of shutdown grace. Progress state is local to the job thread and
+never added to unrelated requests' subprocess environments.
+
+When upgrading from an older separate-worker deployment, first drain/stop the
+old worker and stop the API before replacing code. Keep SQLite and artifacts,
+then run `docker compose -f docker-compose.production.yml up -d --build
+--remove-orphans`. The API starts its runner automatically and the additive
+migration retains existing jobs. Obsolete service containers are removed.
+Do not run the old worker
+alongside the API runner. The optional pipeline_worker CLI is only an offline
+diagnostic tool when the API is stopped.
 
 Caddy accepts public traffic on ports 80 and 443, automatically obtains and
 renews HTTPS certificates for `kpllab.xyz` and `www.kpllab.xyz`, and proxies
@@ -96,10 +112,10 @@ docker image prune -f
 Automatic model training is enabled by default in both the application and
 `.env.production.example`. On an existing server, set
 `AUTO_MODEL_TRAINING_ENABLED=true` in `.env.production` (or remove an old false
-override) to enable it. Recreate the API and worker after deploying this setting:
+override) to enable it. Recreate the API after deploying this setting:
 
 ```bash
-docker compose -f docker-compose.production.yml up -d --build api worker
+docker compose -f docker-compose.production.yml up -d --build api
 ```
 
 For temporary deferral, set `AUTO_MODEL_TRAINING_ENABLED=false`.
@@ -113,19 +129,17 @@ run training; do not use those on this host until their peak usage is measured.
 Explicit false overrides remain effective until removed or changed; uploading
 new code does not replace the server's existing `.env.production`.
 
-The RabbitMQ rollout also introduced a new global training path: the old cron
-was pinned to Season 3, while current jobs discover started seasons and may
-train on all eligible historical series. Compare actual work, not just broker
-overhead. The API and worker each have a 1 GiB ceiling; these are not reserved
-RAM and their combined peaks plus RabbitMQ can exceed host capacity. A worker
-child can be OOM-killed while Celery remains running. Inspect kernel/cgroup
-events even if Docker does not show a terminated container.
+Current jobs discover started seasons and can train on all eligible historical
+series. The API and its trainer children share a 1 GiB ceiling, rather than two
+separate Python containers. A child or the API itself can be OOM-killed under
+that cap; inspect kernel/cgroup events and verify website responsiveness during
+training. Container memory limits do not reserve RAM from the host.
 
 Reference preparation now streams decisions and output relabeling instead of
 retaining the complete corpus alongside child analyzers. This reduces a known
 overlap but is not proof that the complete neural refit fits 1 GiB. Monitor
 the first full training run on the small host to verify adequate headroom.
-More swap or a higher worker RAM limit alone does not protect website latency.
+More swap or a higher API RAM limit alone does not protect website latency.
 
 Production refits now run input hashing, references, base neural training,
 familiarity training, ban training, lineup training and catalog export in fresh
@@ -135,7 +149,7 @@ Freed preparation allocations are also returned where Linux/glibc supports it.
 This releases process-owned memory between stages without reducing the corpus,
 epochs, historical-context rules, recipe or activation checks. Production
 training writes `analysis/outputs/models/candidates/training_memory.jsonl`;
-follow it while the worker runs to see stage names, individual process peaks
+follow it while an update runs to see stage names, individual process peaks
 and available Linux cgroup memory/swap/OOM/pressure readings. Diagnostics
 also record available host RAM, swap and host memory/I/O pressure to distinguish
 container limits from host pressure. A failed stage
@@ -172,20 +186,33 @@ The report includes kernel cgroup peak memory and sampled swap, OOM events,
 pressure and container status. A small sampling process is included in measured
 container memory. Native process-tree RSS can double-count shared pages and
 does not include charged file cache, so use the Linux cgroup test when checking
-the container cap. Neither test includes the separate API, RabbitMQ, web or OS
+the container cap. Neither test includes the separate API, web or OS
 memory budgets. Local Docker architecture and swap availability can differ
 from the server; repeat on a staging host with the server's actual corpus.
 The tool leaves the stopped diagnostic container and temporary snapshot for
 inspection; remove the named container and snapshot after collecting results.
 
+### Compare queue architectures
+
+`deploy/benchmark-queue.py` submits a real HTTP Full update to an isolated API
+and checks health throughout. `--mode worker` runs a saved SQLite-worker baseline
+without overlaying code; `--mode api` overlays the current code and runs only the
+API container. Both use the same saved `--baseline` code/database/export snapshot,
+image and limits. `sqlite` is an alias for `worker` and requires a saved
+SQLite-worker version. Supply separate `--report` directories. Snapshots must omit
+existing model versions so full training occurs. Reports include charged cgroup
+memory, sampled swap, OOM events, health latency, logs and copied workspace paths.
+They exclude Nginx, Caddy and OS memory. Stopped containers and copied data remain
+for inspection; cleanup is manual. Live data and credentials are never mounted.
+
 ### Install the daily trigger
 
 Install the repository-managed refresh script. It submits one idempotent job
-per China calendar day. The worker refreshes the official league catalog and
+per China calendar day. The API runner refreshes the official league catalog and
 selects the newest league that has started and has a completed match. A future
 announced league remains ineligible until play begins. Set `KPL_LEAGUE_ID`
 only to pin an emergency run to a particular official league. The job starts
-at 03:00 China time when the worker is healthy; the site updates after analysis
+at 03:00 China time when the API runner is healthy; the site updates after analysis
 and publishing finish. Confirm the host cron honors `CRON_TZ` (or use 19:00 UTC
 on a UTC host):
 
@@ -208,20 +235,19 @@ The script polls the job and logs stage changes, completion, or failure for up
 to 3.5 hours. `KPL_POLL_SECONDS` and `KPL_MAX_POLLS` can adjust that bound.
 Check `/management` for progress and attempts. Scheduled jobs skip analysis when source data and
 artifacts are current, but repair stale or missing outputs and published files.
-Manual **Full update** always rebuilds analysis and publishes. A broker or
-worker outage delays the run; pending jobs are recovered when service returns.
-The worker has a three-hour hard deadline and the broker allows four hours
-before an unacknowledged delivery expires.
+Manual **Full update** always rebuilds analysis and publishes. An API outage delays
+the run; queued jobs survive and interrupted jobs recover when the API restarts.
+The runner stops descendant trainers before retrying.
 
-For a consistent backup, stop the API and worker, copy the database and
+For a consistent backup, stop the API, copy the database and
 artifacts, then restart them:
 
 ```bash
-docker compose -f docker-compose.production.yml stop api worker
+docker compose -f docker-compose.production.yml stop -t 45 api
 cp backend/data/kpl_bp.db /safe/backup/location/kpl_bp-$(date +%F).db
 tar -czf /safe/backup/location/kpl-artifacts-$(date +%F).tgz \
   analysis/exports analysis/outputs analysis/published
-docker compose -f docker-compose.production.yml start api worker
+docker compose -f docker-compose.production.yml start api
 ```
 
 Keep database and artifact backups outside the ECS disk, such as in OSS. For
