@@ -115,6 +115,19 @@ the same Docker builder; `docker builder prune` or `docker system prune` can
 remove build caches. Cached downloads stay in the builder, outside the runtime
 image, and use additional host disk space.
 
+If a code-only deployment loses its BuildKit installation cache but the existing
+API image is still local, `bash deploy/reuse-api-image.sh` can reuse that image's
+installed packages without running pip. It defaults to `kpl-api:latest`; pass a
+different local API image name if the Compose project has another name. The helper
+refuses mismatched requirements, a changed Dockerfile or Docker ignore rules,
+and incompatible runtime configuration. It removes old application source inside
+the new image before copying current source, uses the normal Docker ignore rules,
+and retains a separate local source-image tag for rollback. It builds only the API
+image and does not deploy it. Build the frontend normally if needed, then deploy
+with `docker compose -f docker-compose.production.yml up -d --no-build --wait`.
+This is a recovery path; use the regular Dockerfile for dependency or base-image
+updates. It does not restore the regular Dockerfile's missing cache records.
+
 ## Scheduled refresh
 
 ### Small-host operation and model training
