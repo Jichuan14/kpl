@@ -255,6 +255,11 @@ export function fetchDraftModel(leagueId, modelVersion) {
   return request(`/api/simulations/model?${params}`);
 }
 
+export function fetchHeroCatalog(leagueId, modelVersion) {
+  const params = new URLSearchParams({ league_id: leagueId, model_version: modelVersion });
+  return request(`/api/simulations/hero-catalog?${params}`);
+}
+
 export function fetchLearnedFeatureSpace(leagueId, modelVersion) {
   if (modelVersion) {
     const params = new URLSearchParams({ league_id: leagueId, model_version: modelVersion });
@@ -294,6 +299,14 @@ export function fetchUltimateCounterLineup({ leagueId, modelVersion, targetHeroI
   });
 }
 
+export function predictDraftNextAction(state, { signal } = {}) {
+  return request("/api/simulations/next-action", {
+    method: "POST",
+    signal,
+    body: JSON.stringify(state),
+  });
+}
+
 export function simulateDraft(state) {
   return request("/api/simulations/draft", {
     method: "POST",
@@ -309,9 +322,10 @@ export function simulateDraftScenario(state, { signal } = {}) {
   });
 }
 
-export function recommendLineup(state) {
+export function recommendLineup(state, { signal } = {}) {
   return request("/api/simulations/recommend-lineup", {
     method: "POST",
+    signal,
     body: JSON.stringify(state),
   });
 }

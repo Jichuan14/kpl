@@ -40,6 +40,27 @@ class SimulationApiTest(unittest.TestCase):
         self.assertEqual(second.status_code, 429)
         simulate.assert_called_once()
 
+    def test_next_action_uses_validated_teams_and_shared_request_budget(self) -> None:
+        limiter = CoachRateLimiter(
+            per_ip_per_minute=1, per_ip_per_day=10, server_per_minute=10,
+            server_per_day=100, max_active_per_ip=1, max_active_server=2,
+        )
+        with (
+            patch("app.api.simulation.simulation_rate_limiter", limiter),
+            patch("app.api.simulation.validate_season_team_pair", return_value={"blue": {"team_name": "Official Blue"}, "red": {"team_name": "Official Red"}}),
+            patch("app.api.simulation.predict_next_action", return_value={"next_action_probabilities": []}) as predict,
+            patch("app.api.simulation.simulate") as simulate,
+        ):
+            first = self.client.post("/api/simulations/next-action", json=self.payload())
+            second = self.client.post("/api/simulations/draft", json=self.payload())
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 429)
+        predict.assert_called_once()
+        self.assertEqual(predict.call_args.kwargs['limit'], None)
+        self.assertEqual(predict.call_args.args[1]['blue_team_name'], 'Official Blue')
+        self.assertEqual(predict.call_args.args[1]['red_team_name'], 'Official Red')
+        simulate.assert_not_called()
+
     def test_simulator_rejects_client_rollout_override(self) -> None:
         response = self.client.post("/api/simulations/draft", json={**self.payload(), "rollouts": 5000})
         self.assertEqual(response.status_code, 422)

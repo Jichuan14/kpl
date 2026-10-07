@@ -478,6 +478,17 @@ def load_sequence_model(league_id: str) -> dict[str, Any]:
     return model
 
 
+def hero_catalog(league_id: str) -> dict[str, Any]:
+    """Compact picker vocabulary and legal lanes, independent of map artifacts."""
+    model = load_model(league_id)
+    rows = []
+    for hero_id in model["hero_ids"]:
+        positions = [int(p) for p in model["hero_positions"].get(str(hero_id), []) if int(p) in POSITION_LANES]
+        rows.append({"hero_id": hero_id, "hero_name": model["hero_names"].get(str(hero_id), str(hero_id)),
+                     "positions": positions, "primary_lane": POSITION_LANES[positions[-1]] if positions else "unknown"})
+    return _feature_space_with_facts({"rows": rows}, league_id)
+
+
 def learned_feature_space(league_id: str) -> dict[str, Any]:
     """Return the notebook-exported 2-D learned candidate representation."""
     path = feature_space_path(league_id)
@@ -1430,11 +1441,11 @@ def predict_next_action(
     state: dict[str, Any],
     *,
     model_type: str = "stats",
-    limit: int = 5,
+    limit: int | None = 5,
     _prepared_prediction: tuple | None = None,
 ) -> dict[str, Any]:
-    """Return the next legal BP distribution without running future rollouts."""
-    if limit < 1:
+    """Return legal next actions without rollouts; limit=None retains every candidate."""
+    if limit is not None and limit < 1:
         raise ValueError("limit must be at least 1")
     (
         model,

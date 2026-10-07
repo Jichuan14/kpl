@@ -2,6 +2,11 @@
 
 ## Frontend architecture
 
+The homepage's hero matchup and lineup tools render from a bundled, names-and-lanes
+catalog immediately. Pinned model vocabulary and selected-season evidence load
+in the background; model actions wait for readiness. Explore fetches its feature
+map only when opened, and the historical-lineup selector fetches battles on demand.
+
 The Vue frontend uses history-mode Vue Router for page URLs and route-level lazy
 loading. Shared `useSeasonCatalog`, `useLatestRequest`, and `usePolling`
 composables keep season readiness filtering, cancellation, and monitor lifecycle
@@ -326,6 +331,10 @@ The public calendar uses one shared, short-lived 17-day range request for the
 widget and welcome popup. The API still supports existing single-day calls.
 Both views group fixtures by Beijing date. The widget labels times as Beijing
 time and includes the full day's schedule, including matches already started.
+The simulator's ordinary moves use `/api/simulations/next-action` to return the
+full legal distribution without completing 50 unused drafts. Recommendations
+run separately in the background; only one search runs at a time and queued
+work uses the newest board. What-if simulations retain their completion budget.
 The simulator chooses its current or next unfinished fixture from the selected
 season's full schedule, including teams without recorded games. Fixture teams
 are selectable without being counted as player observations or ranked teams.

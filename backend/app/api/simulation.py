@@ -21,6 +21,7 @@ from app.services.draft_commentary import build_selection_commentary
 from app.services.draft_evidence import build_simulator_move_evidence
 from app.services.draft_simulator import (
     FIXED_ROLLOUTS,
+    hero_catalog,
     learned_feature_space,
     metadata,
     predict_next_action,
@@ -120,6 +121,17 @@ def draft_model(league_id: str = Query(..., min_length=1, max_length=32), model_
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@router.get("/hero-catalog")
+@pinned_model_operation
+def picker_catalog(league_id: str = Query(..., min_length=1, max_length=32), model_version: str | None = Query(None, max_length=128)) -> ApiResponse:
+    try:
+        return ApiResponse(data=hero_catalog(league_id))
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @router.get("/feature-space")
 @pinned_model_operation
 def feature_space(league_id: str = Query(..., min_length=1, max_length=32), model_version: str | None = Query(None, max_length=128)) -> ApiResponse:
@@ -210,6 +222,52 @@ def hero_matchup(body: HeroMatchupRecommendationRequest) -> ApiResponse:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/next-action")
+@pinned_model_operation
+def draft_next_action(
+    body: DraftSimulationRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> ApiResponse:
+    key = _simulation_client_key(request)
+    decision = simulation_rate_limiter.acquire(key)
+    if not decision.allowed:
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "code": "simulation_rate_limited",
+                "message": "The simulator is busy. Try again shortly.",
+            },
+            headers={"Retry-After": str(decision.retry_after_seconds)},
+        )
+    state = body.model_dump(exclude={"league_id", "model_version", "model_type", "seed"})
+    try:
+        teams = validate_season_team_pair(
+            db,
+            body.league_id,
+            body.blue_team_id,
+            body.red_team_id,
+        )
+        state.update(
+            blue_team_name=teams["blue"]["team_name"],
+            red_team_name=teams["red"]["team_name"],
+        )
+        return ApiResponse(
+            data=predict_next_action(
+                body.league_id,
+                state,
+                model_type=body.model_type,
+                limit=None,
+            )
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    finally:
+        simulation_rate_limiter.release(key)
 
 
 @router.post("/draft")

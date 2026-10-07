@@ -3,7 +3,7 @@ import { createRequestScope } from "./requestScope.js";
 import { createSeasonStartup } from "./seasonStartup.js";
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import {
-  fetchActiveModel,  fetchBattleLineups,
+  fetchActiveModel, fetchBattleLineups, fetchHeroCatalog,
   fetchHeroMatchupRecommendations,
   fetchHeroResponses,
   fetchLearnedFeatureSpace,
@@ -16,6 +16,7 @@ import { getStored, setStored } from "./storage";
 import { heroAsset } from "./heroAssets";
 import { mechanicLabel } from "./heroMechanicLabels";
 import { heroSearchAliases } from "./heroSearchAliases";
+import { heroCatalog } from "./heroCatalog";
 import { supplementalHeroes } from "./supplementalHeroes";
 import LineupAnalyzerWidget from "./LineupAnalyzerWidget.vue";
 import { language, t } from "./i18n";
@@ -42,6 +43,12 @@ const latestFeatureSpace = useLatestRequest();
 const leagueId = selectedLeagueId;
 const modelSession = createModelSession(fetchActiveModel);
 const modelVersion = ref("");
+const catalog = shallowRef(null);
+const toolError = ref("");
+const toolsReady = computed(() => Boolean(leagueId.value && modelVersion.value && catalog.value));
+const deepDiveOpen = ref(false);
+let disposed = false;
+onBeforeUnmount(() => { disposed = true; featureLoadVersion += 1; });
 const payload = shallowRef(null);
 const responses = shallowRef(null);
 const historicalLineups = shallowRef([]);
@@ -102,12 +109,12 @@ const pickerHeroes = computed(() => {
   const heroesById = new Map(
     supplementalHeroes.map((hero) => [Number(hero.hero_id), hero])
   );
-  for (const hero of rankedRows.value) {
+  for (const hero of catalog.value?.rows || heroCatalog) {
     heroesById.set(Number(hero.hero_id), hero);
   }
   return [...heroesById.values()];
 });
-const supportedHeroIds = computed(() => new Set(rows.value.map((hero) => Number(hero.hero_id))));
+const supportedHeroIds = computed(() => new Set((catalog.value?.rows || []).map((hero) => Number(hero.hero_id))));
 const visibleRows = computed(() =>
   showAllHeroes.value ? rankedRows.value : rankedRows.value.slice(0, INITIAL_HERO_LIMIT)
 );
@@ -344,7 +351,7 @@ function removeOpponent(heroId) {
 }
 
 async function recommendForMatchup(limit = INITIAL_MATCHUP_RECOMMENDATION_LIMIT) {
-  if (!opponentHeroIds.value.length || matchupLoading.value) return;
+  if (!toolsReady.value || !opponentHeroIds.value.length || matchupLoading.value) return;
   const operation = matchupRequests.begin();
   if (!operation) return;
   matchupLoading.value = true;
@@ -495,99 +502,128 @@ function laneLabel(lane) {
   return t(laneLabels[lane] || laneLabels.unknown);
 }
 
-async function loadFeatureSpace() {
-  if (!leagueId.value) return;
+function restoreFavorites() {
+  let storedFavoriteIds = [];
+  let hasStoredFavoritePool = false;
+  try {
+    const storedValue = getStored(FAVORITE_HERO_STORAGE_KEY);
+    hasStoredFavoritePool = storedValue !== null;
+    const stored = JSON.parse(storedValue || "[]");
+    if (Array.isArray(stored)) storedFavoriteIds = stored.map(Number);
+    if (!hasStoredFavoritePool && !storedFavoriteIds.length) {
+      const legacy = Number(
+        getStored(LEGACY_FAVORITE_HERO_STORAGE_KEY)
+      );
+      if (legacy) storedFavoriteIds = [legacy];
+    }
+  } catch {
+    storedFavoriteIds = [];
+  }
+  favoriteHeroIds.value = [...new Set(storedFavoriteIds)]
+    .filter((heroId) => Number.isInteger(heroId) && heroId > 0)
+    .slice(0, MAX_FAVORITE_HEROES);
+  try {
+    const storedLane = getStored(PLAYED_LANE_STORAGE_KEY, "") || "";
+    preferredLane.value = favoriteHeroIds.value.length && playableLanes.includes(storedLane)
+      ? storedLane
+      : "";
+  } catch {
+    preferredLane.value = "";
+  }
+  persistFavorites();
+}
+restoreFavorites();
+
+async function ensureModelVersion() {
+  const version = await modelSession.version();
+  if (!disposed) modelVersion.value = version;
+  return version;
+}
+
+function loadToolSeason() {
+  const season = leagueId.value;
   const loadVersion = ++featureLoadVersion;
-  loading.value = true;
-  error.value = "";
+  catalog.value = null;
+  toolError.value = "";
   payload.value = null;
+  error.value = "";
+  loading.value = false;
   responses.value = null;
   historicalLineups.value = [];
   responseState.value = "loading";
+  historicalState.value = "idle";
+  invalidateMatchup();
+  if (!season) return;
+  const current = () => !disposed && loadVersion === featureLoadVersion;
+  void ensureModelVersion().then((version) => fetchHeroCatalog(season, version))
+    .then((data) => { if (current()) catalog.value = data; })
+    .catch(() => {
+      if (current()) toolError.value = t("Analysis is unavailable. You can still build lineups and select heroes.");
+    });
+  void fetchHeroResponses(season)
+    .then((data) => { if (current()) { responses.value = data; responseState.value = "ready"; } })
+    .catch(() => { if (current()) responseState.value = "unavailable"; });
+  if (deepDiveOpen.value) void loadFeatureSpace();
+}
+
+async function loadHistory() {
+  if (!leagueId.value || historicalState.value === "loading" || historicalState.value === "ready") return;
+  const season = leagueId.value;
+  const loadVersion = featureLoadVersion;
   historicalState.value = "loading";
   try {
+    const data = await fetchBattleLineups(season);
+    if (disposed || loadVersion !== featureLoadVersion) return;
+    historicalLineups.value = data?.battles || [];
+    historicalState.value = "ready";
+  } catch {
+    if (!disposed && loadVersion === featureLoadVersion) historicalState.value = "unavailable";
+  }
+}
+
+async function loadFeatureSpace() {
+  if (!leagueId.value || loading.value || payload.value) return;
+  const season = leagueId.value;
+  const loadVersion = featureLoadVersion;
+  loading.value = true;
+  error.value = "";
+  try {
+    const version = await ensureModelVersion();
+    if (disposed || loadVersion !== featureLoadVersion) return;
     const result = await latestFeatureSpace(async (signal, current) => {
-      modelVersion.value = await modelSession.version();
-      if (!current()) return null;
-      const featureSpace = await fetchLearnedFeatureSpace(leagueId.value, modelVersion.value);
-      if (!current()) return null;
-      return featureSpace;
+      const data = await fetchLearnedFeatureSpace(season, version);
+      return current() ? data : null;
     });
-    if (!result) return;
+    if (!result || disposed || loadVersion !== featureLoadVersion) return;
     payload.value = result;
     const requestedHeroId = Number(new URLSearchParams(window.location.search).get("hero"));
     selectedHeroId.value = rows.value.some((row) => Number(row.hero_id) === requestedHeroId)
-      ? requestedHeroId
-      : rankedRows.value[0]?.hero_id || null;
-    let storedFavoriteIds = [];
-    let hasStoredFavoritePool = false;
-    try {
-      const storedValue = getStored(FAVORITE_HERO_STORAGE_KEY);
-      hasStoredFavoritePool = storedValue !== null;
-      const stored = JSON.parse(storedValue || "[]");
-      if (Array.isArray(stored)) storedFavoriteIds = stored.map(Number);
-      if (!hasStoredFavoritePool && !storedFavoriteIds.length) {
-        const legacy = Number(
-          getStored(LEGACY_FAVORITE_HERO_STORAGE_KEY)
-        );
-        if (legacy) storedFavoriteIds = [legacy];
-      }
-    } catch {
-      storedFavoriteIds = [];
-    }
-    const availableIds = new Set(pickerHeroes.value.map((row) => Number(row.hero_id)));
-    favoriteHeroIds.value = [...new Set(storedFavoriteIds)]
-      .filter((heroId) => availableIds.has(heroId))
-      .slice(0, MAX_FAVORITE_HEROES);
-    try {
-      const storedLane = getStored(PLAYED_LANE_STORAGE_KEY, "") || "";
-      preferredLane.value = favoriteHeroIds.value.length && playableLanes.includes(storedLane)
-        ? storedLane
-        : "";
-    } catch {
-      preferredLane.value = "";
-    }
-    persistFavorites();
-    opponentHeroIds.value = [];
-    matchupResult.value = null;
-    matchupError.value = "";
+      ? requestedHeroId : rankedRows.value[0]?.hero_id || null;
     showAllHeroes.value = false;
     resetView();
-    // These enrichments must never hold back the usable feature board. They use
-    // the same load version so a slow prior season cannot overwrite the latest.
-    void fetchHeroResponses(leagueId.value)
-      .then((data) => {
-        if (loadVersion !== featureLoadVersion) return;
-        responses.value = data;
-        responseState.value = "ready";
-      })
-      .catch(() => {
-        if (loadVersion === featureLoadVersion) responseState.value = "unavailable";
-      });
-    void fetchBattleLineups(leagueId.value)
-      .then((data) => {
-        if (loadVersion !== featureLoadVersion) return;
-        historicalLineups.value = data?.battles || [];
-        historicalState.value = "ready";
-      })
-      .catch(() => {
-        if (loadVersion === featureLoadVersion) historicalState.value = "unavailable";
-      });
   } catch (err) {
-    if (err.name === "AbortError") return;
-    error.value = t("No hero feature space is available for this season. Run production model training first.");
+    if (err.name !== "AbortError" && !disposed && loadVersion === featureLoadVersion) {
+      error.value = t("No hero feature space is available for this season. Run production model training first.");
+    }
   } finally {
     if (loadVersion === featureLoadVersion) loading.value = false;
   }
 }
 
-const seasonStartup = createSeasonStartup(loadSeasons, () => { invalidateMatchup(); return loadFeatureSpace(); });
-onMounted(async () => {
-  try {
-    await seasonStartup.initialize();
-  } finally {
-    finishStartupLoading();
-  }
+function toggleDeepDive(event) {
+  deepDiveOpen.value = event.target.open;
+  if (deepDiveOpen.value) void loadFeatureSpace();
+}
+
+const seasonStartup = createSeasonStartup(loadSeasons, loadToolSeason);
+onMounted(() => {
+  finishStartupLoading();
+  void ensureModelVersion().catch(() => {
+    if (!disposed) toolError.value = t("Analysis is unavailable. You can still build lineups and select heroes.");
+  });
+  void seasonStartup.initialize().catch(() => {
+    if (!disposed) toolError.value = t("Analysis is unavailable. You can still build lineups and select heroes.");
+  });
 });
 
 watch(leagueId, seasonStartup.changed, { flush: "sync" });
@@ -597,20 +633,22 @@ watch(() => [favoriteHeroIds.value.join(","), opponentHeroIds.value.join(","), p
 
 <template>
   <main class="feature-space-page">
-    <p v-if="error" class="message error">{{ error }}</p>
-    <p v-else-if="loading" class="message">{{ t("Loading learned feature space…") }}</p>
+    <p v-if="toolError" class="message error" role="status">{{ toolError }}</p>
+    <p v-else-if="!toolsReady" class="message" role="status">{{ t("Preparing analysis… You can select heroes now.") }}</p>
 
-    <template v-else-if="payload">
       <LineupAnalyzerWidget
         :league-id="leagueId"
         :model-version="modelVersion"
+        :model-ready="toolsReady"
+        :response-state="responseState"
         :heroes="pickerHeroes"
         :response-rows="responses?.rows || []"
         :historical-lineups="historicalLineups"
         :historical-state="historicalState"
+        @request-history="loadHistory"
       />
 
-      <details class="feature-space-deep-dive">
+      <details class="feature-space-deep-dive" @toggle="toggleDeepDive">
         <summary>
           <span>
             <strong>{{ t("Explore the hero feature space") }}</strong>
@@ -618,7 +656,10 @@ watch(() => [favoriteHeroIds.value.join(","), opponentHeroIds.value.join(","), p
           </span>
           <b aria-hidden="true">+</b>
         </summary>
-        <div class="deep-dive-content">
+        <div v-if="deepDiveOpen" class="deep-dive-content">
+          <p v-if="error" class="message error">{{ error }}</p>
+          <p v-else-if="loading || !payload" class="message">{{ t("Loading learned feature space…") }}</p>
+          <template v-else-if="payload">
       <p v-if="payload.source_space === 'production_frozen_bag_representation'" class="map-reading">{{ t("Production policy · frozen bag hero vectors") }} · {{ payload.source_dimension }} {{ t("dimensions") }}</p>
       <section class="legend" :aria-label="t('Lane legend')">
         <span class="map-reading"><strong>{{ t("How to read the map") }}</strong>{{ t("Nearby icons mean the model treats those heroes as more similar. The layout directions have no fixed gameplay meaning.") }}</span>
@@ -754,6 +795,7 @@ watch(() => [favoriteHeroIds.value.join(","), opponentHeroIds.value.join(","), p
           </article>
         </div>
       </section>
+          </template>
         </div>
       </details>
 
@@ -882,7 +924,7 @@ watch(() => [favoriteHeroIds.value.join(","), opponentHeroIds.value.join(","), p
             <button
               class="matchup-submit"
               type="button"
-              :disabled="!opponentHeroIds.length || matchupLoading"
+              :disabled="!toolsReady || !opponentHeroIds.length || matchupLoading"
               @click="recommendForMatchup"
             >
               {{ matchupLoading ? t("Calculating…") : t("Recommend heroes") }}
@@ -961,7 +1003,6 @@ watch(() => [favoriteHeroIds.value.join(","), opponentHeroIds.value.join(","), p
           <p class="matchup-disclaimer">{{ t("This ranks historically supported responses, not guaranteed gameplay counters. Patch changes, team composition, and player comfort still matter.") }}</p>
         </template>
       </section>
-    </template>
   </main>
 </template>
 

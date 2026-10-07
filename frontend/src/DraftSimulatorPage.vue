@@ -14,7 +14,7 @@ import {
   fetchUpcomingMatch,
   recommendLineup,
   scoreLineup,
-  simulateDraft,
+  predictDraftNextAction,
   simulateDraftScenario,
 } from "./api";
 import DraftCoachPanel from "./DraftCoachPanel.vue";
@@ -59,6 +59,9 @@ let commentaryAbortController = null;
 let moveEvidenceRequestNumber = 0;
 let moveEvidenceAbortController = null;
 let recommendationRequestNumber = 0;
+const forecastRequests = createRequestScope();
+// Keep one expensive search in flight; when it ends, search only the latest board.
+const recommendationQueue = { running: false, pending: false, controller: null };
 let lineupScoreRequestNumber = 0;
 const loading = ref(false);
 const simulating = ref(false);
@@ -1004,6 +1007,7 @@ let modelLoadVersion = 0;
 async function loadModel() {
   const version = ++modelLoadVersion;
   invalidateLiveMatch();
+  invalidateForecast();
   const operationLeagueId = leagueId.value;
   if (!operationLeagueId) return;
   loading.value = true;
@@ -1077,7 +1081,11 @@ async function loadModel() {
   }
 }
 
-async function forecast() {
+function invalidateForecast() {
+  forecastRequests.invalidate();
+  simulating.value = false;
+  result.value = null;
+  recommendationQueue.pending = false;
   recommendationRequestNumber += 1;
   recommendationLoading.value = false;
   recommendationResult.value = null;
@@ -1086,6 +1094,12 @@ async function forecast() {
   lineupScore.value = null;
   lineupScoreLoading.value = false;
   lineupScoreError.value = "";
+}
+
+async function forecast() {
+  invalidateForecast();
+  const operation = forecastRequests.begin();
+  if (!operation) return;
   if (isPeakDuel.value) {
     result.value = null;
     return;
@@ -1107,14 +1121,13 @@ async function forecast() {
     result.value = null;
     return;
   }
-  if (simulating.value) return;
   const blue = selectedTeam(teamsBySide.value.blue);
   const red = selectedTeam(teamsBySide.value.red);
   simulating.value = true;
   error.value = "";
   let forecastSucceeded = false;
   try {
-    result.value = await simulateDraft({
+    const prediction = await predictDraftNextAction({
       league_id: leagueId.value,
       model_version: modelVersion.value,
       model_type: modelType,
@@ -1126,15 +1139,18 @@ async function forecast() {
       ...board.value,
       blue_used_previous_battles: globalUsed.value[teamsBySide.value.blue],
       red_used_previous_battles: globalUsed.value[teamsBySide.value.red],
-    });
+    }, { signal: operation.signal });
+    if (!operation.isCurrent()) return;
+    result.value = prediction;
     forecastSucceeded = true;
   } catch (err) {
+    if (!operation.isCurrent()) return;
     result.value = null;
     error.value = err.message || "Could not simulate this draft state.";
   } finally {
-    simulating.value = false;
+    if (operation.isCurrent()) simulating.value = false;
   }
-  if (forecastSucceeded) await recommendCurrentDraft();
+  if (forecastSucceeded && operation.isCurrent()) void recommendCurrentDraft();
 }
 
 async function scoreCompletedLineup() {
@@ -1165,7 +1181,16 @@ async function scoreCompletedLineup() {
 }
 
 async function recommendCurrentDraft() {
-  if (!teamsReady.value || !model.value || !currentStep.value) return;
+  if (forecastRequests.disposed || !result.value || !teamsReady.value || !model.value || !currentStep.value) return;
+  recommendationLoading.value = true;
+  if (recommendationQueue.running) {
+    recommendationQueue.pending = true;
+    return;
+  }
+  recommendationQueue.running = true;
+  recommendationQueue.pending = false;
+  const controller = new AbortController();
+  recommendationQueue.controller = controller;
   const requestNumber = ++recommendationRequestNumber;
   expandedRecommendationIds.value = [];
   const blue = selectedTeam(teamsBySide.value.blue);
@@ -1187,7 +1212,7 @@ async function recommendCurrentDraft() {
       red_used_previous_battles: globalUsed.value[teamsBySide.value.red],
       top_k: 3,
       risk_mode: "balanced",
-    });
+    }, { signal: controller.signal });
     if (requestNumber === recommendationRequestNumber) {
       recommendationResult.value = recommendations;
     }
@@ -1197,9 +1222,12 @@ async function recommendCurrentDraft() {
       recommendationError.value = err.message || "无法生成阵容建议。";
     }
   } finally {
+    recommendationQueue.running = false;
+    recommendationQueue.controller = null;
     if (requestNumber === recommendationRequestNumber) {
       recommendationLoading.value = false;
     }
+    if (recommendationQueue.pending) void recommendCurrentDraft();
   }
 }
 
@@ -1756,6 +1784,9 @@ watch(
 );
 
 onBeforeUnmount(() => {
+  forecastRequests.dispose();
+  invalidateForecast();
+  recommendationQueue.controller?.abort();
   liveRequests.dispose();
   modelLoadVersion += 1;
   clearCommentary();

@@ -9,11 +9,14 @@ import { indexRelationships, relationshipWeight } from "./lineupRelationships.js
 const props = defineProps({
   leagueId: { type: String, required: true },
   modelVersion: { type: String, default: "" },
+  modelReady: { type: Boolean, default: true },
+  responseState: { type: String, default: "ready" },
   heroes: { type: Array, default: () => [] },
   responseRows: { type: Array, default: () => [] },
   historicalLineups: { type: Array, default: () => [] },
   historicalState: { type: String, default: "idle" },
 });
+const emit = defineEmits(["request-history"]);
 
 const blueHeroIds = ref([]);
 const redHeroIds = ref([]);
@@ -289,6 +292,7 @@ function loadHistoricalLineup(battle, event) {
 }
 
 async function loadHistoricalScore(battle) {
+  if (!props.modelReady) return;
   const requestNumber = ++historicalScoreRequestNumber;
   historicalScore.value = null;
   historicalScoreError.value = "";
@@ -379,7 +383,7 @@ const ultimateProfileDescriptions = {
 };
 
 async function loadUltimateLineups() {
-  if (!props.leagueId || ultimateLoading.value) return;
+  if (!props.modelReady || !props.leagueId || ultimateLoading.value) return;
   if (ultimateResult.value) {
     ultimateExpanded.value = !ultimateExpanded.value;
     return;
@@ -400,7 +404,7 @@ async function loadUltimateLineups() {
 const blueLineupComplete = computed(() => blueHeroIds.value.length === 5);
 
 async function generateCounterLineup() {
-  if (!props.leagueId || !blueLineupComplete.value || counterLoading.value) return;
+  if (!props.modelReady || !props.leagueId || !blueLineupComplete.value || counterLoading.value) return;
   const requestNumber = ++counterRequestNumber;
   const targetHeroIds = [...blueHeroIds.value];
   counterLoading.value = true;
@@ -455,15 +459,26 @@ function metaScore(value) {
 
 watch(
   () => props.leagueId,
-  () => {
+  (season, previousSeason) => {
+    // The first resolved default must preserve choices made during startup.
+    if (!previousSeason) {
+      if (historyOpen.value) emit("request-history");
+      return;
+    }
     ultimateResult.value = null;
     ultimateError.value = "";
     ultimateExpanded.value = false;
     generatedCounter.value = null;
     counterError.value = "";
     clearLineups();
+    if (historyOpen.value) emit("request-history");
   }
 );
+
+watch(historyOpen, (open) => { if (open) emit("request-history"); });
+watch(() => props.modelReady, (ready) => {
+  if (ready && selectedHistoricalLineup.value) void loadHistoricalScore(selectedHistoricalLineup.value);
+});
 
 watch(
   () => [...blueHeroIds.value],
@@ -536,6 +551,7 @@ const hasAnalysis = computed(() => analysisGroups.value.some((group) => group.ro
 watch(
   () => [
     props.leagueId,
+    props.modelReady,
     selectedHistoricalLineupKey.value,
     blueHeroIds.value.join(","),
     redHeroIds.value.join(","),
@@ -545,7 +561,7 @@ watch(
     neutralScore.value = null;
     neutralScoreLoading.value = false;
     neutralScoreError.value = "";
-    if (!lineupsComplete.value || selectedHistoricalLineupKey.value) return;
+    if (!props.modelReady || !lineupsComplete.value || selectedHistoricalLineupKey.value) return;
     void loadNeutralScore([...blueHeroIds.value], [...redHeroIds.value]);
   }
 );
@@ -616,7 +632,7 @@ function liftLabel(row) {
         <button
           type="button"
           class="ultimate-trigger"
-          :disabled="ultimateLoading"
+          :disabled="!modelReady || ultimateLoading"
           :aria-expanded="ultimateExpanded"
           aria-controls="ultimate-lineup-results"
           @click="loadUltimateLineups"
@@ -632,6 +648,9 @@ function liftLabel(row) {
         <button type="button" :disabled="!hasSelections" @click="clearLineups">{{ t("Clear lineups") }}</button>
       </div>
     </header>
+
+    <p v-if="responseState === 'loading'" role="status">{{ t("Loading historical response evidence…") }}</p>
+    <p v-else-if="responseState === 'unavailable'" role="status">{{ t("Historical response evidence is unavailable for this season.") }}</p>
 
     <p v-if="ultimateExpanded && ultimateError" class="ultimate-error">{{ ultimateError }}</p>
     <section id="ultimate-lineup-results" v-if="ultimateExpanded && ultimateProfiles.length" class="ultimate-results" aria-live="polite">
@@ -671,7 +690,7 @@ function liftLabel(row) {
       <p>{{ t("Computed on demand from existing season artifacts. Team and player preferences are excluded.") }}</p>
     </section>
 
-    <div v-if="historicalState !== 'idle'" class="historical-lineup-picker">
+    <div class="historical-lineup-picker">
       <span>
         <strong>{{ t("Load a past KPL battle") }}</strong>
         <small>{{ t("Select a completed game to place both official lineups on the board.") }}</small>
@@ -773,7 +792,7 @@ function liftLabel(row) {
       </div>
       <button
         type="button"
-        :disabled="!blueLineupComplete || counterLoading"
+        :disabled="!modelReady || !blueLineupComplete || counterLoading"
         @click="generateCounterLineup"
       >
         {{ counterLoading ? t("Building counter…") : t("Generate Red counter") }}

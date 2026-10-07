@@ -1064,6 +1064,8 @@ export const messages = {
     "Current-season games, effective games, and confidence show how much support sits behind a score. Treat close scores and small samples as approximately even.": "当前赛季局数、有效局数和置信度反映分数背后的证据量。分数接近或样本较小时，应视为实力大致相当。",
     "Could not load power rankings.": "无法加载实力排名。",
     "Could not load ranking data.": "无法加载排名数据。",
+    "Preparing analysis… You can select heroes now.": "正在准备分析… 现在即可选择英雄。",
+    "Analysis is unavailable. You can still build lineups and select heroes.": "分析暂不可用。你仍可组建阵容和选择英雄。",
     "Could not load this season's patterns.": "无法加载该赛季的模式数据。",
     "Could not load visualization data.": "无法加载可视化数据。",
   },

@@ -5,7 +5,7 @@ from unittest.mock import patch
 import pytest
 from app.services import model_registry as registry
 from app.services.model_registry import install_bundle,activate_bundle,resolve_bundle,bundle_scope
-from app.services.draft_simulator import load_personalized_model,load_model,learned_feature_space,_prepare_prediction
+from app.services.draft_simulator import load_personalized_model,load_model,learned_feature_space,hero_catalog,_prepare_prediction
 from app.services.lineup_value import load_lineup_value_model
 from app.services.model_tool_scope import pinned_model_operation
 from app.agent.conversation import board_fingerprint
@@ -32,6 +32,40 @@ def test_bundle_pins_all_loaders_and_selected_season_counts(collection,tmp_path)
         old_fingerprint=board_fingerprint('S4',{'blue_picks':[]})
         with pytest.raises(ValueError,match='legacy'):_prepare_prediction('S4',{},'sequence')
     assert old_fingerprint != board_fingerprint('S4',{'blue_picks':[]})
+
+
+def test_picker_catalog_needs_no_feature_map_and_uses_only_selected_season_counts(collection, tmp_path):
+    source, root, browser, handle = collection
+    facts = tmp_path / 'facts'
+    export = facts / 'exports' / 'S4'
+    export.mkdir(parents=True)
+    (export / 'bp_decisions.jsonl').write_text(json.dumps({'action': 'pick', 'selected_hero_id': 105}) + '\n')
+    with bundle_scope(handle), patch('app.services.draft_simulator.ANALYSIS_DIR', facts), patch('app.services.draft_simulator.feature_space_path', side_effect=AssertionError('map accessed')):
+        result = hero_catalog('S4')
+        assert result['observation_season'] == 'S4'
+        assert result['counts_scope'] == 'target_season_observed_decisions'
+        assert result['rows'][0]['pick_count'] == 1
+        assert all(row['positions'] for row in result['rows'])
+        assert all('x' not in row and 'vector' not in row and 'nearest_hero_ids' not in row for row in result['rows'])
+        assert all(row['bp_action_count'] == 0 for row in hero_catalog('empty')['rows'])
+
+
+def test_picker_catalog_api_preserves_the_pinned_version(collection, tmp_path):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from app.api.simulation import router
+    source, root, browser, handle = collection
+    app = FastAPI()
+    app.include_router(router)
+    with patch.object(registry, 'REGISTRY_ROOT', root), patch('app.services.draft_simulator.ANALYSIS_DIR', tmp_path):
+        with TestClient(app) as client:
+            response = client.get('/api/simulations/hero-catalog', params={'league_id': 'empty', 'model_version': handle.version})
+            assert response.status_code == 200
+            data = response.json()['data']
+            assert data['model_version'] == handle.version
+            assert data['observation_season'] == 'empty'
+            assert all(row['bp_action_count'] == 0 for row in data['rows'])
+            assert client.get('/api/simulations/hero-catalog', params={'league_id': 'empty', 'model_version': 'missing'}).status_code == 404
 
 
 def test_unknown_version_and_corruption_fail_explicitly(collection):
@@ -195,3 +229,46 @@ def test_raw_probability_resolution_reports_uncalibrated_exact_bound_weights(col
     sidecar=json.loads((source/'personalized_draft_probability_calibration.json').read_text())
     value=resolve_calibration(source/'personalized_draft_probability_calibration.json',enabled_mode='eligible',policy_model_type='personalized',model_fingerprint=sidecar['model_fingerprint'],candidate_policy_id='game_availability_v1',candidate_policy_fingerprint_value=sidecar['candidate_policy_fingerprint'])
     assert value.status=='uncalibrated' and value.temperature==1. and value.method=='none'
+
+
+def test_next_action_api_returns_every_legal_candidate_with_one_prediction(collection, tmp_path):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from app.api.simulation import router
+    from app.services import draft_simulator
+    from app.services.coach_rate_limit import CoachRateLimiter
+    _, root, _, handle = collection
+    app = FastAPI()
+    app.include_router(router)
+    payload = {'league_id': '20260004', 'model_version': handle.version,
+               'model_type': 'personalized', 'blue_team_id': 'blue', 'red_team_id': 'red',
+               'blue_team_name': 'Blue', 'red_team_name': 'Red',
+               'bp_order': 1}
+    limiter = CoachRateLimiter(per_ip_per_minute=100, per_ip_per_day=100,
+                              server_per_minute=100, server_per_day=100,
+                              max_active_per_ip=1, max_active_server=1)
+    with (patch.object(registry, 'REGISTRY_ROOT', root),
+          patch('app.services.draft_simulator.ANALYSIS_DIR', tmp_path),
+          patch('app.api.simulation.simulation_rate_limiter', limiter),
+          patch('app.api.simulation.validate_season_team_pair', return_value={
+              'blue': {'team_name': 'Blue'}, 'red': {'team_name': 'Red'}}),
+          patch('app.api.simulation.simulate', side_effect=AssertionError('unused rollouts')),
+          patch.object(draft_simulator, '_predict', wraps=draft_simulator._predict) as prediction):
+        with TestClient(app) as client:
+            response = client.post('/api/simulations/next-action', json=payload)
+            assert response.status_code == 200, response.text
+            data = response.json()['data']
+            assert data['model_version'] == handle.version
+            assert data['candidate_count'] == 12
+            assert len(data['next_action_probabilities']) == 12
+            assert {row['hero_id'] for row in data['next_action_probabilities']} == set(range(105, 117))
+            assert sum(row['probability'] for row in data['next_action_probabilities']) == pytest.approx(1.)
+            prediction.assert_called_once()
+            with bundle_scope(handle):
+                expected = draft_simulator.predict_next_action('20260004', payload, model_type='personalized')
+                assert data['next_action_probabilities'][:5] == expected['next_action_probabilities']
+            # Legality and admission cleanup still apply to invalid states.
+            assert client.post('/api/simulations/next-action', json={**payload, 'bp_order': 2}).status_code == 400
+            assert client.post('/api/simulations/next-action', json={**payload, 'blue_bans': [105]}).status_code == 400
+            assert client.post('/api/simulations/next-action', json=payload).status_code == 200
+            assert client.post('/api/simulations/next-action', json={**payload, 'model_version': 'missing'}).status_code == 404
