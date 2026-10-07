@@ -202,8 +202,12 @@ def apply_official_lane_eligibility(
     model: dict[str, Any],
     official_positions: dict[int, list[int]] | None = None,
 ) -> dict[str, Any]:
-    """Use official majority/secondary lanes for hero-table role eligibility."""
+    """Use official lanes with verified corrections for erroneous catalog entries."""
     mapping = official_hero_positions() if official_positions is None else official_positions
+    mapping = dict(mapping)
+    # Tencent lists Luyana as roam; completed KPL rosters consistently place
+    # her in farm lane. Apply this after catalog lookup for serving and builds.
+    mapping[547] = [7]
     names = model.get("hero_names") or {}
     positions = {
         str(hero_id): [int(position) for position in values]

@@ -589,6 +589,44 @@ class OfficialLaneEligibilityTest(unittest.TestCase):
             [171],
         )
 
+    def test_luyana_correction_survives_official_catalog_and_preserves_pick_legality(self) -> None:
+        official = {547: [4], 171: [4], 169: [7]}
+        # Loading existing bundles reads the catalog; training supplies its
+        # pinned catalog explicitly. Both must correct the upstream mistake.
+        for supplied_catalog in (None, official):
+            with self.subTest(supplied_catalog=supplied_catalog is not None):
+                model = {
+                    "hero_ids": [547, 171, 169],
+                    "hero_names": {"547": "卢雅那", "171": "张飞", "169": "后羿"},
+                    "hero_positions": {"547": [4], "171": [4], "169": [7]},
+                    "role_ids": [4, 7],
+                }
+                with patch.object(draft_simulator, "official_hero_positions", return_value=official):
+                    draft_simulator.apply_official_lane_eligibility(model, supplied_catalog)
+                self.assertEqual(model["hero_positions"]["547"], [7])
+                self.assertEqual(official[547], [4])
+                model["_hero_role_masks"] = {
+                    int(hero_id): sum(
+                        1 << index
+                        for index, role_id in enumerate(model["role_ids"])
+                        if role_id in positions
+                    )
+                    for hero_id, positions in model["hero_positions"].items()
+                }
+                for picked, expected in ((171, True), (169, False)):
+                    legal = draft_simulator._legal_heroes(
+                        model,
+                        {"blue_picks": [picked], "red_picks": [], "blue_bans": [], "red_bans": []},
+                        {"side": "blue", "action": "pick"},
+                    )
+                    self.assertEqual(547 in legal, expected)
+
+    def test_luyana_correction_does_not_expand_old_model_vocabulary(self) -> None:
+        model = {"hero_names": {"171": "张飞"}, "hero_positions": {"171": [4]}, "role_ids": [4]}
+        draft_simulator.apply_official_lane_eligibility(model, {171: [4]})
+        self.assertNotIn("547", model["hero_positions"])
+        self.assertEqual(model["role_ids"], [4])
+
 
 if __name__ == "__main__":
     unittest.main()
