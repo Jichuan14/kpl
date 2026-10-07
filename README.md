@@ -383,6 +383,9 @@ agent/         Product decisions, roadmap, and evaluation notes
 `docker-compose.production.yml` runs the frontend and API on one host. It
 persists the SQLite database and generated artifacts on that host's disk, and
 the production API intentionally uses a single Uvicorn worker.
+Build production images with `python3 deploy/build-production.py`; it preserves
+an installed dependency image separately from application builds, so code-only
+API updates do not rerun pip when the tagged dependency image is available.
 
 This is a single-host SQLite deployment: do not share the database over network
 storage or run multiple API instances against it. See

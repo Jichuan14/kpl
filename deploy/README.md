@@ -13,8 +13,9 @@ instances against the same database file or put the database on NFS/OSS.
 1. Create a Linux ECS instance with a persistent system or data disk. Permit
    inbound TCP 22 from your IP and TCP 80/443 from the Internet. Do not expose
    ports 8000 or 3306.
-2. Install Git, Docker Engine, and the Docker Compose plugin, then clone the
-   repository on the ECS instance.
+2. Install Git, Python 3, Docker Engine, and the Docker Compose and Buildx plugins,
+   then clone the repository on the ECS instance. The build helper uses only
+   Python's standard library; no host virtual environment is needed.
 3. Prepare the persistent directories and configuration:
 
    ```bash
@@ -53,7 +54,8 @@ instances against the same database file or put the database on NFS/OSS.
 5. Build and start:
 
    ```bash
-   docker compose -f docker-compose.production.yml up -d --build
+   python3 deploy/build-production.py
+   docker compose -f docker-compose.production.yml up -d --no-build --wait
    docker compose -f docker-compose.production.yml ps
    curl --fail http://127.0.0.1/health
    ```
@@ -82,7 +84,8 @@ never added to unrelated requests' subprocess environments.
 
 When upgrading from an older separate-worker deployment, first drain/stop the
 old worker and stop the API before replacing code. Keep SQLite and artifacts,
-then run `docker compose -f docker-compose.production.yml up -d --build
+then run `python3 deploy/build-production.py` followed by
+`docker compose -f docker-compose.production.yml up -d --no-build --wait
 --remove-orphans`. The API starts its runner automatically and the additive
 migration retains existing jobs. Obsolete service containers are removed.
 Do not run the old worker
@@ -101,32 +104,56 @@ Update the application:
 
 ```bash
 git pull --ff-only
-docker compose -f docker-compose.production.yml up -d --build
-docker image prune -f
+python3 deploy/build-production.py
+docker compose -f docker-compose.production.yml up -d --no-build --wait
 ```
 
-The backend Dockerfile uses BuildKit package-download caches and installs the
-training dependencies before the API dependencies. Code-only changes reuse both
-installation layers; changing API requirements keeps the PyTorch layer cached.
-When an installation must rerun, unchanged downloads can be reused from the
-builder cache. The first build with this Dockerfile fills that cache and may
-download packages again. New package versions still need downloads. Keep using
-the same Docker builder; `docker builder prune` or `docker system prune` can
-remove build caches. Cached downloads stay in the builder, outside the runtime
-image, and use additional host disk space.
+The build helper keeps Python, PyTorch and API packages in a separate local
+`kpl-api-deps:<fingerprint>` image. The fingerprint covers both requirements files,
+the dependency stage of `backend/Dockerfile` (including the pinned Python base),
+and the Linux Docker platform. It also maintains `kpl-api-deps:current` for plain
+Compose builds. Application-source and runtime-stage changes do not rebuild
+dependencies. API builds start from the installed dependency image and copy fresh
+application source, so old code/deleted files do not accumulate in its base.
+The frontend continues using its existing npm installation layer cache.
 
-If a code-only deployment loses its BuildKit installation cache but the existing
-API image is still local, `bash deploy/reuse-api-image.sh` can reuse that image's
-installed packages without running pip. It defaults to `kpl-api:latest`; pass a
-different local API image name if the Compose project has another name. The helper
-refuses mismatched requirements, a changed Dockerfile or Docker ignore rules,
-and incompatible runtime configuration. It removes old application source inside
-the new image before copying current source, uses the normal Docker ignore rules,
-and retains a separate local source-image tag for rollback. It builds only the API
-image and does not deploy it. Build the frontend normally if needed, then deploy
-with `docker compose -f docker-compose.production.yml up -d --no-build --wait`.
-This is a recovery path; use the regular Dockerfile for dependency or base-image
-updates. It does not restore the regular Dockerfile's missing cache records.
+Tagged dependency images survive BuildKit cache garbage collection and
+`docker builder prune`. Preserve them: `docker image prune -a` or
+`docker system prune -a` can remove dependency images that have no containers.
+Ordinary `docker image prune -f` preserves these tags, but deployment does not
+need a pruning step. Deleting the dependency image can require installation again
+unless the existing API qualifies for the migration below.
+
+On first adoption, the helper can seed the dependency image from an existing
+local `kpl-api:latest` without pip installation. For this audited Linux/amd64
+migration, it checks the exact Python base layers, both installed requirements
+files, the dependency recipe and offline `pip check`, then copies `/usr/local`
+onto the pinned Python base. It does not inherit old application layers. Use
+`--bootstrap-image OTHER_API_IMAGE` if your project uses another local image name.
+To guarantee that adoption stops instead of installing packages when migration
+is unavailable, run:
+
+```bash
+python3 deploy/build-production.py --require-reuse
+```
+
+With new requirements, a changed dependency recipe, a different platform, or no
+reusable installed image, the normal helper builds the dependency stage. Its pip
+download cache is still available as a secondary optimization. Changing API
+requirements preserves the earlier training layer where its inputs are unchanged.
+Rebuilds may download new packages; full installation may be necessary if both
+the installed image and its build/download caches are gone. To deliberately
+refresh packages without changing inputs, run
+`python3 deploy/build-production.py --rebuild-dependencies`.
+Update the pinned Python digest in `backend/Dockerfile` deliberately when taking
+base-image updates, then use the normal helper. Direct Compose builds refuse
+mismatched requirements or dependency recipes and explain which helper to run.
+
+`--api-only` skips the frontend build. The old `bash deploy/reuse-api-image.sh`
+command now delegates to this workflow with `--api-only --require-reuse`; it no
+longer builds on top of a full previous API image. A standalone
+`docker build -f backend/Dockerfile .` still works by building both stages, but
+uses ordinary BuildKit caches rather than selecting the persistent image.
 
 ## Scheduled refresh
 
@@ -138,7 +165,7 @@ Automatic model training is enabled by default in both the application and
 override) to enable it. Recreate the API after deploying this setting:
 
 ```bash
-docker compose -f docker-compose.production.yml up -d --build api
+docker compose -f docker-compose.production.yml up -d --no-build api
 ```
 
 For temporary deferral, set `AUTO_MODEL_TRAINING_ENABLED=false`.

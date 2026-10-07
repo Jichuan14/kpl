@@ -48,7 +48,7 @@ Generated artifact locations and Git policy: `ARTIFACTS.md`
 | Lineup value and Ban value | `analysis/lineup_value/`, `analysis/train_lineup_value_model.py`, `analysis/train_ban_value_model.py` | `backend/app/services/lineup_value.py`, `backend/app/services/ban_recommender.py` |
 | Coach/RAG behavior | `backend/app/agent/` | `backend/app/api/coach.py`, `backend/app/knowledge/` |
 | Public request budgets, signed visitor identity, and artifact summary caching | `backend/app/services/public_requests.py` | `backend/app/services/provider_budget.py`, `backend/app/services/request_identity.py`, `backend/app/services/file_summary_cache.py` |
-| Deployment | `docker-compose.production.yml`, `deploy/` | `frontend/nginx.conf`, `frontend/Dockerfile` |
+| Deployment and persistent dependency images | `docker-compose.production.yml`, `deploy/README.md`, `deploy/build-production.py` | `backend/Dockerfile` (`dependencies` and `runtime` stages), `deploy/install_aliyun_release.sh`, `frontend/nginx.conf`, `frontend/Dockerfile` |
 | macOS menu-bar companion | `macos/` | `README.md` section "macOS visitor widget" |
 
 ## Data locations

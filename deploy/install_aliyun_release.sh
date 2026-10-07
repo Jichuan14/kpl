@@ -12,7 +12,7 @@ if [[ $# -ne 1 || "$1" != /* ]]; then
   usage
 fi
 
-for command_name in docker rsync curl; do
+for command_name in docker rsync curl python3; do
   if ! command -v "$command_name" >/dev/null 2>&1; then
     printf 'Required command not found: %s\n' "$command_name" >&2
     exit 1
@@ -92,6 +92,7 @@ for root_file in \
   CALCULATION_METHODOLOGY.md \
   ARTIFACTS.md \
   docker-compose.production.yml \
+  .dockerignore \
   .env.production.example; do
   if [[ -f "$release_root/$root_file" ]]; then
     rsync -a "$release_root/$root_file" "$target_root/$root_file"
@@ -99,7 +100,8 @@ for root_file in \
 done
 
 printf 'Building and starting the updated application...\n'
-docker compose -f "$target_root/docker-compose.production.yml" up -d --build --remove-orphans
+python3 "$target_root/deploy/build-production.py"
+docker compose -f "$target_root/docker-compose.production.yml" up -d --no-build --remove-orphans --wait
 
 printf 'Waiting for the local health endpoint...\n'
 healthy=0

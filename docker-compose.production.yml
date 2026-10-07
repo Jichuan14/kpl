@@ -3,6 +3,11 @@ services:
     build:
       context: .
       dockerfile: backend/Dockerfile
+      args:
+        # Prepared by deploy/build-production.py and retained as a tagged image.
+        # Plain Compose builds also reuse it and refuse mismatched requirements.
+        DEPENDENCY_IMAGE: ${KPL_API_DEPENDENCY_IMAGE:-kpl-api-deps:current}
+      pull: false
     env_file:
       - .env.production
     restart: unless-stopped

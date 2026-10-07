@@ -27,12 +27,17 @@ cd /tmp/kpl-release/kpl-aliyun-release-*
 sudo bash deploy/install_aliyun_release.sh /opt/kpl
 ```
 
-The server needs `docker`, the Docker Compose plugin, `rsync`, and `curl`.
+The server needs `docker`, the Docker Compose and Buildx plugins, `python3`,
+`rsync`, and `curl`.
 When upgrading an older release, the installer first drains and stops its
 separate pipeline worker (waiting up to three hours plus shutdown grace). It
 then stops the API and web containers with shutdown grace. New API updates cancel safely during shutdown. It creates a timestamped backup next
-to the live directory, replaces the release directories, rebuilds the images,
-starts the services, and checks `http://127.0.0.1/health`.
+to the live directory, replaces the release directories, builds the images
+with `deploy/build-production.py`, starts the services, and checks
+`http://127.0.0.1/health`. The build helper reuses a separately tagged dependency
+image when requirements and the dependency recipe match; on first adoption it
+can migrate packages from the existing audited API image without downloading
+them again. See `deploy/README.md` for migration checks and dependency updates.
 
 Because this release contains `backend/data/kpl_bp.db` and all analysis data,
 the corresponding server data is deliberately replaced. The old copies remain
