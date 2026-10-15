@@ -1,6 +1,6 @@
 from collections.abc import Generator
 
-from sqlalchemy import Engine, create_engine, inspect
+from sqlalchemy import Connection, Engine, MetaData, create_engine, inspect, select
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.config import get_settings
@@ -17,8 +17,7 @@ class Base(DeclarativeBase):
 
 
 # ``create_all`` creates missing tables but deliberately does not add columns to
-# an existing table. These additive SQLite migrations keep local databases made
-# by older versions usable without deleting or rewriting any rows.
+# an existing table. Compatibility migrations preserve existing local data.
 BATTLE_PLAYER_PERFORMANCE_COLUMNS = {
     "performance_data_available": "INTEGER NOT NULL DEFAULT 0",
     "kill_num": "INTEGER NOT NULL DEFAULT 0",
@@ -39,6 +38,46 @@ BATTLE_PLAYER_PERFORMANCE_COLUMNS = {
     "hurt_to_hero_total_rate": "FLOAT NOT NULL DEFAULT 0",
     "be_hurt_by_hero_total_rate": "FLOAT NOT NULL DEFAULT 0",
 }
+
+
+def _allow_multiple_board_codes(connection: Connection) -> None:
+    """Remove the legacy per-browser unique constraint without losing posts/IDs."""
+    if not inspect(connection).has_table("event_board_codes"):
+        return
+    # PRAGMA sees implicit UNIQUE indexes reliably, including older inline DDL.
+    unique_columns = []
+    for index in connection.exec_driver_sql("PRAGMA index_list(event_board_codes)").all():
+        if index[2]:
+            quoted = connection.dialect.identifier_preparer.quote_identifier(index[1])
+            columns = connection.exec_driver_sql(f"PRAGMA index_info({quoted})").all()
+            unique_columns.append([column[2] for column in columns])
+    if ["visitor_hash"] not in unique_columns:
+        return
+
+    from app.models import EventBoardCode
+
+    # SQLite's implicit UNIQUE index cannot be dropped. Rebuild just this table
+    # inside the caller's write transaction, retaining its complete records.
+    original = EventBoardCode.__table__
+    replacement = original.to_metadata(MetaData(), name="event_board_codes_multiple")
+    previous_sequence = connection.exec_driver_sql(
+        "SELECT seq FROM sqlite_sequence WHERE name = 'event_board_codes'"
+    ).scalar() if inspect(connection).has_table("sqlite_sequence") else None
+    replacement.create(connection)
+    columns = [column.name for column in original.columns]
+    connection.execute(replacement.insert().from_select(columns, select(*original.columns)))
+    connection.exec_driver_sql("DROP TABLE event_board_codes")
+    connection.exec_driver_sql("ALTER TABLE event_board_codes_multiple RENAME TO event_board_codes")
+    if previous_sequence is not None:
+        result = connection.exec_driver_sql(
+            "UPDATE sqlite_sequence SET seq = MAX(seq, ?) WHERE name = 'event_board_codes'",
+            (previous_sequence,),
+        )
+        if not result.rowcount:
+            connection.exec_driver_sql(
+                "INSERT INTO sqlite_sequence(name, seq) VALUES ('event_board_codes', ?)",
+                (previous_sequence,),
+            )
 
 
 def ensure_schema_compatibility(target_engine: Engine = engine) -> list[str]:
@@ -71,6 +110,7 @@ def ensure_schema_compatibility(target_engine: Engine = engine) -> list[str]:
                     f'ALTER TABLE "{table}" ADD COLUMN "{name}" {declaration}'
                 )
                 added.append(name if table == "battle_players" else f"{table}.{name}")
+        _allow_multiple_board_codes(connection)
     return added
 
 

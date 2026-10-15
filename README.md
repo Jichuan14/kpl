@@ -148,6 +148,74 @@ performance data. Historical all-zero API placeholders are retained with
 
 ## Application areas
 
+### Temporary homepage code board
+
+The homepage has one shared, season-independent code board above the hero matchup
+assistant. The checked-in `backend/event-board.json` enables a clearly labeled
+test activity with placeholder instructions. No sample submissions are seeded.
+Edit this file to change the Chinese/English title, instructions and input hint,
+or set `enabled` to `false` to hide the board and reject new posts.
+Changes take effect on the next request without restarting the API; visitors can
+use **Refresh codes** or reload. Production mounts this same file read-only into
+the API container. `EVENT_BOARD_CONFIG_PATH` optionally overrides its location.
+
+Optional `starts_at` and `ends_at` values must be ISO 8601 timestamps with a
+timezone, for example `2026-10-31T23:59:59+08:00`; `null` leaves that bound open.
+The backend enforces the window. The displayed board also hides at its end time.
+Invalid or missing configuration disables the module. A future activity can
+reuse the same component and configuration. Toggling visibility preserves codes;
+changing the title does not reset submissions.
+
+Codes appear newest registered first, 10 initially. **Show more** appends the next
+15 using an ID cursor, so newer submissions cannot cause pagination duplicates.
+The responsive grid displays just the bracketed standee code (`【…】`), with
+five columns on wide screens, three on medium screens and two on phones. Each
+cell includes copy and invalid-report actions with touch-sized buttons. Copying retains
+the complete validated game message; generic plain-text activities keep their
+full codes visible.
+Each browser can submit any number of different codes, one message per request.
+The board supports submitting, viewing, copying and reporting invalid codes;
+published codes cannot be edited or directly withdrawn. Its APIs are
+`GET /api/event-board`, `POST /api/event-board/codes` and
+`POST /api/event-board/codes/{id}/report`.
+Repeating the same successful request acknowledges the existing submission;
+another code creates a separate post. A unique database constraint on the code
+also prevents simultaneous duplicate submissions from overwriting one another.
+Existing installations automatically remove the legacy one-code-per-browser
+constraint at API startup, preserving all posts and their IDs. The board uses
+the shared public-write request limits, with no separate board submission quota.
+Identical normalized codes cannot be
+active twice. Codes are displayed
+as plain text; the site does not verify game redemption or rewards.
+
+The current configuration uses `code_format: "birthday_standee"`. Every post
+must contain exactly one complete 王者荣耀 birthday standee share message:
+the bracketed standee name and six ASCII letters/digits, a positive point value,
+and the matching game invitation sentence. Surrounding or embedded whitespace,
+full-width ASCII, code letter case, common zero-width clipboard spaces and BOMs
+are normalized; the stored/copyable message uses consistent Chinese punctuation.
+Bare tokens, unrelated text, links/markup, truncated messages, other hidden
+control characters and multiple concatenated messages are rejected. Duplicate
+detection uses the six-character token, so changing the name or claimed points
+cannot repost the same token. Samples used for parser tests are never seeded
+into the board. This validates syntax only, not issuance, points or redemption.
+For a future activity, `code_format: "plain_text"` restores generic text inputs;
+unsupported format names disable the board rather than silently skipping checks.
+
+Reporting a code immediately removes its row from the reporting browser's list.
+Hidden IDs persist in localStorage across refreshes; other browsers still see the
+code after one or two reports. The server records one report per signed browser
+and code; retries and other tabs sharing that cookie cannot add extra votes.
+The third distinct report hard-deletes the code row and its reports together in
+one SQLite transaction. Concurrent reports are serialized, and stale reports of
+already-deleted IDs do not create orphan records. A failed report restores the
+local row so it can be retried. Anonymous browser sessions are not verified
+individuals; clearing cookies creates a new session.
+
+There is no event selector or Management portal. Legacy hidden/withdrawn codes
+remain absent from the public list. The public response does not include browser
+identity, ownership hashes or report counts.
+
 | Route | Purpose |
 | --- | --- |
 | `/` | Multi-season Draft Atlas relationship explorer |

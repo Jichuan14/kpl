@@ -104,6 +104,19 @@ export function fetchSiteDefault() {
   return request("/api/site-default", { cache: "no-store" });
 }
 
+export function fetchEventBoard({ before, signal } = {}) {
+  const query = before == null ? "" : `?before=${encodeURIComponent(before)}`;
+  return request(`/api/event-board${query}`, { cache: "no-store", signal });
+}
+
+export function submitEventCode(code, { signal } = {}) {
+  return request("/api/event-board/codes", { method: "POST", body: JSON.stringify({ code }), signal });
+}
+
+export function reportInvalidEventCode(id, { signal } = {}) {
+  return request(`/api/event-board/codes/${encodeURIComponent(id)}/report`, { method: "POST", signal });
+}
+
 export function saveSiteDefault(leagueId) {
   return request("/api/leagues/site-default", { method: "PUT", body: JSON.stringify({ league_id: leagueId }) });
 }

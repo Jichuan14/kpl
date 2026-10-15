@@ -24,6 +24,7 @@ analysis/outputs/draft_intention_research/
 # Reproducible full-update memory benchmarks and generated reports.
 analysis/outputs/memory_profiles/
 *.json
+!backend/event-board.json
 *.pt
 *.npz
 !analysis/hero_ability_mechanics.json

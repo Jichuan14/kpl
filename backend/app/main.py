@@ -5,6 +5,7 @@ from fastapi.responses import JSONResponse
 
 from app.api import (
     analytics,
+    event_board,
     bp,
     coach,
     data,
@@ -58,6 +59,7 @@ app.include_router(visualization.router)
 app.include_router(simulation.router)
 app.include_router(coach.router)
 app.include_router(analytics.router)
+app.include_router(event_board.router)
 
 
 @app.on_event("startup")

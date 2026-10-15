@@ -64,6 +64,7 @@ class Settings(BaseSettings):
     public_trust_proxy_headers: bool = False
     public_session_secret: SecretStr | None = None
     public_session_key_path: str = str(BACKEND_ROOT / "data" / "public_session.key")
+    event_board_config_path: str = str(BACKEND_ROOT / "event-board.json")
     # Dedicated credential for the read-only macOS visitor widget.  It is
     # deliberately separate from management Basic Auth and must never be put
     # in frontend code.

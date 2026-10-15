@@ -13,6 +13,33 @@ class SiteSettings(Base):
     default_league_id: Mapped[str] = mapped_column(String(32))
 
 
+class EventBoardCode(Base):
+    """One shared board; anonymous ownership never leaves the server."""
+
+    __tablename__ = "event_board_codes"
+    __table_args__ = {"sqlite_autoincrement": True}
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    visitor_hash: Mapped[str] = mapped_column(String(64))
+    code: Mapped[str] = mapped_column(Text)
+    active_digest: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True)
+    hidden: Mapped[bool] = mapped_column(default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class EventBoardReport(Base):
+    """Each signed browser contributes at most one invalid report per code."""
+
+    __tablename__ = "event_board_reports"
+    __table_args__ = (UniqueConstraint("code_id", "visitor_hash", name="uk_event_board_report"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    code_id: Mapped[int] = mapped_column(Integer, index=True)
+    visitor_hash: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class PipelineJob(Base):
     __tablename__ = "pipeline_jobs"
 

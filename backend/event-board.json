@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "title_zh": "王者荣耀11周年庆盾山活动",
+  "title_en": "Honor of Kings 11th Anniversary Dunshan Event",
+  "instructions_zh": "测试活动：发布你的活动码，或复制其他玩家的活动码。正式活动说明稍后更新。",
+  "instructions_en": "Test event: share your code or copy another player's code. Actual event instructions will be added later.",
+  "placeholder_zh": "粘贴游戏内完整立牌分享口令（每次一条）",
+  "placeholder_en": "Paste one complete standee share message from the game",
+  "starts_at": null,
+  "ends_at": null,
+  "max_code_length": 500,
+  "code_format": "birthday_standee"
+}

@@ -19,6 +19,7 @@ import { heroSearchAliases } from "./heroSearchAliases";
 import { heroCatalog } from "./heroCatalog";
 import { supplementalHeroes } from "./supplementalHeroes";
 import LineupAnalyzerWidget from "./LineupAnalyzerWidget.vue";
+import EventCodeBoard from "./EventCodeBoard.vue";
 import { language, t } from "./i18n";
 import { finishStartupLoading } from "./startupLoader";
 
@@ -798,6 +799,8 @@ watch(() => [favoriteHeroIds.value.join(","), opponentHeroIds.value.join(","), p
           </template>
         </div>
       </details>
+
+      <EventCodeBoard />
 
       <section class="matchup-lab" aria-labelledby="matchup-lab-heading">
         <header class="matchup-lab-header">

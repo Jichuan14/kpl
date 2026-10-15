@@ -23,6 +23,8 @@ services:
     volumes:
       # ECS-local persistent state. Do not mount these from network storage.
       - ./backend/data:/app/backend/data
+      # One live-editable board configuration; no management portal required.
+      - ./backend/event-board.json:/app/backend/event-board.json:ro
       - ./analysis/exports:/app/analysis/exports
       - ./analysis/outputs:/app/analysis/outputs
       - ./analysis/published:/app/analysis/published
