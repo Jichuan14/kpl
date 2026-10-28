@@ -80,6 +80,7 @@ test("a simulator response arriving after disposal cannot restart polling", asyn
   const liveRequests = createRequestScope();
   let intervals = 0;
   const context = {
+    pageVisible: () => true, stopLiveMatchPolling: () => {},
     liveRequests, leagueId: ref("20260004"), teamsReady: ref(true), upcomingMatch: ref({ match_id: "fixture" }),
     selectedTeamIds: ref({ a: "a", b: "b" }), TEAM_A: "a", TEAM_B: "b",
     liveMatchLoading: ref(false), liveMatch: ref(null), liveFollowing: ref(false),
@@ -220,7 +221,23 @@ test("simulator selects the scheduled teams before they have season observations
 
 
 function simulatorForecastHarness(overrides = {}) {
+  let now = 0, nextId = 0;
+  const timers = new Map();
+  const clock = {
+    setTimeout(fn, delay) { const id = ++nextId; timers.set(id, { fn, at: now + delay }); return id; },
+    clearTimeout(id) { timers.delete(id); },
+    async advance(ms) {
+      now += ms;
+      for (const [id, timer] of [...timers]) if (timer.at <= now) { timers.delete(id); timer.fn(); }
+      await new Promise((resolve) => setImmediate(resolve));
+    },
+  };
   const context = {
+    selectedTeamsMatchFixture: () => true, liveApiCheckAvailable: ref(true), scheduleLiveMatchCheck: () => {},
+    liveScheduleClock: ref(0), scheduleLiveScheduleClock: () => {}, refreshLiveMatch: async () => {},
+    stopLiveMatchPolling: () => {}, stopLiveMatchCheckSchedule: () => {}, stopLiveScheduleClock: () => {},
+    window: clock, document: { visibilityState: "visible" }, recommendationTimer: null,
+    retryClock: ref(0), retryClockTimer: null, predictionRetryAt: 0, recommendationRetryAt: 0, predictionFailed: ref(false), inFlightForecasts: new Map(),
     forecastRequests: createRequestScope(), recommendationRequestNumber: 0, lineupScoreRequestNumber: 0,
     recommendationQueue: { running: false, pending: false, controller: null },
     recommendationLoading: ref(false), recommendationResult: ref(null), recommendationError: ref(""),
@@ -235,18 +252,20 @@ function simulatorForecastHarness(overrides = {}) {
     recommendLineup: async () => ({ current: true }), ...overrides,
   };
   const functions = componentFunctions("./DraftSimulatorPage.vue",
-    ["invalidateForecast", "forecast", "recommendCurrentDraft"], context);
-  return { ...functions, context };
+    ["invalidateForecast", "forecastPayload", "forecast", "recommendCurrentDraft", "pageVisible",
+      "stopRecommendationTimer", "scheduleRecommendations", "retryPrediction", "retryRecommendations", "stopRetryClock", "updateRetryClock", "handleVisibilityChange"], context);
+  return { ...functions, context, clock };
 }
 
 test("simulator unlocks legal choices while recommendations are still pending", async () => {
   const recommendation = deferred();
   let recommendationCalls = 0;
-  const { forecast, context } = simulatorForecastHarness({ recommendLineup: () => {
+  const { forecast, context, clock } = simulatorForecastHarness({ recommendLineup: () => {
     recommendationCalls++;
     return recommendation.promise;
   } });
   await forecast();
+  await clock.advance(300);
   assert.equal(context.simulating.value, false);
   assert.equal(context.recommendationLoading.value, true);
   assert.deepEqual(context.result.value.next_action_probabilities, [{ hero_id: 105 }]);
@@ -260,15 +279,18 @@ test("simulator unlocks legal choices while recommendations are still pending", 
 test("simulator queues only the latest board behind one expensive search", async () => {
   const searches = [deferred(), deferred()];
   const requestedOrders = [];
-  const { forecast, context } = simulatorForecastHarness({ recommendLineup: (body) => {
+  const { forecast, context, clock } = simulatorForecastHarness({ recommendLineup: (body) => {
     requestedOrders.push(body.bp_order);
     return searches[requestedOrders.length - 1].promise;
   } });
   await forecast();
+  await clock.advance(300);
   context.bpOrder.value = 2;
   await forecast();
+  await clock.advance(300);
   context.bpOrder.value = 3;
   await forecast();
+  await clock.advance(300);
   assert.deepEqual(requestedOrders, [1]);
   searches[0].resolve({ obsolete: true });
   await new Promise((resolve) => setImmediate(resolve));
@@ -283,7 +305,7 @@ test("simulator queues only the latest board behind one expensive search", async
 test("superseded simulator predictions cannot overwrite new choices or start recommendations", async () => {
   const first = deferred(), second = deferred();
   const signals = [], requests = [];
-  const { forecast, context } = simulatorForecastHarness({
+  const { forecast, context, clock } = simulatorForecastHarness({
     predictDraftNextAction: (_body, { signal }) => { signals.push(signal); return signals.length === 1 ? first.promise : second.promise; },
     recommendLineup: (body) => { requests.push(body); return {}; },
   });
@@ -297,6 +319,7 @@ test("superseded simulator predictions cannot overwrite new choices or start rec
   assert.equal(context.simulating.value, true);
   second.resolve({ latest: true });
   await latest;
+  await clock.advance(300);
   assert.deepEqual(context.result.value, { latest: true });
   assert.equal(requests.length, 1);
   assert.equal(requests[0].bp_order, 2);
@@ -306,9 +329,11 @@ test("model changes and disposal discard recommendations and queued searches", a
   for (const dispose of [false, true]) {
     const pending = deferred();
     let calls = 0;
-    const { forecast, invalidateForecast, context } = simulatorForecastHarness({ recommendLineup: () => { calls++; return pending.promise; } });
+    const { forecast, invalidateForecast, context, clock } = simulatorForecastHarness({ recommendLineup: () => { calls++; return pending.promise; } });
     await forecast();
+  await clock.advance(300);
     await forecast();
+  await clock.advance(300);
     if (dispose) context.forecastRequests.dispose();
     invalidateForecast();
     pending.resolve({ obsolete: true });
@@ -323,12 +348,14 @@ test("model changes and disposal discard recommendations and queued searches", a
 test("failed next-action requests leave no stale legal choices or queued recommendation", async () => {
   const pending = deferred();
   let predictions = 0, searches = 0;
-  const { forecast, context } = simulatorForecastHarness({
+  const { forecast, context, clock } = simulatorForecastHarness({
     predictDraftNextAction: async () => { if (predictions++) throw new Error("Unavailable"); return { current: true }; },
     recommendLineup: () => { searches++; return pending.promise; },
   });
   await forecast();
+  await clock.advance(300);
   await forecast();
+  await clock.advance(300);
   pending.resolve({ obsolete: true });
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(context.error.value, "Unavailable");
@@ -336,4 +363,270 @@ test("failed next-action requests leave no stale legal choices or queued recomme
   assert.equal(context.recommendationResult.value, null);
   assert.equal(context.simulating.value, false);
   assert.equal(searches, 1);
+});
+
+
+test("burst board edits keep fast forecasts immediate and debounce deep search to the final board", async () => {
+  const fast = [], deep = [];
+  const { forecast, context, clock } = simulatorForecastHarness({
+    predictDraftNextAction: async (body) => { fast.push(body); return { legal: true }; },
+    recommendLineup: async (body) => { deep.push(body); return {}; },
+  });
+  await forecast();
+  await clock.advance(150);
+  context.board.value.blue_bans.push(105);
+  context.bpOrder.value = 2;
+  await forecast();
+  await clock.advance(299);
+  assert.equal(fast.length, 2);
+  assert.equal(deep.length, 0);
+  await clock.advance(1);
+  assert.equal(deep.length, 1);
+  assert.equal(deep[0].bp_order, 2);
+  assert.deepEqual(deep[0].blue_bans, [105]);
+  assert.deepEqual(fast[0].blue_bans, []);
+});
+
+test("identical overlapping fast payloads share HTTP while changed previous usage starts fresh", async () => {
+  const pending = deferred();
+  const calls = [];
+  const { forecast, context } = simulatorForecastHarness({ predictDraftNextAction: (body) => {
+    calls.push(body); return pending.promise;
+  } });
+  const first = forecast(), same = forecast();
+  assert.equal(calls.length, 1);
+  context.globalUsed.value.a.push(105);
+  const changed = forecast();
+  assert.equal(calls.length, 2);
+  assert.deepEqual(calls[0].blue_used_previous_battles, []);
+  pending.resolve({ current: true });
+  await Promise.all([first, same, changed]);
+  assert.deepEqual(context.result.value, { current: true });
+});
+
+test("hidden view cancels unsent deep work and resumes only missing analysis", async () => {
+  let deep = 0, refreshes = 0;
+  const { forecast, context, clock, handleVisibilityChange } = simulatorForecastHarness({
+    recommendLineup: async () => { deep++; return {}; }, refreshLiveMatch: async () => { refreshes++; },
+  });
+  await forecast();
+  context.document.visibilityState = "hidden";
+  await handleVisibilityChange();
+  await clock.advance(500);
+  assert.equal(deep, 0);
+  context.document.visibilityState = "visible";
+  await handleVisibilityChange();
+  assert.equal(refreshes, 1);
+  await clock.advance(300);
+  assert.equal(deep, 1);
+  await handleVisibilityChange();
+  await clock.advance(300);
+  assert.equal(deep, 1);
+});
+
+test("retry uses the current payload and honors server cooldown without automatic retries", async () => {
+  const previousNow = Date.now;
+  let now = 1000, calls = 0;
+  Date.now = () => now;
+  try {
+    const { forecast, retryPrediction, context, clock } = simulatorForecastHarness({
+      predictDraftNextAction: async (body) => {
+        calls++;
+        if (calls === 1) throw Object.assign(new Error("Busy"), { retryAfter: 2 });
+        assert.equal(body.league_id, "20260004");
+        return { current: true };
+      },
+    });
+    await forecast();
+    await retryPrediction();
+    await clock.advance(3000);
+    assert.equal(calls, 1);
+    now = 3000;
+    await retryPrediction();
+    assert.equal(calls, 2);
+    assert.deepEqual(context.result.value, { current: true });
+  } finally { Date.now = previousNow; }
+});
+
+test("automatic live polls wait for completion and hidden views never launch them", async () => {
+  let polls = 0, timer = null;
+  const pending = deferred();
+  const context = {
+    window: { setTimeout: (fn) => { timer = fn; return 1; }, clearTimeout: () => { timer = null; } },
+    pageVisible: () => visible, liveRequests: createRequestScope(), liveMatchPollTimer: null,
+    leagueId: ref("20260004"), teamsReady: ref(true), upcomingMatch: ref({ match_id: "fixture" }),
+    selectedTeamIds: ref({ a: "a", b: "b" }), TEAM_A: "a", TEAM_B: "b", liveMatchLoading: ref(false),
+    liveMatch: ref(null), liveFollowing: ref(false), shouldRestoreLiveFollow: () => false,
+    isOfficialSeriesComplete: () => false, fetchLiveMatch: () => { polls++; return pending.promise; },
+  };
+  let visible = true;
+  const { refreshLiveMatch, startLiveMatchPolling } = componentFunctions("./DraftSimulatorPage.vue",
+    ["refreshLiveMatch", "startLiveMatchPolling", "stopLiveMatchPolling"], context);
+  const request = refreshLiveMatch();
+  await refreshLiveMatch();
+  assert.equal(polls, 1);
+  assert.equal(timer, null);
+  pending.resolve({ is_live: true });
+  await request;
+  assert.equal(typeof timer, "function");
+  visible = false;
+  await timer();
+  assert.equal(polls, 1);
+  startLiveMatchPolling();
+});
+
+
+test("returning visible queues the latest board behind a stale running deep request", async () => {
+  const first = deferred(), calls = [];
+  const { forecast, context, clock, handleVisibilityChange } = simulatorForecastHarness({ recommendLineup: (body) => {
+    calls.push(body.bp_order); return calls.length === 1 ? first.promise : Promise.resolve({ latest: true });
+  } });
+  await forecast();
+  await clock.advance(300);
+  context.bpOrder.value = 2;
+  await forecast();
+  context.document.visibilityState = "hidden";
+  await handleVisibilityChange();
+  await clock.advance(500);
+  context.document.visibilityState = "visible";
+  await handleVisibilityChange();
+  await clock.advance(300);
+  assert.deepEqual(calls, [1]);
+  first.resolve({ stale: true });
+  await clock.advance(0);
+  assert.deepEqual(calls, [1, 2]);
+  assert.deepEqual(context.recommendationResult.value, { latest: true });
+});
+
+test("undo and reset supersede slow predictions while retaining official and peak locks", async () => {
+  for (const action of ["undo", "reset"]) {
+    const pending = deferred();
+    let calls = 0;
+    const { forecast, context } = simulatorForecastHarness({
+      predictDraftNextAction: () => ++calls === 1 ? pending.promise : Promise.resolve({ latest: true }),
+    });
+    context.board.value.blue_bans = [105];
+    context.bpOrder.value = 2;
+    const history = ref([{ field: "blue_bans", heroId: 105, bpOrder: 1 }]);
+    const liveHeroSelectionLocked = ref(false);
+    const funcs = componentFunctions("./DraftSimulatorPage.vue", ["undo", "reset"], {
+      ...context, history, liveHeroSelectionLocked, forecast, emptyBoard: () => ({ blue_bans: [], red_bans: [], blue_picks: [], red_picks: [] }),
+      search: ref(""), clearCommentary: () => {}, clearMoveEvidence: () => {}, syncVersionTreeWithBoard: () => {},
+      resetScenarioTree: () => {}, clearVersionTree: () => {},
+    });
+    const old = forecast();
+    await funcs[action]();
+    assert.equal(calls, 2);
+    assert.deepEqual(context.board.value.blue_bans, []);
+    pending.resolve({ stale: true });
+    await old;
+    assert.deepEqual(context.result.value, { latest: true });
+    liveHeroSelectionLocked.value = true;
+    await funcs[action]();
+    context.isPeakDuel.value = true;
+    liveHeroSelectionLocked.value = false;
+    await funcs[action]();
+    assert.equal(calls, 2);
+  }
+});
+
+test("deep retry honors cooldown and does not cache successful stochastic results", async () => {
+  let now = 1000, calls = 0;
+  const previousNow = Date.now;
+  Date.now = () => now;
+  try {
+    const { forecast, clock, context, retryRecommendations } = simulatorForecastHarness({ recommendLineup: async () => {
+      if (++calls === 1) throw Object.assign(new Error("Busy"), { retryAfter: 2 });
+      return { attempt: calls };
+    } });
+    await forecast();
+    await clock.advance(300);
+    await retryRecommendations();
+    assert.equal(calls, 1);
+    now = 3000;
+    await clock.advance(1000);
+    await retryRecommendations();
+    assert.equal(calls, 2);
+    assert.deepEqual(context.recommendationResult.value, { attempt: 2 });
+    await forecast();
+    await clock.advance(300);
+    assert.equal(calls, 3);
+  } finally { Date.now = previousNow; }
+});
+
+
+test("returning to the same payload still replaces an invalidated running deep search", async () => {
+  const first = deferred(), calls = [];
+  const { forecast, context, clock, handleVisibilityChange } = simulatorForecastHarness({ recommendLineup: (body) => {
+    calls.push(body.bp_order); return calls.length === 1 ? first.promise : Promise.resolve({ fresh: true });
+  } });
+  await forecast();
+  await clock.advance(300);
+  context.bpOrder.value = 2;
+  await forecast();
+  context.bpOrder.value = 1;
+  await forecast();
+  context.document.visibilityState = "hidden";
+  await handleVisibilityChange();
+  await clock.advance(500);
+  context.document.visibilityState = "visible";
+  await handleVisibilityChange();
+  await clock.advance(300);
+  assert.deepEqual(calls, [1]);
+  first.resolve({ stale: true });
+  await clock.advance(0);
+  assert.deepEqual(calls, [1, 1]);
+  assert.deepEqual(context.recommendationResult.value, { fresh: true });
+  assert.equal(context.recommendationLoading.value, false);
+});
+
+test("visibility restore keeps completed-lineup scores and in-flight scoring, requesting only missing scores", async () => {
+  for (const state of ["complete", "pending", "failed", "missing"]) {
+    let scores = 0;
+    const { context, handleVisibilityChange } = simulatorForecastHarness({
+      lineupComplete: ref(true), lineupScore: ref(state === "complete" ? { score: 0.5 } : null),
+      lineupScoreLoading: ref(state === "pending"), lineupScoreError: ref(state === "failed" ? "Unavailable" : ""),
+      scoreCompletedLineup: async () => { scores++; },
+    });
+    context.document.visibilityState = "hidden";
+    await handleVisibilityChange();
+    context.document.visibilityState = "visible";
+    await handleVisibilityChange();
+    assert.equal(scores, state === "missing" ? 1 : 0, state);
+    if (state === "complete") assert.deepEqual(context.lineupScore.value, { score: 0.5 });
+    if (state === "pending") assert.equal(context.lineupScoreLoading.value, true);
+  }
+});
+
+
+test("visibility restores fixture scheduling without premature or mismatched live refreshes", async () => {
+  const previousNow = Date.now;
+  // The fixture begins at 10:00 UTC; official checks begin at 10:05 UTC.
+  const checkAt = Date.UTC(2026, 9, 28, 10, 5);
+  try {
+    for (const state of ["future", "mismatch", "inprogress"]) {
+      const now = state === "future" ? checkAt - 600_000 : checkAt;
+      Date.now = () => now;
+      let refreshes = 0, scheduled = null;
+      const context = {
+        window: { setTimeout: (fn, delay) => { scheduled = { fn, delay }; return 1; }, clearTimeout: () => { scheduled = null; } },
+        pageVisible: () => true, liveRequests: createRequestScope(), forecastRequests: createRequestScope(),
+        selectedTeamsMatchFixture: () => state !== "mismatch", liveApiCheckAvailable: ref(now >= checkAt),
+        teamsReady: ref(true), upcomingMatch: ref({ start_time: "2026-10-28 18:00:00" }),
+        liveScheduleClock: ref(0), liveMatchCheckTimer: null, updateRetryClock: () => {}, scheduleLiveScheduleClock: () => {},
+        refreshLiveMatch: async () => { refreshes++; }, result: ref({ current: true }),
+        simulating: ref(false), predictionFailed: ref(false), recommendationQueue: { running: false },
+        scheduleRecommendations: () => {},
+      };
+      const { handleVisibilityChange } = componentFunctions("./DraftSimulatorPage.vue",
+        ["handleVisibilityChange", "scheduleLiveMatchCheck", "stopLiveMatchCheckSchedule", "scheduledLiveCheckDelay"], context);
+      await handleVisibilityChange();
+      assert.equal(refreshes, state === "inprogress" ? 1 : 0, state);
+      if (state === "future") {
+        assert.equal(scheduled.delay, 600_000);
+        scheduled.fn();
+        assert.equal(refreshes, 1);
+      } else assert.equal(scheduled, null, state);
+    }
+  } finally { Date.now = previousNow; }
 });

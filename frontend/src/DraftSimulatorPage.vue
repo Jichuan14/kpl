@@ -60,6 +60,77 @@ let moveEvidenceRequestNumber = 0;
 let moveEvidenceAbortController = null;
 let recommendationRequestNumber = 0;
 const forecastRequests = createRequestScope();
+const inFlightForecasts = new Map();
+let recommendationTimer = null;
+let predictionRetryAt = 0;
+let recommendationRetryAt = 0;
+const retryClock = ref(Date.now());
+let retryClockTimer = null;
+function stopRetryClock() {
+  if (retryClockTimer !== null) window.clearTimeout(retryClockTimer);
+  retryClockTimer = null;
+}
+function updateRetryClock() {
+  stopRetryClock();
+  retryClock.value = Date.now();
+  const remaining = Math.max(predictionRetryAt, recommendationRetryAt) - retryClock.value;
+  if (remaining > 0 && pageVisible() && !forecastRequests.disposed) {
+    retryClockTimer = window.setTimeout(updateRetryClock, Math.min(1000, remaining));
+  }
+}
+const predictionFailed = ref(false);
+function pageVisible() {
+  return document.visibilityState !== "hidden";
+}
+function stopRecommendationTimer() {
+  if (recommendationTimer !== null) window.clearTimeout(recommendationTimer);
+  recommendationTimer = null;
+}
+function scheduleRecommendations() {
+  stopRecommendationTimer();
+  if (!pageVisible() || forecastRequests.disposed || !result.value || recommendationResult.value || recommendationError.value) return;
+  recommendationLoading.value = true;
+  recommendationTimer = window.setTimeout(() => {
+    recommendationTimer = null;
+    void recommendCurrentDraft();
+  }, 300);
+}
+async function retryPrediction() {
+  if (!predictionFailed.value || simulating.value || Date.now() < predictionRetryAt) return;
+  await forecast();
+}
+async function retryRecommendations() {
+  if (!recommendationError.value || recommendationLoading.value || Date.now() < recommendationRetryAt) return;
+  await recommendCurrentDraft();
+}
+async function handleVisibilityChange() {
+  if (!pageVisible()) {
+    stopRecommendationTimer();
+    stopRetryClock();
+    recommendationQueue.pending = false;
+    if (!recommendationQueue.running) recommendationLoading.value = false;
+    stopLiveMatchPolling();
+    stopLiveMatchCheckSchedule();
+    stopLiveScheduleClock();
+    return;
+  }
+  if (forecastRequests.disposed) return;
+  updateRetryClock();
+  liveScheduleClock.value = Date.now();
+  scheduleLiveScheduleClock();
+  if (selectedTeamsMatchFixture() && liveApiCheckAvailable.value) {
+    stopLiveMatchCheckSchedule();
+    await refreshLiveMatch();
+  } else {
+    scheduleLiveMatchCheck();
+  }
+  if (!pageVisible() || forecastRequests.disposed) return;
+  if (!result.value && !simulating.value && !predictionFailed.value) {
+    if (!lineupComplete.value || (!lineupScore.value && !lineupScoreLoading.value && !lineupScoreError.value)) await forecast();
+  } else if (!recommendationQueue.running || recommendationQueue.key !== JSON.stringify(forecastPayload()) || recommendationQueue.requestNumber !== recommendationRequestNumber) {
+    scheduleRecommendations();
+  }
+}
 // Keep one expensive search in flight; when it ends, search only the latest board.
 const recommendationQueue = { running: false, pending: false, controller: null };
 let lineupScoreRequestNumber = 0;
@@ -523,6 +594,7 @@ function selectedTeam(team) {
 }
 
 function selectTeamForSide(team, teamId) {
+  if (String(selectedTeamIds.value[team]) === String(teamId)) return;
   const otherTeam = team === TEAM_A ? TEAM_B : TEAM_A;
   const currentTeamId = selectedTeamIds.value[team];
   const otherTeamId = selectedTeamIds.value[otherTeam];
@@ -545,7 +617,7 @@ function sideLabel(side) {
 }
 
 async function setTeamForDraftSide(side, team) {
-  if (!canChangeCurrentSides.value || ![TEAM_A, TEAM_B].includes(team)) return;
+  if (!canChangeCurrentSides.value || ![TEAM_A, TEAM_B].includes(team) || teamsBySide.value[side] === team) return;
   const otherTeam = team === TEAM_A ? TEAM_B : TEAM_A;
   teamsBySide.value =
     side === "blue"
@@ -750,7 +822,7 @@ function shouldRestoreScheduledFollow() {
 
 function stopLiveMatchPolling() {
   if (liveMatchPollTimer !== null) {
-    window.clearInterval(liveMatchPollTimer);
+    window.clearTimeout(liveMatchPollTimer);
     liveMatchPollTimer = null;
   }
 }
@@ -799,7 +871,7 @@ function selectedTeamsMatchFixture() {
 
 function scheduleLiveScheduleClock() {
   stopLiveScheduleClock();
-  if (liveRequests.disposed || !teamsReady.value || !selectedTeamsMatchFixture()) return;
+  if (!pageVisible() || liveRequests.disposed || !teamsReady.value || !selectedTeamsMatchFixture()) return;
   const checkDelay = scheduledLiveCheckDelay(upcomingMatch.value);
   if (checkDelay === null) return;
   const waits = [checkDelay - 5 * 60_000, checkDelay].filter((wait) => wait > 0);
@@ -813,7 +885,7 @@ function scheduleLiveScheduleClock() {
 
 function scheduleLiveMatchCheck() {
   stopLiveMatchCheckSchedule();
-  if (liveRequests.disposed || !teamsReady.value || !selectedTeamsMatchFixture()) return;
+  if (!pageVisible() || liveRequests.disposed || !teamsReady.value || !selectedTeamsMatchFixture()) return;
   const delay = scheduledLiveCheckDelay(upcomingMatch.value);
   if (delay === null) return;
   const wait = Math.max(0, delay);
@@ -824,11 +896,14 @@ function scheduleLiveMatchCheck() {
 }
 
 function startLiveMatchPolling() {
-  if (liveRequests.disposed) return;
+  if (!pageVisible() || liveRequests.disposed) return;
   stopLiveMatchPolling();
   // The browser checks in frequently enough to react to cache expiry, while
   // the backend itself limits official KPL requests to one per three minutes.
-  liveMatchPollTimer = window.setInterval(refreshLiveMatch, 30_000);
+  liveMatchPollTimer = window.setTimeout(() => {
+    liveMatchPollTimer = null;
+    void refreshLiveMatch();
+  }, 30_000);
 }
 
 function completedGameSignature(state) {
@@ -925,7 +1000,8 @@ async function moveToNextScheduledFixture() {
 }
 
 async function refreshLiveMatch(manual = false) {
-  if (!leagueId.value || !teamsReady.value || !upcomingMatch.value?.match_id) return;
+  if ((!manual && (!pageVisible() || liveMatchLoading.value)) || !leagueId.value || !teamsReady.value || !upcomingMatch.value?.match_id) return;
+  stopLiveMatchPolling();
   const operation = liveRequests.begin();
   if (!operation) return;
   liveMatchLoading.value = true;
@@ -958,7 +1034,6 @@ async function refreshLiveMatch(manual = false) {
     if (!liveFollowing.value) {
       // This lightweight monitor only advances the scheduled matchup. It does
       // not apply heroes or alter the visitor's local draft board.
-      startLiveMatchPolling();
       return;
     }
     await loadLiveWinnerPredictions();
@@ -972,12 +1047,14 @@ async function refreshLiveMatch(manual = false) {
       if (!operation.isCurrent()) return;
       liveAppliedGameSignature.value = gameSignature;
     }
-    startLiveMatchPolling();
   } catch {
     // A temporary official API failure should not remove the last usable live
     // context from a visitor's simulator.
   } finally {
-    if (operation.isCurrent()) liveMatchLoading.value = false;
+    if (operation.isCurrent()) {
+      liveMatchLoading.value = false;
+      if (!isOfficialSeriesComplete(liveMatch.value)) startLiveMatchPolling();
+    }
   }
 }
 
@@ -1082,6 +1159,8 @@ async function loadModel() {
 }
 
 function invalidateForecast() {
+  stopRecommendationTimer();
+  predictionFailed.value = false;
   forecastRequests.invalidate();
   simulating.value = false;
   result.value = null;
@@ -1096,38 +1175,10 @@ function invalidateForecast() {
   lineupScoreError.value = "";
 }
 
-async function forecast() {
-  invalidateForecast();
-  const operation = forecastRequests.begin();
-  if (!operation) return;
-  if (isPeakDuel.value) {
-    result.value = null;
-    return;
-  }
-  if (!teamsReady.value) {
-    result.value = null;
-    return;
-  }
-  if (!model.value) {
-    result.value = null;
-    return;
-  }
-  if (lineupComplete.value) {
-    result.value = null;
-    await scoreCompletedLineup();
-    return;
-  }
-  if (!currentStep.value) {
-    result.value = null;
-    return;
-  }
+function forecastPayload() {
   const blue = selectedTeam(teamsBySide.value.blue);
   const red = selectedTeam(teamsBySide.value.red);
-  simulating.value = true;
-  error.value = "";
-  let forecastSucceeded = false;
-  try {
-    const prediction = await predictDraftNextAction({
+  return JSON.parse(JSON.stringify({
       league_id: leagueId.value,
       model_version: modelVersion.value,
       model_type: modelType,
@@ -1139,18 +1190,46 @@ async function forecast() {
       ...board.value,
       blue_used_previous_battles: globalUsed.value[teamsBySide.value.blue],
       red_used_previous_battles: globalUsed.value[teamsBySide.value.red],
-    }, { signal: operation.signal });
-    if (!operation.isCurrent()) return;
-    result.value = prediction;
-    forecastSucceeded = true;
-  } catch (err) {
-    if (!operation.isCurrent()) return;
-    result.value = null;
-    error.value = err.message || "Could not simulate this draft state.";
-  } finally {
-    if (operation.isCurrent()) simulating.value = false;
+  }));
+}
+
+async function forecast() {
+  if (forecastRequests.disposed) return;
+  const eligible = !isPeakDuel.value && teamsReady.value && model.value && !lineupComplete.value && currentStep.value;
+  const payload = eligible ? forecastPayload() : null;
+  const key = payload ? JSON.stringify(payload) : "";
+  const existing = inFlightForecasts.get(key);
+  if (existing?.operation.isCurrent()) return existing.promise;
+  invalidateForecast();
+  const operation = forecastRequests.begin();
+  if (!operation) return;
+  if (!eligible) {
+    if (!isPeakDuel.value && teamsReady.value && model.value && lineupComplete.value) await scoreCompletedLineup();
+    return;
   }
-  if (forecastSucceeded && operation.isCurrent()) void recommendCurrentDraft();
+  simulating.value = true;
+  error.value = "";
+  const entry = { operation, promise: null };
+  entry.promise = (async () => {
+    try {
+      const prediction = await predictDraftNextAction(payload, { signal: operation.signal });
+      if (!operation.isCurrent()) return;
+      result.value = prediction;
+      scheduleRecommendations();
+    } catch (err) {
+      if (!operation.isCurrent()) return;
+      result.value = null;
+      predictionFailed.value = true;
+      predictionRetryAt = Date.now() + Math.max(0, Number(err.retryAfter) || 0) * 1000;
+      updateRetryClock();
+      error.value = err.message || "Could not simulate this draft state.";
+    } finally {
+      if (inFlightForecasts.get(key) === entry) inFlightForecasts.delete(key);
+      if (operation.isCurrent()) simulating.value = false;
+    }
+  })();
+  inFlightForecasts.set(key, entry);
+  return entry.promise;
 }
 
 async function scoreCompletedLineup() {
@@ -1181,17 +1260,19 @@ async function scoreCompletedLineup() {
 }
 
 async function recommendCurrentDraft() {
-  if (forecastRequests.disposed || !result.value || !teamsReady.value || !model.value || !currentStep.value) return;
+  if (!pageVisible() || forecastRequests.disposed || !result.value || !teamsReady.value || !model.value || !currentStep.value) return;
   recommendationLoading.value = true;
   if (recommendationQueue.running) {
     recommendationQueue.pending = true;
     return;
   }
   recommendationQueue.running = true;
+  recommendationQueue.key = JSON.stringify(forecastPayload());
   recommendationQueue.pending = false;
   const controller = new AbortController();
   recommendationQueue.controller = controller;
   const requestNumber = ++recommendationRequestNumber;
+  recommendationQueue.requestNumber = requestNumber;
   expandedRecommendationIds.value = [];
   const blue = selectedTeam(teamsBySide.value.blue);
   const red = selectedTeam(teamsBySide.value.red);
@@ -1219,6 +1300,8 @@ async function recommendCurrentDraft() {
   } catch (err) {
     if (requestNumber === recommendationRequestNumber) {
       recommendationResult.value = null;
+      recommendationRetryAt = Date.now() + Math.max(0, Number(err.retryAfter) || 0) * 1000;
+      updateRetryClock();
       recommendationError.value = err.message || "无法生成阵容建议。";
     }
   } finally {
@@ -1227,7 +1310,7 @@ async function recommendCurrentDraft() {
     if (requestNumber === recommendationRequestNumber) {
       recommendationLoading.value = false;
     }
-    if (recommendationQueue.pending) void recommendCurrentDraft();
+    if (recommendationQueue.pending && pageVisible()) void recommendCurrentDraft();
   }
 }
 
@@ -1549,7 +1632,7 @@ watch(
 );
 
 async function undo() {
-  if (isPeakDuel.value) return;
+  if (isPeakDuel.value || liveHeroSelectionLocked.value) return;
   const event = history.value.pop();
   if (!event) return;
   const index = board.value[event.field].lastIndexOf(event.heroId);
@@ -1562,7 +1645,7 @@ async function undo() {
 }
 
 async function reset() {
-  if (isPeakDuel.value) return;
+  if (isPeakDuel.value || liveHeroSelectionLocked.value) return;
   board.value = emptyBoard();
   history.value = [];
   bpOrder.value = 1;
@@ -1746,6 +1829,7 @@ function resistMobileBoardWheel(event) {
 
 const seasonStartup = createSeasonStartup(loadSeasons, loadModel);
 onMounted(async () => {
+  document.addEventListener("visibilitychange", handleVisibilityChange);
   try {
     await seasonStartup.initialize();
   } catch (err) {
@@ -1784,6 +1868,8 @@ watch(
 );
 
 onBeforeUnmount(() => {
+  document.removeEventListener("visibilitychange", handleVisibilityChange);
+  stopRetryClock();
   forecastRequests.dispose();
   invalidateForecast();
   recommendationQueue.controller?.abort();
@@ -1855,10 +1941,12 @@ onBeforeUnmount(() => {
       </div>
     </header>
 
-    <p v-if="error" class="simulator-message error">{{ error }}</p>
+    <p v-if="error" class="simulator-message error">{{ error }}
+      <button v-if="predictionFailed" type="button" :disabled="simulating || retryClock < predictionRetryAt" @click="retryPrediction">{{ retryClock < predictionRetryAt ? $t("Retry in {seconds}s", { seconds: Math.ceil((predictionRetryAt - retryClock) / 1000) }) : $t("Retry") }}</button>
+    </p>
     <p v-else-if="loading" class="simulator-message">{{ $t("正在加载 BP 模型…") }}</p>
 
-    <template v-else-if="model">
+    <template v-if="model && (!error || predictionFailed)">
       <section class="global-bp-panel">
         <div>
           <p class="simulator-eyebrow">比赛赛制</p>
@@ -2073,8 +2161,8 @@ onBeforeUnmount(() => {
         </div>
         <div class="simulator-actions">
           <button type="button" :disabled="!teamsReady || isPeakDuel || liveHeroSelectionLocked" @click="openWhatIfWorkspace">{{ $t("打开 What-if 窗口") }}</button>
-          <button type="button" :disabled="isPeakDuel || !history.length || simulating || liveHeroSelectionLocked" @click="undo">撤销</button>
-          <button type="button" :disabled="isPeakDuel || simulating || liveHeroSelectionLocked" @click="reset">重置</button>
+          <button type="button" :disabled="isPeakDuel || !history.length || liveHeroSelectionLocked" @click="undo">撤销</button>
+          <button type="button" :disabled="isPeakDuel || liveHeroSelectionLocked" @click="reset">重置</button>
         </div>
       </section>
 
@@ -2129,7 +2217,9 @@ onBeforeUnmount(() => {
                     {{ !currentStep ? '已完成' : recommendationLoading ? '搜索中…' : recommendationResult ? '已更新' : '等待状态' }}
                   </span>
                 </header>
-                <p v-if="recommendationError" class="recommendation-error">{{ recommendationError }}</p>
+                <p v-if="recommendationError" class="recommendation-error">{{ recommendationError }}
+                  <button type="button" :disabled="recommendationLoading || retryClock < recommendationRetryAt" @click="retryRecommendations">{{ retryClock < recommendationRetryAt ? $t("Retry in {seconds}s", { seconds: Math.ceil((recommendationRetryAt - retryClock) / 1000) }) : $t("Retry") }}</button>
+                </p>
                 <div v-if="recommendationResult?.recommendations?.length" class="recommendation-list">
                   <article v-for="row in recommendationResult.recommendations" :key="row.hero_id">
                     <button

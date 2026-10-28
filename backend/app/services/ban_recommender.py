@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from app.services.simulator_analysis_cache import file_signature
 import math
 from dataclasses import dataclass
 from pathlib import Path
@@ -268,7 +269,7 @@ class BanValueModel:
         }
 
 
-_MODEL_CACHE: tuple[Path, int, BanValueModel] | None = None
+_MODEL_CACHE: tuple[Path, tuple, BanValueModel] | None = None
 
 
 def ban_value_model_path(league_id: str) -> Path:
@@ -284,9 +285,10 @@ def load_ban_value_model(league_id: str) -> BanValueModel:
     path = ban_value_model_path(league_id)
     if not path.is_file():
         raise FileNotFoundError(f"Ban value model is missing: {path}")
-    modified = path.stat().st_mtime_ns
-    if _MODEL_CACHE and _MODEL_CACHE[:2] == (path, modified):
-        return _MODEL_CACHE[2]
+    modified = file_signature(path)
+    cached = _MODEL_CACHE
+    if cached and cached[:2] == (path, modified):
+        return cached[2]
     payload = json.loads(path.read_text(encoding="utf-8"))
     model = BanValueModel(payload)
     _MODEL_CACHE = (path, modified, model)
