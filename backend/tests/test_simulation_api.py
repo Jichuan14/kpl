@@ -12,6 +12,10 @@ class SimulationApiTest(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.client = TestClient(app)
 
+    def setUp(self) -> None:
+        from app.services.simulator_analysis_cache import simulator_analysis_cache
+        simulator_analysis_cache.clear()
+
     @staticmethod
     def payload() -> dict:
         return {

@@ -14,6 +14,7 @@ import numpy as np
 
 from app.services.analysis_pipeline import ANALYSIS_DIR, OUTPUT_ROOT, REPO_ROOT
 from app.services.model_registry import component_path, current_bundle, model_output_root
+from app.services.simulator_analysis_cache import file_signature
 from app.services.draft_calibration import (
     CALIBRATION_FILENAME,
     CalibrationResolution,
@@ -33,15 +34,15 @@ from app.services.sequence_model_runtime import (
 from app.services.personalized_model_runtime import personalized_logits, prepare_personalized_parameters
 from app.services.player_draft_context import candidate_features as personalized_candidate_features, load_context_snapshot
 
-_CACHE: dict[Path, tuple[tuple[int, int], dict[str, Any]]] = {}
-_LEARNABLE_CACHE: dict[Path, tuple[int, dict[str, Any]]] = {}
-_SEQUENCE_CACHE: dict[Path, tuple[tuple[int, int, int, int, str], dict[str, Any]]] = {}
+_CACHE: dict[Path, tuple[tuple, dict[str, Any]]] = {}
+_LEARNABLE_CACHE: dict[Path, tuple[tuple, dict[str, Any]]] = {}
+_SEQUENCE_CACHE: dict[Path, tuple[tuple, dict[str, Any]]] = {}
 _FEATURE_SPACE_CACHE: dict[Path, tuple[tuple[int, int], dict[str, Any]]] = {}
-_PERSONALIZED_CACHE: dict[Path, tuple[tuple[int, int, int], dict[str, Any]]] = {}
+_PERSONALIZED_CACHE: dict[Path, tuple[tuple, dict[str, Any]]] = {}
 _TEAM_TENDENCY_CACHE: dict[
     Path,
     tuple[
-        int,
+        tuple,
         dict[tuple[str, str, str, str, int, str], dict[int, dict[str, Any]]],
     ],
 ] = {}
@@ -123,7 +124,7 @@ def load_personalized_model(league_id: str) -> dict[str, Any]:
     if not path.is_file(): raise FileNotFoundError(f"No personalized draft model has been generated for {league_id}")
     context_path=personalized_context_path(league_id)
     calibration_path=personalized_calibration_path(league_id)
-    signature=(path.stat().st_mtime_ns,context_path.stat().st_mtime_ns if context_path.is_file() else -1,calibration_path.stat().st_mtime_ns if calibration_path.is_file() else -1);cached=_PERSONALIZED_CACHE.get(path)
+    signature=(file_signature(path),file_signature(context_path),file_signature(calibration_path));cached=_PERSONALIZED_CACHE.get(path)
     if cached and cached[0]==signature: return cached[1]
     model=json.loads(path.read_text(encoding="utf-8"))
     if current_bundle() is None and str(model.get("base_artifact",{}).get("target_season"))!=league_id: raise ValueError("Personalized base target season mismatch")
@@ -236,9 +237,9 @@ def load_model(league_id: str) -> dict[str, Any]:
     path = model_path(league_id)
     if not path.is_file():
         raise FileNotFoundError(f"No draft model has been generated for {league_id}")
-    modified = path.stat().st_mtime_ns
+    modified = file_signature(path)
     official_path = component_path("herolist.json", OFFICIAL_HEROLIST_PATH)
-    official_modified = official_path.stat().st_mtime_ns if official_path.is_file() else 0
+    official_modified = file_signature(official_path)
     cache_key = (modified, official_modified)
     cached = _CACHE.get(path)
     if cached and cached[0] == cache_key:
@@ -279,7 +280,8 @@ def load_learnable_model(league_id: str) -> dict[str, Any]:
     path = learnable_model_path(league_id)
     if not path.is_file():
         raise FileNotFoundError(f"No learnable draft model has been generated for {league_id}")
-    modified = path.stat().st_mtime_ns
+    modified = (file_signature(path), file_signature(DRAFT_FEATURES_PATH),
+                file_signature(LEGACY_SPECIALTY_FEATURES_PATH))
     cached = _LEARNABLE_CACHE.get(path)
     if cached and cached[0] == modified:
         return cached[1]
@@ -411,10 +413,10 @@ def load_sequence_model(league_id: str) -> dict[str, Any]:
     calibration_path = sequence_calibration_path(league_id)
     calibration_mode = os.getenv("DRAFT_SEQUENCE_CALIBRATION", "off").strip().lower()
     signature = (
-        path.stat().st_mtime_ns,
-        DRAFT_FEATURES_PATH.stat().st_mtime_ns if DRAFT_FEATURES_PATH.is_file() else -1,
-        LEGACY_SPECIALTY_FEATURES_PATH.stat().st_mtime_ns if LEGACY_SPECIALTY_FEATURES_PATH.is_file() else -1,
-        calibration_path.stat().st_mtime_ns if calibration_path.is_file() else -1,
+        file_signature(path),
+        file_signature(DRAFT_FEATURES_PATH),
+        file_signature(LEGACY_SPECIALTY_FEATURES_PATH),
+        file_signature(calibration_path),
         calibration_mode,
     )
     cached = _SEQUENCE_CACHE.get(path)
@@ -1178,10 +1180,10 @@ def _load_team_tendency_index(
     str,
 ]:
     path = component_path("team_action_tendencies.jsonl", OUTPUT_ROOT / league_id / "team_action_tendencies.jsonl")
-    modified = path.stat().st_mtime_ns
+    modified = file_signature(path)
     cached = _TEAM_TENDENCY_CACHE.get(path)
     if cached and cached[0] == modified:
-        return cached[1], str(modified)
+        return cached[1], str(path.stat().st_mtime_ns)
     rows: list[dict[str, Any]] = []
     with path.open(encoding="utf-8") as source:
         for line in source:
@@ -1189,7 +1191,7 @@ def _load_team_tendency_index(
                 rows.append(json.loads(line))
     index = _team_tendency_index(tuple(rows))
     _TEAM_TENDENCY_CACHE[path] = (modified, index)
-    return index, str(modified)
+    return index, str(path.stat().st_mtime_ns)
 
 
 def _apply_team_tendency(

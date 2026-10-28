@@ -7,12 +7,13 @@ from pathlib import Path
 from typing import Any
 import itertools
 import numpy as np
+from app.services.simulator_analysis_cache import file_signature
 
-_CACHE:dict[Path,tuple[int,dict[str,Any]]]={}
+_CACHE:dict[Path,tuple[tuple,dict[str,Any]]]={}
 
 
 def load_context_snapshot(path:Path,hero_ids:list[int])->dict[str,Any]:
-    modified=path.stat().st_mtime_ns;cached=_CACHE.get(path)
+    modified=(file_signature(path),tuple(hero_ids));cached=_CACHE.get(path)
     if cached and cached[0]==modified:return cached[1]
     value=json.loads(path.read_text(encoding="utf-8"))
     if value.get("schema_version")!=1 or value.get("context_contract_version")!="player_context_v1" or [int(v) for v in value.get("hero_ids",[])]!=hero_ids:raise ValueError("Player context snapshot is incompatible")

@@ -7,6 +7,7 @@ exposed as a literal win probability.
 from __future__ import annotations
 
 import json
+from app.services.simulator_analysis_cache import file_signature
 import math
 from dataclasses import dataclass
 from itertools import combinations
@@ -449,7 +450,7 @@ class LineupValueModel:
         }
 
 
-_MODEL_CACHE: tuple[Path, int, LineupValueModel] | None = None
+_MODEL_CACHE: tuple[Path, tuple, LineupValueModel] | None = None
 
 
 def lineup_value_model_path(league_id: str | None = None) -> Path:
@@ -475,9 +476,11 @@ def load_lineup_value_model(
     path = path or lineup_value_model_path(league_id)
     if not path.is_file():
         raise FileNotFoundError(f"Lineup value model is missing: {path}")
-    modified = path.stat().st_mtime_ns
-    if _MODEL_CACHE and _MODEL_CACHE[:2] == (path, modified):
-        return _MODEL_CACHE[2]
-    model = LineupValueModel.from_path(path, component_path("hero_tactical_roles.json", TACTICAL_ROLES_PATH))
+    tactical_path = component_path("hero_tactical_roles.json", TACTICAL_ROLES_PATH)
+    modified = (file_signature(path), str(tactical_path), file_signature(tactical_path))
+    cached = _MODEL_CACHE
+    if cached and cached[:2] == (path, modified):
+        return cached[2]
+    model = LineupValueModel.from_path(path, tactical_path)
     _MODEL_CACHE = (path, modified, model)
     return model

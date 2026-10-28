@@ -10,6 +10,8 @@ const savedLanguage = getStored(storageKey);
 
 export const messages = {
   "zh-CN": {
+    "Retry": "重试",
+    "Retry in {seconds}s": "{seconds} 秒后重试",
     "Player code sharing": "玩家互助",
     "Show more": "显示更多",
     "Copied": "已复制",

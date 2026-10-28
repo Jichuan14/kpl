@@ -28,6 +28,9 @@ from app.services.draft_simulator import (
     sample_forced_draft_completions,
     simulate,
 )
+from app.services.simulator_analysis_cache import (
+    analysis_dependencies, analysis_key, default_recommendation_seed, simulator_analysis_cache,
+)
 from app.services.season_teams import validate_season_team_pair
 from app.services.model_tool_scope import pinned_model_operation
 from app.services.model_registry import resolve_bundle, current_bundle
@@ -254,14 +257,13 @@ def draft_next_action(
             blue_team_name=teams["blue"]["team_name"],
             red_team_name=teams["red"]["team_name"],
         )
-        return ApiResponse(
-            data=predict_next_action(
-                body.league_id,
-                state,
-                model_type=body.model_type,
-                limit=None,
-            )
-        )
+        dependencies = analysis_dependencies(body.league_id, body.model_type, recommendation=False)
+        cache_key = analysis_key("next-action", body.league_id, body.model_type, state, dependencies)
+        return ApiResponse(data=simulator_analysis_cache.get_or_compute(
+            cache_key,
+            lambda: predict_next_action(body.league_id, state, model_type=body.model_type, limit=None),
+            is_current=lambda: dependencies == analysis_dependencies(body.league_id, body.model_type, recommendation=False),
+        ))
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
@@ -418,16 +420,18 @@ def lineup_recommendation(
             blue_team_name=teams["blue"]["team_name"],
             red_team_name=teams["red"]["team_name"],
         )
-        return ApiResponse(
-            data=recommend_lineup(
-                body.league_id,
-                state,
-                model_type=body.model_type,
-                seed=body.seed,
-                top_k=body.top_k,
-                risk_mode=body.risk_mode,
-            )
+        dependencies = analysis_dependencies(body.league_id, body.model_type, recommendation=True)
+        seed = body.seed if body.seed is not None else default_recommendation_seed(
+            body.league_id, body.model_type, state, dependencies
         )
+        cache_key = analysis_key("recommend-lineup", body.league_id, body.model_type, state,
+                                 dependencies, seed=seed, top_k=body.top_k, risk_mode=body.risk_mode)
+        return ApiResponse(data=simulator_analysis_cache.get_or_compute(
+            cache_key,
+            lambda: recommend_lineup(body.league_id, state, model_type=body.model_type,
+                                     seed=seed, top_k=body.top_k, risk_mode=body.risk_mode),
+            is_current=lambda: dependencies == analysis_dependencies(body.league_id, body.model_type, recommendation=True),
+        ))
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
