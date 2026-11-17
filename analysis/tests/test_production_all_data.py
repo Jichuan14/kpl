@@ -37,16 +37,84 @@ def test_fingerprint_ignores_incomplete_fixture_and_order_but_tracks_corrections
     assert production.retrain_identity(all_manifest(root),{**production.RECIPE,'version':'changed'})[0]!=before
 
 
-def test_unchanged_production_skips_and_historical_seed_refits(tmp_path):
+def test_unchanged_production_skips_and_historical_seed_refits(tmp_path, monkeypatch):
+    from app.services import model_registry, pipeline_jobs
+    monkeypatch.setattr(pipeline_jobs, 'LOCK_PATH', tmp_path / 'pipeline.lock')
+    monkeypatch.setattr(model_registry, 'BROWSER_ROOT', tmp_path / 'browser')
     m=all_manifest(exports(tmp_path/'exports',1));identity,inputs=production.retrain_identity(m)
     registry=tmp_path/'registry';registry.mkdir();(registry/'current.json').write_text('{}')
     args=SimpleNamespace(output_root=tmp_path/'out',weight_mode='season_recency',decay=.65,maximum_age_days=None,cutoff=None,seed=7,epochs=30,smoke=False,activate=True,version='new',threads=1)
     incumbent=SimpleNamespace(version='current',manifest={'promotion_status':'production_all_data','retrain_identity':identity})
-    with patch.object(production,'REGISTRY_ROOT',registry),patch.object(production,'build_rolling_manifest',return_value=m),patch.object(production,'run_production_stage',return_value={'identity':identity,'inputs':inputs,'raw_inputs':{}}),patch.object(production,'resolve_bundle',return_value=incumbent),patch.object(production,'train_all_data') as train:
+    with patch.object(production,'REGISTRY_ROOT',registry),patch.object(production,'build_rolling_manifest',return_value=m),patch.object(production,'run_production_stage',return_value={'identity':identity,'inputs':inputs,'raw_inputs':{}}),patch.object(production,'resolve_bundle',return_value=incumbent),patch.object(production,'train_all_data') as train,patch('app.services.model_registry.prune_production_history') as prune:
         assert production.production_update(args)['status']=='NO_CHANGE';train.assert_not_called()
+        prune.assert_called_once_with(registry_root=registry)
         incumbent.manifest={'promotion_status':'seed'};train.side_effect=RuntimeError('training attempted')
         with pytest.raises(RuntimeError,match='attempted'):production.production_update(args)
         assert json.loads((args.output_root/'latest_status.json').read_text())['status']=='FAILED'
+
+
+@pytest.mark.parametrize('fails', [False, True])
+def test_activated_training_discards_workspace_and_keeps_latest_report(tmp_path, monkeypatch, fails):
+    from app.services import model_registry, pipeline_jobs
+
+    registry = tmp_path / 'registry'
+    candidates = registry / 'candidates'
+    abandoned = candidates / '.production-build-abandoned'
+    abandoned.mkdir(parents=True)
+    (abandoned / 'intermediate').write_text('partial')
+    old = candidates / 'all-data-20261110T190137-b1d3b6c3'
+    old.mkdir()
+    installed = registry / 'versions' / old.name
+    installed.mkdir(parents=True)
+    (installed / 'manifest.json').write_text('{}')
+    activation = registry / 'activations' / f'{old.name}.json'
+    activation.parent.mkdir()
+    activation.write_text('{}')
+    research = candidates / 'all-data-20261111T190137-a1d3b6c4'
+    research.mkdir()
+    browser = tmp_path / 'browser'
+    abandoned_stages = [root / '.production-stage-abandoned' for root in (registry, browser)]
+    for stage in abandoned_stages:
+        stage.mkdir(parents=True)
+        (stage / 'partial-copy').write_text('partial')
+    monkeypatch.setattr(pipeline_jobs, 'LOCK_PATH', tmp_path / 'pipeline.lock')
+    monkeypatch.setattr(model_registry, 'BROWSER_ROOT', browser)
+    monkeypatch.setattr(production, 'REGISTRY_ROOT', registry)
+    manifest = {'splits': {'train': [{'start_time': '2026-11-08T10:00:00+00:00'}]}, 'source_seasons': ['20260004']}
+    args = SimpleNamespace(output_root=candidates, weight_mode='season_recency', decay=.65,
+                           maximum_age_days=None, cutoff=None, seed=7, epochs=30, smoke=False,
+                           activate=True, version='new', threads=1)
+    report = {'limitations': []}
+
+    def train(_manifest, output, **_options):
+        output.mkdir()
+        (output / 'intermediate').write_text('generated')
+        if fails:
+            raise OSError('training failed')
+        (output / 'reference_coverage.json').write_text('{}')
+        return report
+
+    with patch.object(production, 'build_rolling_manifest', return_value=manifest), \
+         patch.object(production, 'run_production_stage', return_value={'identity': 'new', 'inputs': {}, 'raw_inputs': {}}), \
+         patch.object(production, 'validate_sources'), patch.object(production, 'train_all_data', side_effect=train), \
+         patch.object(production, 'install_bundle'), patch.object(production, 'activate_bundle') as activate, \
+         patch('app.services.model_registry.prune_production_history') as prune:
+        if fails:
+            with pytest.raises(OSError, match='training failed'):
+                production.production_update(args)
+            activate.assert_not_called()
+            prune.assert_not_called()
+            assert not (candidates / 'latest_report.json').exists()
+        else:
+            status = production.production_update(args)
+            assert status['status'] == 'ACTIVATED'
+            assert json.loads(Path(status['report']).read_text()) == report
+            activate.assert_called_once()
+            prune.assert_called_once()
+
+    assert [path for path in candidates.iterdir() if path.is_dir()] == [research]
+    assert installed.is_dir()
+    assert not any(path.exists() for path in abandoned_stages)
 
 
 def test_unknown_traits_expand_vocabulary_without_fabricating_role_or_capability(tmp_path):

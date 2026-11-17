@@ -150,8 +150,9 @@ performance data. Historical all-zero API placeholders are retained with
 
 ### Temporary homepage code board
 
-The homepage has one shared, season-independent code board above the hero matchup
-assistant. The checked-in `backend/event-board.json` enables a clearly labeled
+The shared, season-independent code board is available for future events. To show it
+again, import `EventCodeBoard.vue` in `HeroFeatureSpacePage.vue` and mount it above
+the hero matchup assistant. The checked-in `backend/event-board.json` enables a clearly labeled
 test activity with placeholder instructions. No sample submissions are seeded.
 Edit this file to change the Chinese/English title, instructions and input hint,
 or set `enabled` to `false` to hide the board and reject new posts.
@@ -492,9 +493,9 @@ Run the normal all-data update:
 python analysis/train_rolling_bundle.py --activate
 ```
 
-The bundle validates exact component lineage, hashes, vocabulary, lane legality, finite numeric inputs and calibration contracts before atomic publication. Activation uses an incumbent comparison under a process lock; previously activated versions remain available for rollback and pinned sessions. Refitted production probabilities are explicitly **uncalibrated, temperature 1**. Historical temperatures are never transferred to new weights. Factual Season 4 counts and fixtures remain Season 4 only.
+The bundle validates exact component lineage, hashes, vocabulary, lane legality, finite numeric inputs and calibration contracts before atomic publication. Activation uses an incumbent comparison under a process lock. Production updates retain the active model and its immediate predecessor for rollback and pinned sessions. Sessions pinned to retired versions must reload. Refitted production probabilities are explicitly **uncalibrated, temperature 1**. Historical temperatures are never transferred to new weights. Factual Season 4 counts and fixtures remain Season 4 only.
 
-New observed/legal hero IDs expand the maintained feature vocabulary automatically. Missing verified capability traits use an explicitly unknown neutral encoding, with reduced mechanics coverage. Catalog lanes come from pinned completed rosters and official Tencent lane data. Missing ban-only lane evidence triggers a bounded official-catalog refresh; unavailable authoritative lanes produce a clear failed update while preserving the active version. Existing hero vectors and old immutable bundles are preserved.
+New observed/legal hero IDs expand the maintained feature vocabulary automatically. Missing verified capability traits use an explicitly unknown neutral encoding, with reduced mechanics coverage. Catalog lanes come from pinned completed rosters and official Tencent lane data. Missing ban-only lane evidence triggers a bounded official-catalog refresh; unavailable authoritative lanes produce a clear failed update while preserving the active version. Vocabulary expansion preserves existing hero vectors.
 
 `/api/simulations/active-model` reports version, sources, cutoffs and calibration status. Each mounted tool pins one version through recommendations, scoring, Coach and what-if requests. Explicit unversioned legacy APIs and season trainers remain supported.
 

@@ -22,6 +22,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[3]
 REGISTRY_ROOT = ROOT / 'analysis/outputs/models'
 BROWSER_ROOT = ROOT / 'analysis/published/data/models'
+PRODUCTION_STAGE_PREFIX = '.production-stage-'
 COMPONENTS = (
     'personalized_draft_choice_model.json',
     'personalized_draft_probability_calibration.json', 'player_draft_context.json',
@@ -295,7 +296,8 @@ def install_bundle(source: Path, manifest: dict, *, registry_root: Path | None =
     if destination.exists():
         raise ValueError('Immutable model version already exists')
     registry.mkdir(parents=True, exist_ok=True)
-    with TemporaryDirectory(dir=registry, prefix='.stage-') as temporary:
+    prefix = PRODUCTION_STAGE_PREFIX if manifest.get('managed_production_update') else '.stage-'
+    with TemporaryDirectory(dir=registry, prefix=prefix) as temporary:
         stage = Path(temporary)
         for name in COMPONENTS:
             shutil.copyfile(source / name, stage / name)
@@ -337,7 +339,8 @@ def _activate_bundle_locked(handle: BundleHandle, *, registry_root: Path | None 
     target = browser / 'versions' / handle.version
     if not target.exists():
         browser.mkdir(parents=True, exist_ok=True)
-        with TemporaryDirectory(dir=browser, prefix='.stage-') as temporary:
+        prefix = PRODUCTION_STAGE_PREFIX if handle.manifest.get('managed_production_update') else '.stage-'
+        with TemporaryDirectory(dir=browser, prefix=prefix) as temporary:
             stage = Path(temporary)
             shutil.copyfile(handle.path('learned_hero_feature_space.json'), stage / 'feature-space.json')
             shutil.copyfile(handle.path('draft_model.json'), stage / 'draft-model.json')
@@ -358,20 +361,81 @@ def _activate_bundle_locked(handle: BundleHandle, *, registry_root: Path | None 
     for filename in ('feature-space.json', 'draft-model.json', 'metadata.json'):
         (target / filename).chmod(0o644)
     # Assets and server components are complete before this sole activation point.
-    previous = _json(registry / 'current.json').get('version') if (registry / 'current.json').is_file() else None
+    current_pointer = _json(registry / 'current.json') if incumbent else {}
+    previous = current_pointer.get('version')
+    if previous == handle.version:
+        previous = current_pointer.get('previous_version')
     pointer = {'version': handle.version, 'previous_version': previous,
                'activated_at': datetime.now(timezone.utc).isoformat()}
-    atomic_json(registry / 'current.json', pointer)
-    atomic_json(registry / 'activations' / f'{handle.version}.json', pointer)
+    activation_path = registry / 'activations' / f'{handle.version}.json'
+    already_activated = activation_path.is_file()
+    atomic_json(activation_path, pointer)
+    try:
+        atomic_json(registry / 'current.json', pointer)
+    except OSError:
+        if not already_activated:
+            activation_path.unlink(missing_ok=True)
+        raise
     return pointer
+
+
+@contextmanager
+def _activation_lock(registry: Path):
+    import fcntl
+    registry.mkdir(parents=True, exist_ok=True)
+    with (registry / '.activation.lock').open('a') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        yield
 
 
 def activate_bundle(handle: BundleHandle, *, registry_root: Path | None = None,
                     browser_root: Path | None = None, rollback: bool = False) -> dict:
     """Serialize promotions across workers and compare the evaluated incumbent."""
-    import fcntl
     registry = registry_root or REGISTRY_ROOT
-    registry.mkdir(parents=True, exist_ok=True)
-    with (registry/'.activation.lock').open('a') as lock:
-        fcntl.flock(lock,fcntl.LOCK_EX)
-        return _activate_bundle_locked(handle,registry_root=registry,browser_root=browser_root,rollback=rollback)
+    with _activation_lock(registry):
+        return _activate_bundle_locked(handle, registry_root=registry, browser_root=browser_root, rollback=rollback)
+
+
+def clear_production_staging(*, registry_root: Path | None = None, browser_root: Path | None = None) -> None:
+    """Clear interrupted install and publish copies while the update lock is held."""
+    registry = registry_root or REGISTRY_ROOT
+    browser = browser_root or BROWSER_ROOT
+    with _activation_lock(registry):
+        for parent in (registry, browser):
+            for path in parent.glob(f'{PRODUCTION_STAGE_PREFIX}*'):
+                if not path.is_symlink() and path.is_dir():
+                    shutil.rmtree(path)
+
+
+def prune_production_history(*, registry_root: Path | None = None, browser_root: Path | None = None) -> None:
+    """Retire previously served bundles and builds interrupted during promotion."""
+    registry = registry_root or REGISTRY_ROOT
+    browser = browser_root or BROWSER_ROOT
+    with _activation_lock(registry):
+        pointer = _json(registry / 'current.json')
+        keep = {version_id(pointer['version'])}
+        if previous := pointer.get('previous_version'):
+            keep.add(version_id(previous))
+        versions = registry / 'versions'
+        for version in keep:
+            if not (versions / version / 'manifest.json').is_file():
+                raise FileNotFoundError(f'Cannot prune history while protected bundle {version} is missing')
+        retired = {path.stem for path in (registry / 'activations').glob('*.json')
+                   if not path.is_symlink() and path.is_file()}
+        for path in versions.iterdir():
+            if path.name in keep or path.name in retired or path.is_symlink() or not path.is_dir():
+                continue
+            try:
+                manifest = _json(path / 'manifest.json')
+            except (FileNotFoundError, ValueError):
+                continue
+            if isinstance(manifest, dict) and manifest.get('managed_production_update') is True:
+                retired.add(path.name)
+        for version in retired - keep:
+            try:
+                version_id(version)
+            except ValueError:
+                continue
+            for path in (versions / version, browser / 'versions' / version):
+                if not path.is_symlink() and path.is_dir():
+                    shutil.rmtree(path)

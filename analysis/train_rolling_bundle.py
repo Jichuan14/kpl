@@ -11,7 +11,6 @@ from contextlib import ExitStack
 from datetime import datetime, timezone, timedelta
 import importlib.util
 import json
-import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -25,6 +24,7 @@ ANALYSIS=ROOT/'analysis'
 sys.path.insert(0,str(ROOT/'backend'))
 from rolling_corpus import build_rolling_manifest, split_keys, validate_sources, DeferredTraining, event_time, exported_battles, standard_battle_keys
 from app.services.model_registry import COMPONENTS, atomic_json, install_bundle, resolve_bundle, activate_bundle, REGISTRY_ROOT
+from app.services.pipeline_execution import subprocess_options
 from export_production_hero_feature_space import build_feature_space
 from train_lineup_value_model import load_trainer
 import train_ban_value_model as ban
@@ -45,7 +45,7 @@ def command(script: str, *args: str) -> None:
     record('command_start', label)
     try:
         subprocess.run([sys.executable,str(ANALYSIS/script),*map(str,args)],cwd=ROOT,check=True,
-                       pass_fds=((int(os.environ['KPL_PIPELINE_LOCK_FD']),) if os.environ.get('KPL_PIPELINE_LOCK_FD') else ()))
+                       **subprocess_options())
     finally:
         record('command_end', label)
 

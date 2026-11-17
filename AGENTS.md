@@ -4,7 +4,7 @@ Read this file before searching the repository. Use the map below to open the sm
 
 ## Working season context
 
-Unless the user specifies otherwise, treat all new work as targeting the newly started **2026 Season 4** (`league_id: 20260004`, local catalog name: `2026年KPL年度总决赛`). Use this context for website presentation, management workflows, model planning, and verification.
+Default task context, recorded 2026-10-29: unless the user specifies otherwise, target **2026 Season 4** (`league_id: 20260004`, local catalog name: `2026年KPL年度总决赛`). Use this context for website presentation, management workflows, model planning, and verification.
 
 Account for zero or sparse current-season observations and unavailable current-season artifacts. Treat earlier seasons as explicitly labeled historical evidence or model-training sources; do not present them as Season 4 observations or assume historical model validation establishes Season 4 validity. Preserve historical-season functionality and avoid hardcoding the default context into season-independent calculations.
 

@@ -1,7 +1,10 @@
 """Fixed-recipe fresh production refits, with no evaluation reservation or search."""
 from __future__ import annotations
+from contextlib import nullcontext
 import copy
 import os
+import re
+import shutil
 from tempfile import TemporaryDirectory
 from datetime import timedelta, datetime, timezone
 import json
@@ -12,7 +15,7 @@ from uuid import uuid4
 import numpy as np
 from rolling_corpus import build_rolling_manifest, training_context_games, event_time, exported_battles, validate_sources
 from sequence_training.splits import canonical_sha256, file_sha256
-from app.services.model_registry import atomic_json, install_bundle, activate_bundle, resolve_bundle, REGISTRY_ROOT
+from app.services.model_registry import atomic_json, install_bundle, activate_bundle, resolve_bundle, version_id, REGISTRY_ROOT
 from app.services.draft_calibration import candidate_policy_fingerprint
 from train_rolling_bundle import ROOT, ANALYSIS, command, corpus_rows, iter_corpus_rows, build_references, finalize_catalog
 import train_ban_value_model as ban
@@ -23,6 +26,8 @@ LINEUP_CONFIG={'elo_k':16.,'season_decay':.55,'familiarity_prior':64.,'synergy_p
 RECIPE={'version':'all-data-v1','epochs':30,'hidden_dim':48,'seed':7,'winning_pick_multiplier':1.,'season_recency':.65,'lineup_config':LINEUP_CONFIG,
         'calibration':'uncalibrated_temperature_1','familiarity_context':'strictly_earlier_China_dates','serving_context':'next_China_date_after_latest_finished_series'}
 OFFICIAL_CACHE=ANALYSIS/'outputs/models/inputs/herolist.json'
+PRODUCTION_BUILD_PREFIX = '.production-build-'
+AUTOMATIC_VERSION = re.compile(r'all-data-[0-9]{8}T[0-9]{6}-[0-9a-f]{8}')
 
 def official_input():
     return OFFICIAL_CACHE if OFFICIAL_CACHE.is_file() else ROOT/'knowledge/sources/official/herolist.json'
@@ -234,6 +239,19 @@ def train_all_data(manifest,output,*,epochs=30,threads=1,seed=7):
 
 
 def production_update(args):
+    from app.services.pipeline_execution import execution_context, execution_token, lock_fd
+
+    if not args.activate or lock_fd() is not None:
+        return _recorded_production_update(args)
+
+    from app.services.pipeline_jobs import global_pipeline_lock
+
+    # The API passes this lock to its trainer; direct production runs take it too.
+    with global_pipeline_lock() as fd, execution_context(fd, execution_token() or uuid4().hex):
+        return _recorded_production_update(args)
+
+
+def _recorded_production_update(args):
     from memory_telemetry import record
     previous = os.environ.get('KPL_MEMORY_LOG')
     args.output_root.mkdir(parents=True, exist_ok=True)
@@ -251,11 +269,33 @@ def production_update(args):
             os.environ.pop('KPL_MEMORY_LOG', None)
 
 
+def _clear_production_workspaces(root: Path) -> None:
+    from app.services.model_registry import clear_production_staging
+
+    clear_production_staging(registry_root=REGISTRY_ROOT)
+    # The update lock outlives any subprocess that could still be writing here.
+    for path in root.glob(f'{PRODUCTION_BUILD_PREFIX}*'):
+        if path.is_dir() and not path.is_symlink():
+            shutil.rmtree(path)
+
+    if root.resolve() == (REGISTRY_ROOT / 'candidates').resolve():
+        for path in root.glob('all-data-*'):
+            if (AUTOMATIC_VERSION.fullmatch(path.name) and path.is_dir() and not path.is_symlink()
+                    and (REGISTRY_ROOT / 'versions' / path.name / 'manifest.json').is_file()
+                    and (REGISTRY_ROOT / 'activations' / f'{path.name}.json').is_file()):
+                shutil.rmtree(path)
+
+
 def _production_update(args):
     status_path=args.output_root/'latest_status.json'
     try:
         if args.weight_mode!='season_recency' or args.decay!=.65 or args.maximum_age_days or args.cutoff:
             raise ValueError('Production uses all available complete series with established .65 weights; use --evaluation-mode for research windows')
+        smoke = args.smoke or args.epochs < 30
+        if smoke and args.activate:
+            raise ValueError('Low-budget all-data smoke runs cannot activate')
+        if args.activate:
+            _clear_production_workspaces(args.output_root)
         manifest=build_rolling_manifest(ANALYSIS/'exports',production_all_data=True)
         prepared=run_production_stage('inputs', manifest, args.output_root, epochs=args.epochs, threads=args.threads, seed=args.seed)
         identity,inputs,raw_inputs=prepared['identity'],prepared['inputs'],prepared['raw_inputs']
@@ -263,20 +303,69 @@ def _production_update(args):
         if incumbent and incumbent.manifest.get('promotion_status')=='production_all_data' and incumbent.manifest.get('retrain_identity')==identity:
             status={'status':'NO_CHANGE','active_model_version':incumbent.version,'reason':'Eligible corpus, maintained inputs and recipe are unchanged','active_preserved':True}
         else:
-            smoke=args.smoke or args.epochs<30
-            if smoke and args.activate:raise ValueError('Low-budget all-data smoke runs cannot activate')
-            version=args.version or datetime.now(timezone.utc).strftime('all-data-%Y%m%dT%H%M%S-')+uuid4().hex[:8]
-            output=args.output_root/version;report=train_all_data(manifest,output,epochs=args.epochs,threads=args.threads,seed=args.seed)
-            validate_sources(manifest)
-            verified=run_production_stage('identity', manifest, output, epochs=args.epochs, threads=args.threads, seed=args.seed)
-            if verified['raw_inputs']!=raw_inputs or verified['identity']!=identity:raise ValueError('Maintained inputs changed during training')
-            cutoff=max(r['start_time'] for r in manifest['splits']['train'])
-            metadata={'version':version,'promotion_status':'experimental' if smoke else 'production_all_data','training_contract':'production_all_data','source_seasons':manifest['source_seasons'],'parameter_training_cutoff':cutoff,'context_reference_cutoff':cutoff,'split_manifest':manifest,'retrain_identity':identity,'maintained_inputs':inputs,'maintained_input_raw_sha256':raw_inputs,'recipe':{**RECIPE,'seed':args.seed,'epochs':args.epochs},'metrics':report,'limitations':report['limitations'],'reference_coverage':json.loads((output/'reference_coverage.json').read_text()),'promotion':{'incumbent_version':incumbent.version if incumbent else None,'incumbent_model_fingerprint':json.loads(incumbent.path('personalized_draft_choice_model.json').read_text())['model_fingerprint'] if incumbent else None}}
-            # Smoke still exercises full immutable server validation, with a
-            # separate experimental registry; it never touches production.
-            handle=install_bundle(output,metadata,registry_root=args.output_root/'smoke-registry' if smoke else None)
-            status={'status':'SMOKE/EXPERIMENTAL' if smoke else 'TRAINED','model_version':version,'reason':'Fresh all-data fixed-recipe fit; probabilities uncalibrated','active_preserved':True,'report':str(output/'candidate_report.json')}
-            if args.activate:activate_bundle(handle);status.update(status='ACTIVATED',active_preserved=False)
-        atomic_json(status_path,status);print(json.dumps(status,indent=2));return status
+            status = _train_candidate_update(args, manifest, incumbent, identity, inputs, raw_inputs, smoke)
     except Exception as error:
         atomic_json(status_path,{'status':'FAILED','reason':str(error),'active_preserved':True});raise
+
+    if args.activate:
+        from app.services.model_registry import prune_production_history
+        try:
+            prune_production_history(registry_root=REGISTRY_ROOT)
+        except OSError as error:
+            # Publication already succeeded; cleanup can be retried on the next update.
+            status['cleanup_warning'] = str(error)
+    atomic_json(status_path, status)
+    print(json.dumps(status, indent=2))
+    return status
+
+
+def _train_candidate_update(args, manifest, incumbent, identity, inputs, raw_inputs, smoke):
+    version = version_id(args.version or datetime.now(timezone.utc).strftime('all-data-%Y%m%dT%H%M%S-') + uuid4().hex[:8])
+    workspace = TemporaryDirectory(dir=args.output_root, prefix=PRODUCTION_BUILD_PREFIX,
+                                   ignore_cleanup_errors=True) if args.activate else nullcontext(args.output_root)
+    with workspace as directory:
+        output = Path(directory) / version
+        report = train_all_data(manifest, output, epochs=args.epochs, threads=args.threads, seed=args.seed)
+        validate_sources(manifest)
+        verified = run_production_stage('identity', manifest, output, epochs=args.epochs, threads=args.threads, seed=args.seed)
+        if verified['raw_inputs'] != raw_inputs or verified['identity'] != identity:
+            raise ValueError('Maintained inputs changed during training')
+        cutoff = max(row['start_time'] for row in manifest['splits']['train'])
+        metadata = {
+            'version': version,
+            'promotion_status': 'experimental' if smoke else 'production_all_data',
+            'training_contract': 'production_all_data',
+            'managed_production_update': args.activate,
+            'source_seasons': manifest['source_seasons'],
+            'parameter_training_cutoff': cutoff,
+            'context_reference_cutoff': cutoff,
+            'split_manifest': manifest,
+            'retrain_identity': identity,
+            'maintained_inputs': inputs,
+            'maintained_input_raw_sha256': raw_inputs,
+            'recipe': {**RECIPE, 'seed': args.seed, 'epochs': args.epochs},
+            'metrics': report,
+            'limitations': report['limitations'],
+            'reference_coverage': json.loads((output / 'reference_coverage.json').read_text()),
+            'promotion': {
+                'incumbent_version': incumbent.version if incumbent else None,
+                'incumbent_model_fingerprint': (
+                    json.loads(incumbent.path('personalized_draft_choice_model.json').read_text())['model_fingerprint']
+                    if incumbent else None
+                ),
+            },
+        }
+        handle = install_bundle(output, metadata, registry_root=args.output_root / 'smoke-registry' if smoke else None)
+        status = {
+            'status': 'SMOKE/EXPERIMENTAL' if smoke else 'TRAINED',
+            'model_version': version,
+            'reason': 'Fresh all-data fixed-recipe fit; probabilities uncalibrated',
+            'active_preserved': True,
+            'report': str(output / 'candidate_report.json'),
+        }
+        if args.activate:
+            report_path = args.output_root / 'latest_report.json'
+            atomic_json(report_path, report)
+            activate_bundle(handle)
+            status.update(status='ACTIVATED', active_preserved=False, report=str(report_path))
+        return status

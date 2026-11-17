@@ -215,6 +215,45 @@ def test_production_all_data_activation_without_quality_gates_still_has_cas(coll
     assert resolve_bundle(registry_root=root).version=='a'
 
 
+def test_production_retention_keeps_active_and_one_rollback(collection):
+    source, root, browser, seed = collection
+    first = install_bundle(source, production_source(source, 'first', seed), registry_root=root)
+    activate_bundle(first, registry_root=root, browser_root=browser)
+    second = install_bundle(source, production_source(source, 'second', first), registry_root=root)
+    activate_bundle(second, registry_root=root, browser_root=browser)
+    research = install_bundle(source, production_source(source, 'research', second), registry_root=root)
+    interrupted = production_source(source, 'interrupted', second)
+    interrupted['managed_production_update'] = True
+    install_bundle(source, interrupted, registry_root=root)
+
+    registry.prune_production_history(registry_root=root, browser_root=browser)
+
+    assert {path.name for path in (root / 'versions').iterdir()} == {'first', 'second', 'research'}
+    assert {path.name for path in (browser / 'versions').iterdir()} == {'first', 'second'}
+    assert resolve_bundle(registry_root=root).version == second.version
+    assert resolve_bundle(research.version, registry_root=root) == research
+    activate_bundle(first, registry_root=root, browser_root=browser, rollback=True)
+    assert resolve_bundle(registry_root=root).version == first.version
+
+
+@pytest.mark.parametrize('failed_path', ['current.json', 'activations/new.json'])
+def test_activation_write_failure_keeps_the_previous_pointer(collection, failed_path):
+    source, root, browser, incumbent = collection
+    new = install_bundle(source, production_source(source, 'new', incumbent), registry_root=root)
+    write_json = registry.atomic_json
+
+    def fail_write(path, value):
+        if path == root / failed_path:
+            raise OSError('disk full')
+        write_json(path, value)
+
+    with patch.object(registry, 'atomic_json', side_effect=fail_write):
+        with pytest.raises(OSError, match='disk full'):
+            activate_bundle(new, registry_root=root, browser_root=browser)
+    assert resolve_bundle(registry_root=root).version == incumbent.version
+    assert not (root / 'activations' / 'new.json').exists()
+
+
 @pytest.mark.parametrize('filename',['lineup_value_model.json','ban_value_model.json','player_draft_context.json'])
 def test_hash_consistent_nonfinite_serving_component_rejected(collection,filename):
     source,root,_,_=collection
